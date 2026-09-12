@@ -1,0 +1,1505 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>RTS Balance: перенос точек и игроков</title>
+<style>
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{font-family:system-ui,"Segoe UI",Roboto,Arial,sans-serif;background:#16181d;color:#e8e8e8}
+  .page{padding:12px 14px 24px}
+
+  /* === ЗАКРЕПЛЁННАЯ ШАПКА === */
+  .toolbar{
+    position:sticky;top:0;z-index:100;
+    background:linear-gradient(#1c1e24 80%, #1c1e2400);
+    padding:10px 14px 12px;
+    border-bottom:1px solid #2c2f37;
+    backdrop-filter:blur(6px);
+  }
+  .toolbar .row{display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin:0}
+  .toolbar .file-lbl{
+    display:inline-flex;align-items:center;gap:8px;
+    background:#141519;border:1px solid #3a3e46;border-radius:8px;
+    padding:5px 10px;font-size:12.5px;cursor:pointer;max-width:340px;
+    overflow:hidden;white-space:nowrap;text-overflow:ellipsis;
+  }
+  .toolbar .file-lbl:hover{border-color:#5a606b}
+  .toolbar input[type=file]{display:none}
+  .file-name{color:#a7b0bd;max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .hot-hint{
+    margin-left:auto;font-size:11.5px;color:#7a828f;
+    display:flex;align-items:center;gap:6px;
+  }
+  .hot-hint kbd{
+    background:#141519;border:1px solid #3a3e46;border-bottom-width:2px;
+    border-radius:5px;padding:1px 7px;font-size:11px;font-family:inherit;color:#c9ced8;
+  }
+
+  h1{font-size:17px;margin:8px 0 10px}
+  h3{font-size:14px;margin:10px 0 6px;color:#c9ced8}
+  h4{font-size:12px;margin:10px 0 4px;color:#9aa0aa;text-transform:uppercase;letter-spacing:.05em}
+  .panel{background:#22242b;border-radius:10px;padding:10px 12px;margin-bottom:10px;border:1px solid #2c2f37}
+  label{font-size:12.5px;user-select:none}
+  input[type=number]{width:70px;background:#141519;color:#e8e8e8;border:1px solid #444;border-radius:6px;padding:3px 6px;font-size:12px}
+  button{background:#3b82f6;border:0;color:#fff;padding:7px 13px;border-radius:8px;cursor:pointer;font-size:12.5px;transition:background .12s}
+  button:hover{background:#2563eb}
+  button:disabled{background:#444;cursor:default;opacity:.7}
+  button.alt{background:#4b5563}
+  button.alt:hover{background:#374151}
+  button.calc{background:#16a34a;font-weight:600}
+  button.calc:hover{background:#15803d}
+  button.calc.dirty{animation:pulse 1.4s ease-in-out infinite}
+  @keyframes pulse{0%,100%{box-shadow:0 0 0 0 #16a34a99}50%{box-shadow:0 0 0 8px #16a34a00}}
+  canvas{width:100%;height:auto;display:block;border-radius:8px;background:#0d0e12;user-select:none;touch-action:none}
+  canvas.pan{cursor:grab}
+  canvas.pan:active{cursor:grabbing}
+  canvas.pick{cursor:pointer}
+  canvas.dragging{cursor:move}
+  table{border-collapse:collapse;font-size:12px;width:100%}
+  th,td{border-bottom:1px solid #2f323a;padding:4px 7px;text-align:left;vertical-align:top}
+  th{color:#9aa0aa;font-weight:600;background:#1c1e24;position:sticky;top:0}
+  tr.sel{background:#1e2a3a}
+  tr.clickable{cursor:pointer}
+  tr.clickable:hover{background:#2a2d36}
+  .ok{color:#8ef58e}.bad{color:#ff8080}.warn{color:#ffd166}.info{color:#7dd3fc}.dim{color:#7a828f}
+  .cols{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-start}
+  .col-main{flex:2 1 620px;min-width:340px}
+  .col-side{flex:1 1 400px;min-width:340px}
+  .row{display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-bottom:6px}
+  code{background:#141519;padding:1px 5px;border-radius:4px;font-size:11.5px}
+  .hint{font-size:11.5px;color:#8b93a1;line-height:1.5}
+  .tag{display:inline-block;padding:1px 6px;border-radius:9px;font-size:10.5px;font-weight:700}
+  .tag-p1{background:#0f3d1f;color:#7bf59a;border:1px solid #1f6b38}
+  .tag-p2{background:#3d0f0f;color:#ff9a9a;border:1px solid #6b1f1f}
+  .tag-hot{background:#3d320f;color:#ffe27b;border:1px solid #6b581f}
+  .tag-home1{background:#0f2f24;color:#7ff0c4;border:1px solid #1f6b46}
+  .tag-home2{background:#2f0f1a;color:#ffb0c4;border:1px solid #6b1f38}
+  .tag-na{background:#2a2a2a;color:#999;border:1px solid #444}
+  .tag-add{background:#0c3d3d;color:#7ff0e6;border:1px solid #1f6b6b}
+  .tag-rm{background:#3d0f0f;color:#ff9a9a;border:1px solid #6b1f1f}
+  .tag-move{background:#3d2a0f;color:#ffc478;border:1px solid #6b4d1f}
+  .bar{height:7px;border-radius:4px;background:#2c2f37;overflow:hidden;margin-top:3px;min-width:80px}
+  .bar > i{display:block;height:100%}
+  details{background:#1c1e24;border:1px solid #2c2f37;border-radius:8px;margin-bottom:8px;overflow:hidden}
+  details > summary{cursor:pointer;padding:8px 11px;font-weight:600;font-size:13px;user-select:none;list-style:none;background:#23262e;color:#d7dce4}
+  details > summary::-webkit-details-marker{display:none}
+  details > summary::before{content:'▸ ';color:#7dd3fc;display:inline-block;width:12px}
+  details[open] > summary::before{content:'▾ '}
+  details > summary:hover{background:#2a2e37}
+  details .body{padding:8px 10px 10px}
+  .kv{margin:0 0 4px}
+  .kv b{color:#9aa0aa;font-weight:600;display:inline-block;min-width:96px}
+  .pill{display:inline-block;padding:2px 8px;border-radius:10px;background:#2a2e37;font-size:11px;margin-right:4px}
+  .status-msg{font-size:12px;padding:6px 10px;border-radius:6px;margin-top:6px}
+  .status-stale{background:#3d2a0f;color:#ffd166;border:1px solid #6b4d1f}
+  .status-ok{background:#0f2f1a;color:#8ef5b0;border:1px solid #1f6b38}
+
+  /* Сводка */
+  .summary-block{display:grid;grid-template-columns:auto 1fr 1fr auto;gap:4px 12px;font-size:12.5px;align-items:center}
+  .summary-block .hdr{color:#9aa0aa;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.05em}
+  .summary-block .n{color:#7a828f}
+  .summary-block .v1{color:#8ef58e}
+  .summary-block .v2{color:#ff8080}
+  .summary-block .adv{text-align:right;font-weight:700}
+  .skew-big{font-size:22px;font-weight:800;letter-spacing:.02em}
+  .skew-bar{height:12px;background:#2c2f37;border-radius:6px;overflow:hidden;position:relative;margin:8px 0}
+  .skew-bar > i{position:absolute;top:0;bottom:0;width:50%;background:linear-gradient(90deg,#22c55e,#4ade80)}
+  .skew-bar > span{
+    position:absolute;top:0;bottom:0;left:50%;width:2px;background:#e8e8e8aa;
+  }
+</style>
+</head>
+<body>
+
+<!-- ===== ЗАКРЕПЛЁННАЯ ШАПКА ===== -->
+<div class="toolbar">
+  <div class="row">
+    <label class="file-lbl">
+      <span>📂 Выберите файл</span>
+      <span class="file-name" id="fileName">файл не выбран</span>
+      <input type="file" id="file" accept="image/png,image/*">
+    </label>
+    <button id="demo" class="alt">Тестовая карта</button>
+    <button id="run" class="calc" disabled>Рассчитать</button>
+    <button id="reset" class="alt">Сбросить вид</button>
+    <button id="resetPos" class="alt">Вернуть объекты</button>
+    <div class="hot-hint">Запуск: <kbd>Space</kbd></div>
+  </div>
+</div>
+
+<div class="page">
+
+<h1>RTS Balance — перетаскивание точек и игроков, анализ по кнопке</h1>
+
+<div class="panel">
+  <div class="row">
+    <label>Допуск цвета: <input type="number" id="tol" value="20" min="0" max="120" step="1"></label>
+    <label>Спорная, ≤ <input type="number" id="hot" value="3" min="0" max="50" step="0.5"> кл.</label>
+    <label>Домашняя, порог <input type="number" id="homeThr" value="10" min="2" max="30" step="1"> %</label>
+    <label>NMS: <input type="number" id="nmsRadius" value="60" min="10" max="200" step="5"> px</label>
+    <label>Макс. рек.: <input type="number" id="maxSuggest" value="5" min="1" max="20" step="1"></label>
+  </div>
+  <div class="row">
+    <label><input type="checkbox" id="othersBlocked"> Прочие цвета непроходимы</label>
+    <label><input type="checkbox" id="showVor" checked> Зоны</label>
+    <label><input type="checkbox" id="showFront" checked> Фронт</label>
+    <label><input type="checkbox" id="showMarks" checked> Метки</label>
+    <label><input type="checkbox" id="showSuggest" checked> Рекомендации</label>
+    <label><input type="checkbox" id="showPaths" checked> Пути до выбранной</label>
+  </div>
+  <div class="hint">
+    <b>Игрок 1</b> = <code>00FF00</code>, <b>Игрок 2</b> = <code>FF0000</code>, <b>Точки</b> = <code>FFFF00</code>.
+    Непроходимо: <code>0000FF</code>, <code>000000</code>.
+    <br><b>Управление:</b> тащите маркеры, чтобы сдвинуть игроков и точки; ЛКМ по пустому месту — панорама; колесо — зум; клик по точке — выбрать её и увидеть пути.
+    <br>После перетаскивания нажмите <b>«Рассчитать»</b> (или <b>Space</b>), чтобы обновить анализ.
+  </div>
+  <div id="status"></div>
+</div>
+
+<div class="cols">
+  <div class="col-main"><canvas id="cv"></canvas></div>
+  <div class="col-side">
+    <div class="panel" id="selectedPanel">
+      <div class="hint">Кликните по точке интереса, чтобы увидеть пути от каждого юнита обеих команд.</div>
+    </div>
+    <div id="tables"></div>
+  </div>
+</div>
+
+</div>
+
+<script>
+"use strict";
+
+/* ============================================================
+   ЦВЕТА
+   ============================================================ */
+const C_RED    = [255,   0,   0];
+const C_GREEN  = [  0, 255,   0];
+const C_YELLOW = [255, 255,   0];
+const C_BLUE   = [  0,   0, 255];
+const C_BLACK  = [  0,   0,   0];
+const SQRT2 = Math.SQRT2;
+
+const PALETTE_T1 = ['#22ff22','#44ddff','#aaff44','#22ffaa','#88ff88','#00d4ff'];
+const PALETTE_T2 = ['#ff2222','#ff44dd','#ffaa44','#ff7722','#ff8888','#ff00aa'];
+
+/* ============================================================
+   DOM
+   ============================================================ */
+const cv       = document.getElementById('cv');
+const ctx      = cv.getContext('2d');
+const fileIn   = document.getElementById('file');
+const fileNameEl = document.getElementById('fileName');
+const runBtn   = document.getElementById('run');
+const demoBtn  = document.getElementById('demo');
+const resetBtn = document.getElementById('reset');
+const resetPosBtn = document.getElementById('resetPos');
+const selPanel = document.getElementById('selectedPanel');
+const tablesEl = document.getElementById('tables');
+const statusEl = document.getElementById('status');
+const tolEl    = document.getElementById('tol');
+const hotEl    = document.getElementById('hot');
+const homeThrEl= document.getElementById('homeThr');
+const nmsEl    = document.getElementById('nmsRadius');
+const maxSugEl = document.getElementById('maxSuggest');
+const othersEl = document.getElementById('othersBlocked');
+const showVorEl    = document.getElementById('showVor');
+const showFrontEl  = document.getElementById('showFront');
+const showMarksEl  = document.getElementById('showMarks');
+const showSugEl    = document.getElementById('showSuggest');
+const showPathsEl  = document.getElementById('showPaths');
+
+/* ============================================================
+   СОСТОЯНИЕ
+   ============================================================ */
+const S = {
+  imgSource: null, W: 0, H: 0,
+  origData: null, cleanData: null, cleanCanvas: null,
+  bg: [255,255,255],
+  blocked: null,
+  markers: [], markersInit: [],
+  trees1: [], trees2: [],
+  d1: null, d2: null,
+  P1: [], P2: [], POI: [],
+  poiAnalyzed: [], suggestions: [], advices: [],
+  summary: null,
+  shortest1to2: Infinity,
+  voronoiCanvas: null,
+  view: { scale: 1, offsetX: 0, offsetY: 0 },
+  selectedPOI: null, selectedPaths: null,
+  calculated: false, stale: true,
+  drag: null,
+  hoverMarker: null,
+};
+
+/* ============================================================
+   MIN-HEAP
+   ============================================================ */
+class MinHeap {
+  constructor(dist){ this.dist = dist; this.buf = new Int32Array(4096); this.n = 0; }
+  get size(){ return this.n; }
+  push(v){
+    if (this.n === this.buf.length){ const nb = new Int32Array(this.buf.length*2); nb.set(this.buf); this.buf = nb; }
+    const d = this.dist, a = this.buf; let i = this.n++; a[i] = v;
+    while (i > 0){ const p = (i-1)>>1; if (d[a[p]] <= d[a[i]]) break; const t=a[p]; a[p]=a[i]; a[i]=t; i=p; }
+  }
+  pop(){
+    const d = this.dist, a = this.buf; const top = a[0]; const last = a[--this.n];
+    if (this.n > 0){
+      a[0] = last; let i = 0;
+      for(;;){
+        const l = 2*i+1; if (l >= this.n) break;
+        const r = l+1; let m = l;
+        if (r < this.n && d[a[r]] < d[a[l]]) m = r;
+        if (d[a[m]] >= d[a[i]]) break;
+        const t=a[m]; a[m]=a[i]; a[i]=t; i=m;
+      }
+    }
+    return top;
+  }
+}
+
+/* ============================================================
+   УТИЛИТЫ ЦВЕТА
+   ============================================================ */
+function getTol(){ return Math.min(120, Math.max(0, parseInt(tolEl.value,10) || 0)); }
+function near(r,g,b,c,tol){
+  return Math.abs(r-c[0]) <= tol && Math.abs(g-c[1]) <= tol && Math.abs(b-c[2]) <= tol;
+}
+function computeBg(data){
+  const counts = new Map();
+  const step = Math.max(4, ((data.length/4) / 60000 | 0) * 4);
+  for (let i = 0; i < data.length; i += step){
+    const key = (data[i]<<16) | (data[i+1]<<8) | data[i+2];
+    counts.set(key, (counts.get(key)||0)+1);
+  }
+  let bestKey = 0xffffff, bestN = 0;
+  for (const [k,v] of counts) if (v > bestN){ bestN = v; bestKey = k; }
+  return [(bestKey>>16)&255, (bestKey>>8)&255, bestKey&255];
+}
+
+/* ============================================================
+   ЗАГРУЗКА
+   ============================================================ */
+function loadImage(src){
+  const w = src.naturalWidth || src.width;
+  const h = src.naturalHeight || src.height;
+  cv.width = w; cv.height = h;
+  ctx.setTransform(1,0,0,1,0,0);
+  ctx.clearRect(0,0,w,h);
+  ctx.drawImage(src, 0, 0, w, h);
+
+  S.imgSource = src;
+  S.W = w; S.H = h;
+  S.origData = ctx.getImageData(0,0,w,h);
+  S.bg = computeBg(S.origData.data);
+
+  buildCleanImage();
+  detectMarkers();
+  S.markersInit = S.markers.map(m => ({ ...m }));
+
+  S.calculated = false;
+  S.stale = true;
+  S.selectedPOI = null;
+  S.selectedPaths = null;
+  S.poiAnalyzed = []; S.suggestions = []; S.advices = []; S.summary = null;
+  S.voronoiCanvas = null;
+  S.view = { scale: 1, offsetX: 0, offsetY: 0 };
+  buildBlocked();
+
+  runBtn.disabled = false;
+  runBtn.classList.add('dirty');
+  updateStatus();
+  render();
+  selPanel.innerHTML = `<div class="hint">Изображение <b>${w}×${h}</b> загружено. Перенесите маркеры при необходимости и нажмите <b>«Рассчитать»</b> (или <b>Space</b>).</div>`;
+  tablesEl.innerHTML = '';
+}
+
+function buildCleanImage(){
+  const { W, H, bg } = S;
+  const src = S.origData.data;
+  const out = new Uint8ClampedArray(src.length);
+  const tol = getTol();
+  for (let i = 0; i < src.length; i += 4){
+    const r = src[i], g = src[i+1], b = src[i+2];
+    if (near(r,g,b,C_RED,tol) || near(r,g,b,C_GREEN,tol) || near(r,g,b,C_YELLOW,tol)){
+      out[i] = bg[0]; out[i+1] = bg[1]; out[i+2] = bg[2]; out[i+3] = 255;
+    } else {
+      out[i] = r; out[i+1] = g; out[i+2] = b; out[i+3] = src[i+3];
+    }
+  }
+  S.cleanData = new ImageData(out, W, H);
+  const cc = document.createElement('canvas');
+  cc.width = W; cc.height = H;
+  cc.getContext('2d').putImageData(S.cleanData, 0, 0);
+  S.cleanCanvas = cc;
+}
+
+function buildBlocked(){
+  const { W, H, cleanData, bg } = S;
+  const data = cleanData.data;
+  const N = W*H;
+  const blocked = new Uint8Array(N);
+  const tol = getTol();
+  const bgTol = Math.max(12, tol);
+  const othersBlock = othersEl.checked;
+  for (let i = 0, p = 0; i < N; i++, p += 4){
+    const r = data[p], g = data[p+1], b = data[p+2];
+    if (othersBlock){
+      blocked[i] = near(r,g,b,bg,bgTol) ? 0 : 1;
+    } else {
+      blocked[i] = (near(r,g,b,C_BLUE,tol) || near(r,g,b,C_BLACK,tol)) ? 1 : 0;
+    }
+  }
+  S.blocked = blocked;
+}
+
+/* ============================================================
+   КОМПОНЕНТЫ
+   ============================================================ */
+function findComponents(mask, W, H){
+  const N = W*H;
+  const labels = new Int32Array(N).fill(-1);
+  const comps = [];
+  const stack = [];
+  for (let i = 0; i < N; i++){
+    if (!mask[i] || labels[i] !== -1) continue;
+    const id = comps.length;
+    let size=0, sx=0, sy=0;
+    stack.length=0; stack.push(i); labels[i]=id;
+    while (stack.length){
+      const p = stack.pop();
+      const x = p%W, y = (p-x)/W;
+      size++; sx+=x; sy+=y;
+      if (x>0)   { const q=p-1; if (mask[q] && labels[q]===-1){ labels[q]=id; stack.push(q); } }
+      if (x<W-1) { const q=p+1; if (mask[q] && labels[q]===-1){ labels[q]=id; stack.push(q); } }
+      if (y>0)   { const q=p-W; if (mask[q] && labels[q]===-1){ labels[q]=id; stack.push(q); } }
+      if (y<H-1) { const q=p+W; if (mask[q] && labels[q]===-1){ labels[q]=id; stack.push(q); } }
+    }
+    comps.push({ size, cx: sx/size, cy: sy/size });
+  }
+  return comps;
+}
+
+function detectMarkers(){
+  const { W, H, origData } = S;
+  const N = W*H;
+  const data = origData.data;
+  const tol = getTol();
+  const isR = new Uint8Array(N), isG = new Uint8Array(N), isY = new Uint8Array(N);
+  for (let i = 0, p = 0; i < N; i++, p += 4){
+    const r = data[p], g = data[p+1], b = data[p+2];
+    if      (near(r,g,b,C_RED,tol))    isR[i] = 1;
+    else if (near(r,g,b,C_GREEN,tol))  isG[i] = 1;
+    else if (near(r,g,b,C_YELLOW,tol)) isY[i] = 1;
+  }
+  const byPos = (a,b) => (a.cy - b.cy) || (a.cx - b.cx);
+  const gs = findComponents(isG, W, H).filter(c => c.size >= 4).sort(byPos);
+  const rs = findComponents(isR, W, H).filter(c => c.size >= 4).sort(byPos);
+  const ys = findComponents(isY, W, H).filter(c => c.size >= 4).sort(byPos);
+
+  S.markers = [];
+  gs.forEach((c, i) => S.markers.push({ kind:'p1', n:i+1, name:'И1·'+(i+1), x:c.cx, y:c.cy, cell:-1, snapped:false, offset:0 }));
+  rs.forEach((c, i) => S.markers.push({ kind:'p2', n:i+1, name:'И2·'+(i+1), x:c.cx, y:c.cy, cell:-1, snapped:false, offset:0 }));
+  ys.forEach((c, i) => S.markers.push({ kind:'poi', n:i+1, name:'Т'+(i+1),   x:c.cx, y:c.cy, cell:-1, snapped:false, offset:0 }));
+}
+
+/* ============================================================
+   ДЕЙКСТРА
+   ============================================================ */
+function dijkstraFrom(start, blocked, W, H){
+  const N = W*H;
+  const dist = new Float32Array(N).fill(Infinity);
+  const parent = new Int32Array(N).fill(-1);
+  const visited = new Uint8Array(N);
+  const heap = new MinHeap(dist);
+  dist[start] = 0; heap.push(start);
+  while (heap.size > 0){
+    const u = heap.pop();
+    if (visited[u]) continue;
+    visited[u] = 1;
+    const du = dist[u];
+    const ux = u%W, uy = (u-ux)/W;
+    for (let dy=-1; dy<=1; dy++){
+      const ny = uy+dy; if (ny<0||ny>=H) continue;
+      const rb = ny*W;
+      for (let dx=-1; dx<=1; dx++){
+        if (dx===0&&dy===0) continue;
+        const nx = ux+dx; if (nx<0||nx>=W) continue;
+        const v = rb+nx;
+        if (blocked[v] || visited[v]) continue;
+        const w = (dx!==0&&dy!==0)?SQRT2:1;
+        const nd = du+w;
+        if (nd < dist[v]){ dist[v]=nd; parent[v]=u; heap.push(v); }
+      }
+    }
+  }
+  return { dist, parent };
+}
+
+function buildPath(parent, from, to){
+  const path = []; let cur = to, guard = 0;
+  while (cur !== -1 && guard++ < 1e7){
+    path.push(cur);
+    if (cur === from) break;
+    cur = parent[cur];
+  }
+  if (path[path.length-1] !== from) return null;
+  path.reverse();
+  return path;
+}
+
+function snapToWalkable(cx, cy, blocked, W, H){
+  let x = Math.round(cx), y = Math.round(cy);
+  x = Math.min(W-1, Math.max(0, x));
+  y = Math.min(H-1, Math.max(0, y));
+  const idx = y*W+x;
+  if (!blocked[idx]) return { cell: idx, x, y, offset: 0 };
+  for (let r = 1; r <= 80; r++){
+    for (let dy=-r; dy<=r; dy++) for (let dx=-r; dx<=r; dx++){
+      if (Math.max(Math.abs(dx),Math.abs(dy)) !== r) continue;
+      const nx = x+dx, ny = y+dy;
+      if (nx<0||ny<0||nx>=W||ny>=H) continue;
+      const q = ny*W+nx;
+      if (!blocked[q]) return { cell: q, x: nx, y: ny, offset: Math.hypot(dx,dy) };
+    }
+  }
+  return { cell: -1, x, y, offset: Infinity };
+}
+
+/* ============================================================
+   КЛАССИФИКАЦИЯ И РЕЛЕВАНТНОСТЬ
+   ============================================================ */
+function classifyPOI(D1, D2, homeThrPct){
+  if (!isFinite(D1) || !isFinite(D2)) return 'inaccessible';
+  const total = D1 + D2;
+  if (total <= 0) return 'contested';
+  const ratio1 = D1/total;
+  const thr = homeThrPct/100;
+  if (ratio1 < 0.5 - thr) return 'home1';
+  if (ratio1 > 0.5 + thr) return 'home2';
+  return 'contested';
+}
+
+function computeRelevance(D1, D2, poi, allPOIs, shortest1to2, NEIGHBOR_R){
+  if (!isFinite(D1) || !isFinite(D2)) return { value:0, balance:0, betweenness:0, density:0, neighbors:0 };
+  const total = D1 + D2;
+  if (total <= 0) return { value:0, balance:0, betweenness:0, density:0, neighbors:0 };
+  const ratio1 = D1/total;
+  const balance = 1 - Math.abs(2*ratio1 - 1);
+  let betweenness = 0;
+  if (isFinite(shortest1to2) && shortest1to2 > 0) betweenness = Math.min(1, shortest1to2/total);
+  let neighbors = 0;
+  for (const other of allPOIs){
+    if (other === poi) continue;
+    if (Math.hypot(other.x - poi.x, other.y - poi.y) <= NEIGHBOR_R) neighbors++;
+  }
+  const density = Math.min(1, neighbors/3);
+  const value = 0.45*balance + 0.30*betweenness + 0.25*density;
+  return { value, balance, betweenness, density, neighbors };
+}
+
+/* ============================================================
+   РЕКОМЕНДАЦИИ
+   ============================================================ */
+function suggestPoints(blocked, d1, d2, poiCells, W, H, opts){
+  const N = W*H;
+  const distCover = new Float32Array(N).fill(Infinity);
+  const visited = new Uint8Array(N);
+  const heap = new MinHeap(distCover);
+  for (const c of poiCells){ if (c>=0){ distCover[c]=0; heap.push(c); } }
+  while (heap.size > 0){
+    const u = heap.pop();
+    if (visited[u]) continue;
+    visited[u] = 1;
+    const du = distCover[u];
+    const ux = u%W, uy = (u-ux)/W;
+    for (let dy=-1;dy<=1;dy++){
+      const ny = uy+dy; if (ny<0||ny>=H) continue;
+      const rb = ny*W;
+      for (let dx=-1;dx<=1;dx++){
+        if (dx===0&&dy===0) continue;
+        const nx = ux+dx; if (nx<0||nx>=W) continue;
+        const v = rb+nx;
+        if (blocked[v] || visited[v]) continue;
+        const w = (dx!==0&&dy!==0)?SQRT2:1;
+        const nd = du+w;
+        if (nd < distCover[v]){ distCover[v]=nd; heap.push(v); }
+      }
+    }
+  }
+  const MAX_GAP = 200, BAL_WIN = 16;
+  const scores = new Float32Array(N);
+  for (let i = 0; i < N; i++){
+    if (blocked[i]) continue;
+    const c = distCover[i]; if (!isFinite(c)) continue;
+    const a = d1[i], b = d2[i];
+    if (!isFinite(a) || !isFinite(b)) continue;
+    const diff = Math.abs(a-b);
+    if (diff > BAL_WIN) continue;
+    const balance = 1 - diff/BAL_WIN;
+    const x = i%W, y = (i-x)/W;
+    let free = 0, total = 0;
+    for (let dy=-2;dy<=2;dy++){
+      const ny = y+dy;
+      for (let dx=-2;dx<=2;dx++){
+        const nx = x+dx; total++;
+        if (nx<0||ny<0||nx>=W||ny>=H) continue;
+        if (!blocked[ny*W+nx]) free++;
+      }
+    }
+    const clearance = free/total;
+    if (clearance < 0.85) continue;
+    scores[i] = Math.min(c, MAX_GAP)*balance*clearance;
+  }
+  const idxs = [];
+  for (let i = 0; i < N; i++) if (scores[i] > 0) idxs.push(i);
+  idxs.sort((p,q) => scores[q]-scores[p]);
+  const picked = [];
+  const R = opts.nmsRadius, maxN = opts.maxSuggest;
+  for (const i of idxs){
+    if (picked.length >= maxN) break;
+    const x = i%W, y = (i-x)/W;
+    let ok = true;
+    for (const p of picked) if (Math.hypot(x - p.x, y - p.y) < R){ ok = false; break; }
+    if (!ok) continue;
+    picked.push({ cell: i, x, y, score: scores[i], gap: distCover[i], d1: d1[i], d2: d2[i] });
+  }
+  return picked;
+}
+
+function analyzeExisting(poiAnalyzed){
+  const advices = [];
+  for (const p of poiAnalyzed){
+    if (p.kind !== 'contested'){
+      advices.push({ poi: p, kind: 'keep', notes: [p.kind === 'inaccessible' ? 'недостижима' : 'домашняя — рекомендации не нужны'] });
+      continue;
+    }
+    const a = Math.abs(p.adv);
+    let kind = 'keep';
+    const notes = [];
+    if (a > 10){ kind='move'; notes.push(`сильный перекос (Δ=${a.toFixed(1)} кл.)`); }
+    else if (a > 6){ kind='move'; notes.push(`умеренный перекос (Δ=${a.toFixed(1)} кл.)`); }
+    else notes.push('сбалансирована');
+    let minD = Infinity, minT = null;
+    for (const other of poiAnalyzed){
+      if (other === p) continue;
+      const dd = Math.hypot(p.poi.x - other.poi.x, p.poi.y - other.poi.y);
+      if (dd < minD){ minD = dd; minT = other; }
+    }
+    if (minD < 25){ notes.push(`дублирует Т${minT.idx} (${minD.toFixed(0)} px)`); if (kind==='keep') kind='move'; }
+    advices.push({ poi: p, kind, notes });
+  }
+  return advices;
+}
+
+/* ============================================================
+   ВОРОНОЙ
+   ============================================================ */
+function buildVoronoiCanvas(){
+  const W = S.W, H = S.H, N = W*H;
+  const owner = new Int8Array(N);
+  for (let i = 0; i < N; i++){
+    if (S.blocked[i]){ owner[i] = -1; continue; }
+    const a = S.d1[i], b = S.d2[i], fa = isFinite(a), fb = isFinite(b);
+    if (fa && fb) owner[i] = (a < b) ? 0 : 1;
+    else if (fa)  owner[i] = 0;
+    else if (fb)  owner[i] = 1;
+    else          owner[i] = -1;
+  }
+  const tmp = document.createElement('canvas');
+  tmp.width = W; tmp.height = H;
+  const tctx = tmp.getContext('2d');
+  const ov = tctx.createImageData(W, H);
+  const od = ov.data;
+  const wantVor = showVorEl.checked, wantFront = showFrontEl.checked;
+  for (let y = 0; y < H; y++){
+    const row = y*W;
+    for (let x = 0; x < W; x++){
+      const i = row+x, p = i*4, own = owner[i];
+      if (own < 0){ od[p+3] = 0; continue; }
+      let isFront = false;
+      if (wantFront){
+        for (let dy=-1;dy<=1 && !isFront;dy++){
+          const ny = y+dy; if (ny<0||ny>=H) continue;
+          for (let dx=-1;dx<=1;dx++){
+            if (dx===0&&dy===0) continue;
+            const nx = x+dx; if (nx<0||nx>=W) continue;
+            const oj = owner[ny*W+nx];
+            if (oj>=0 && oj!==own){ isFront = true; break; }
+          }
+        }
+      }
+      if (isFront){ od[p]=255; od[p+1]=255; od[p+2]=255; od[p+3]=235; }
+      else if (wantVor){
+        if (own === 0){ od[p]=34; od[p+1]=197; od[p+2]=94; od[p+3]=52; }
+        else          { od[p]=239; od[p+1]=68; od[p+2]=68; od[p+3]=52; }
+      } else od[p+3] = 0;
+    }
+  }
+  tctx.putImageData(ov, 0, 0);
+  return tmp;
+}
+
+/* ============================================================
+   РЕНДЕР
+   ============================================================ */
+function render(){
+  if (!S.cleanCanvas) return;
+  const { scale, offsetX, offsetY } = S.view;
+  ctx.setTransform(1,0,0,1,0,0);
+  ctx.fillStyle = '#0d0e12';
+  ctx.fillRect(0, 0, cv.width, cv.height);
+  ctx.setTransform(scale, 0, 0, scale, offsetX, offsetY);
+
+  ctx.drawImage(S.cleanCanvas, 0, 0);
+
+  const inv = 1/scale;
+
+  if (S.calculated && !S.stale && (showVorEl.checked || showFrontEl.checked)){
+    if (!S.voronoiCanvas) S.voronoiCanvas = buildVoronoiCanvas();
+    ctx.drawImage(S.voronoiCanvas, 0, 0);
+  }
+  if (S.calculated && !S.stale && showSugEl.checked){
+    for (const a of S.advices){
+      const m = S.markers.find(x => x.kind === 'poi' && x.n === a.poi.poi.n);
+      if (!m) continue;
+      if (a.kind === 'remove') drawRemoveMark(m.x, m.y, inv);
+      else if (a.kind === 'move') drawMoveMark(m.x, m.y, inv);
+    }
+    S.suggestions.forEach((s, i) => drawSuggested(s.x, s.y, i+1, inv));
+  }
+  if (S.calculated && !S.stale && showPathsEl.checked && S.selectedPOI && S.selectedPaths){
+    drawSelectedPaths(inv);
+  }
+  if (showMarksEl.checked) drawMarkers(inv);
+}
+let renderPending = false;
+function scheduleRender(){
+  if (renderPending) return;
+  renderPending = true;
+  requestAnimationFrame(() => { renderPending = false; render(); });
+}
+
+function markerColor(m){
+  if (m.kind === 'p1') return '#22ff22';
+  if (m.kind === 'p2') return '#ff2222';
+  const p = S.poiAnalyzed.find(x => x.poi.n === m.n);
+  if (S.calculated && p){
+    if (p.kind === 'home1') return '#7ff0c4';
+    if (p.kind === 'home2') return '#ffb0c4';
+    if (p.kind === 'contested') return '#ffe27b';
+    return '#888';
+  }
+  return '#ffee55';
+}
+function drawMarkers(inv){
+  for (const m of S.markers){
+    const isSel = S.selectedPOI && m.kind === 'poi' && m.n === S.selectedPOI.n;
+    const isHover = S.hoverMarker === m;
+    const color = markerColor(m);
+    const r = (m.kind === 'poi' ? (isSel ? 15 : 11) : 12) * inv;
+    ctx.save();
+    if (isSel || isHover){
+      ctx.globalAlpha = 0.35;
+      ctx.fillStyle = color;
+      ctx.beginPath(); ctx.arc(m.x, m.y, r + 5*inv, 0, Math.PI*2); ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+    ctx.lineWidth = (isSel ? 3 : 2) * inv;
+    ctx.strokeStyle = 'rgba(0,0,0,0.9)';
+    ctx.beginPath(); ctx.arc(m.x, m.y, r, 0, Math.PI*2); ctx.stroke();
+    ctx.strokeStyle = color;
+    ctx.beginPath(); ctx.arc(m.x, m.y, r, 0, Math.PI*2); ctx.stroke();
+    ctx.globalAlpha = 0.3;
+    ctx.fillStyle = color;
+    ctx.beginPath(); ctx.arc(m.x, m.y, r, 0, Math.PI*2); ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.beginPath(); ctx.arc(m.x, m.y, 2.5*inv, 0, Math.PI*2);
+    ctx.fillStyle = color; ctx.fill();
+
+    if (S.calculated && m.snapped && m.cell >= 0){
+      const sx = m.cell % S.W;
+      const sy = (m.cell - sx) / S.W;
+      ctx.setLineDash([3*inv, 3*inv]);
+      ctx.lineWidth = 1.5*inv;
+      ctx.strokeStyle = '#ff8c00';
+      ctx.beginPath(); ctx.moveTo(m.x, m.y); ctx.lineTo(sx + 0.5, sy + 0.5); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = '#ff8c00';
+      ctx.beginPath(); ctx.arc(sx + 0.5, sy + 0.5, 2*inv, 0, Math.PI*2); ctx.fill();
+    }
+
+    ctx.font = `bold ${12*inv}px system-ui, sans-serif`;
+    const label = m.name + (S.calculated && m.snapped ? ' ⚠' : '');
+    const tw = ctx.measureText(label).width;
+    ctx.fillStyle = 'rgba(0,0,0,0.82)';
+    ctx.fillRect(m.x + 14*inv, m.y - 22*inv, tw + 8*inv, 16*inv);
+    ctx.fillStyle = color;
+    ctx.fillText(label, m.x + 18*inv, m.y - 10*inv);
+    ctx.restore();
+  }
+}
+
+function drawSuggested(x, y, idx, inv){
+  const r = 13*inv;
+  ctx.save();
+  ctx.lineWidth = 2.2*inv;
+  ctx.setLineDash([5*inv, 4*inv]);
+  ctx.strokeStyle = 'rgba(0,0,0,0.85)';
+  ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2); ctx.stroke();
+  ctx.strokeStyle = '#7ff0e6';
+  ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.lineWidth = 2.4*inv;
+  ctx.beginPath();
+  ctx.moveTo(x - 6*inv, y); ctx.lineTo(x + 6*inv, y);
+  ctx.moveTo(x, y - 6*inv); ctx.lineTo(x, y + 6*inv);
+  ctx.stroke();
+  ctx.font = `bold ${12*inv}px system-ui, sans-serif`;
+  const label = '+' + idx;
+  const tw = ctx.measureText(label).width;
+  ctx.fillStyle = 'rgba(0,60,60,0.85)';
+  ctx.fillRect(x + 14*inv, y - 22*inv, tw + 8*inv, 16*inv);
+  ctx.fillStyle = '#c9fffb';
+  ctx.fillText(label, x + 18*inv, y - 10*inv);
+  ctx.restore();
+}
+function drawRemoveMark(x, y, inv){
+  ctx.save();
+  ctx.lineWidth = 3*inv;
+  ctx.strokeStyle = 'rgba(0,0,0,0.85)';
+  ctx.beginPath();
+  ctx.moveTo(x - 11*inv, y - 11*inv); ctx.lineTo(x + 11*inv, y + 11*inv);
+  ctx.moveTo(x + 11*inv, y - 11*inv); ctx.lineTo(x - 11*inv, y + 11*inv);
+  ctx.stroke();
+  ctx.strokeStyle = '#ef4444';
+  ctx.beginPath();
+  ctx.moveTo(x - 11*inv, y - 11*inv); ctx.lineTo(x + 11*inv, y + 11*inv);
+  ctx.moveTo(x + 11*inv, y - 11*inv); ctx.lineTo(x - 11*inv, y + 11*inv);
+  ctx.stroke();
+  ctx.restore();
+}
+function drawMoveMark(x, y, inv){
+  const r = 14*inv;
+  ctx.save();
+  ctx.lineWidth = 3*inv;
+  ctx.strokeStyle = '#f59e0b';
+  ctx.beginPath(); ctx.arc(x, y, r, Math.PI * 0.15, Math.PI * 1.55); ctx.stroke();
+  const ang = Math.PI * 1.55;
+  const hx = x + r*Math.cos(ang);
+  const hy = y + r*Math.sin(ang);
+  ctx.beginPath();
+  ctx.moveTo(hx, hy); ctx.lineTo(hx - 5*inv, hy - 5*inv);
+  ctx.moveTo(hx, hy); ctx.lineTo(hx + 5*inv, hy - 5*inv);
+  ctx.stroke();
+  ctx.restore();
+}
+function drawSelectedPaths(inv){
+  const P = S.selectedPaths;
+  ctx.save();
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+  const drawOne = (group, palette) => {
+    group.forEach((r, i) => {
+      if (!r.path || r.path.length < 2) return;
+      const col = palette[i % palette.length];
+      ctx.lineWidth = 5*inv;
+      ctx.strokeStyle = 'rgba(0,0,0,0.55)';
+      ctx.beginPath();
+      for (let k = 0; k < r.path.length; k++){
+        const idx = r.path[k], x = idx%S.W, y = (idx-x)/S.W;
+        if (k===0) ctx.moveTo(x+0.5, y+0.5); else ctx.lineTo(x+0.5, y+0.5);
+      }
+      ctx.stroke();
+      ctx.lineWidth = 2.8*inv;
+      ctx.strokeStyle = col;
+      ctx.beginPath();
+      for (let k = 0; k < r.path.length; k++){
+        const idx = r.path[k], x = idx%S.W, y = (idx-x)/S.W;
+        if (k===0) ctx.moveTo(x+0.5, y+0.5); else ctx.lineTo(x+0.5, y+0.5);
+      }
+      ctx.stroke();
+      const mid = r.path[Math.floor(r.path.length/2)];
+      const mx = mid%S.W, my = (mid-mx)/S.W;
+      const label = r.unit.name + '  ' + r.dist.toFixed(1);
+      ctx.font = `bold ${11*inv}px system-ui, sans-serif`;
+      const tw = ctx.measureText(label).width;
+      const pad = 4*inv;
+      ctx.fillStyle = 'rgba(0,0,0,0.85)';
+      ctx.fillRect(mx - tw/2 - pad, my - 9*inv, tw + 2*pad, 15*inv);
+      ctx.fillStyle = col;
+      ctx.fillText(label, mx - tw/2, my + 2*inv);
+    });
+  };
+  drawOne(P.p1, PALETTE_T1);
+  drawOne(P.p2, PALETTE_T2);
+  ctx.restore();
+}
+
+/* ============================================================
+   PAN / ZOOM / DRAG
+   ============================================================ */
+function getRectScale(){
+  const r = cv.getBoundingClientRect();
+  return { left: r.left, top: r.top, sx: cv.width/r.width, sy: cv.height/r.height, rect: r };
+}
+function screenToWorld(clientX, clientY){
+  const rs = getRectScale();
+  const cx = (clientX - rs.left) * rs.sx;
+  const cy = (clientY - rs.top)  * rs.sy;
+  return { x: (cx - S.view.offsetX) / S.view.scale, y: (cy - S.view.offsetY) / S.view.scale };
+}
+function pickMarker(worldX, worldY){
+  const hitR = 16 / S.view.scale;
+  let best = null, bestD = hitR;
+  for (const m of S.markers){
+    const d = Math.hypot(m.x - worldX, m.y - worldY);
+    if (d < bestD){ bestD = d; best = m; }
+  }
+  return best;
+}
+cv.addEventListener('pointerdown', e => {
+  if (!S.cleanCanvas) return;
+  cv.setPointerCapture(e.pointerId);
+  const w = screenToWorld(e.clientX, e.clientY);
+  const hit = pickMarker(w.x, w.y);
+  if (hit){
+    S.drag = { mode:'marker', marker: hit, startX: e.clientX, startY: e.clientY, moved: false, ox: hit.x, oy: hit.y };
+    cv.classList.remove('pan','pick'); cv.classList.add('dragging');
+  } else {
+    S.drag = { mode:'pan', startX: e.clientX, startY: e.clientY, moved: false, ox: S.view.offsetX, oy: S.view.offsetY };
+    cv.classList.remove('pick','dragging'); cv.classList.add('pan');
+  }
+});
+cv.addEventListener('pointermove', e => {
+  if (!S.drag){
+    const w = screenToWorld(e.clientX, e.clientY);
+    const h = pickMarker(w.x, w.y);
+    if (h !== S.hoverMarker){
+      S.hoverMarker = h;
+      cv.classList.toggle('pick', !!h);
+      if (!h) cv.classList.add('pan');
+      scheduleRender();
+    }
+    return;
+  }
+  const dx = e.clientX - S.drag.startX;
+  const dy = e.clientY - S.drag.startY;
+  if (Math.abs(dx) + Math.abs(dy) > 3) S.drag.moved = true;
+  if (S.drag.mode === 'pan'){
+    const rs = getRectScale();
+    S.view.offsetX = S.drag.ox + dx * rs.sx;
+    S.view.offsetY = S.drag.oy + dy * rs.sy;
+    scheduleRender();
+  } else if (S.drag.mode === 'marker'){
+    const w = screenToWorld(e.clientX, e.clientY);
+    const m = S.drag.marker;
+    m.x = Math.max(0, Math.min(S.W - 1, w.x));
+    m.y = Math.max(0, Math.min(S.H - 1, w.y));
+    S.stale = true;
+    updateStatus();
+    scheduleRender();
+  }
+});
+function endDrag(e){
+  if (!S.drag) return;
+  const d = S.drag;
+  S.drag = null;
+  cv.classList.remove('dragging','pan');
+  cv.classList.add('pan');
+  if (d.mode === 'marker'){
+    if (d.moved){
+      const s = snapToWalkable(d.marker.x, d.marker.y, S.blocked, S.W, S.H);
+      if (s.cell >= 0){
+        d.marker.x = s.x; d.marker.y = s.y;
+        d.marker.cell = s.cell;
+        d.marker.snapped = s.offset > 0.5;
+        d.marker.offset = s.offset;
+      }
+      S.stale = true;
+      updateStatus();
+      scheduleRender();
+    } else {
+      if (d.marker.kind === 'poi'){
+        const p = S.calculated ? S.poiAnalyzed.find(x => x.poi.n === d.marker.n) : null;
+        if (p) selectPOI(p);
+        else {
+          S.selectedPOI = { n: d.marker.n };
+          S.selectedPaths = null;
+          updateSelectedPanel();
+          scheduleRender();
+        }
+      }
+    }
+  }
+}
+cv.addEventListener('pointerup', endDrag);
+cv.addEventListener('pointercancel', endDrag);
+cv.addEventListener('pointerleave', e => { if (!S.drag) { S.hoverMarker = null; scheduleRender(); } });
+cv.addEventListener('wheel', e => {
+  e.preventDefault();
+  if (!S.cleanCanvas) return;
+  const rs = getRectScale();
+  const mx = (e.clientX - rs.left) * rs.sx;
+  const my = (e.clientY - rs.top)  * rs.sy;
+  const factor = e.deltaY < 0 ? 1.15 : 1/1.15;
+  const ns = Math.max(0.08, Math.min(20, S.view.scale * factor));
+  const k = ns / S.view.scale;
+  S.view.offsetX = mx - (mx - S.view.offsetX) * k;
+  S.view.offsetY = my - (my - S.view.offsetY) * k;
+  S.view.scale = ns;
+  scheduleRender();
+}, { passive: false });
+
+resetBtn.addEventListener('click', () => {
+  if (!S.W) return;
+  S.view = { scale: 1, offsetX: 0, offsetY: 0 };
+  scheduleRender();
+});
+resetPosBtn.addEventListener('click', () => {
+  if (!S.markersInit.length) return;
+  S.markers = S.markersInit.map(m => ({ ...m }));
+  S.calculated = false;
+  S.stale = true;
+  S.selectedPOI = null;
+  S.selectedPaths = null;
+  S.voronoiCanvas = null;
+  S.poiAnalyzed = []; S.suggestions = []; S.advices = []; S.summary = null;
+  tablesEl.innerHTML = '';
+  runBtn.classList.add('dirty');
+  updateStatus();
+  updateSelectedPanel();
+  scheduleRender();
+});
+
+/* ============================================================
+   ГОРЯЧАЯ КЛАВИША — ПРОБЕЛ
+   ============================================================ */
+document.addEventListener('keydown', e => {
+  if (e.code !== 'Space' || e.repeat) return;
+  const t = e.target;
+  const tag = (t.tagName || '').toLowerCase();
+  if (tag === 'input' || tag === 'textarea' || tag === 'select' || t.isContentEditable) return;
+  e.preventDefault();
+  if (runBtn.disabled) return;
+  runBtn.click();
+  // Небольшая визуальная вспышка кнопки
+  runBtn.style.transition = 'none';
+  runBtn.style.filter = 'brightness(1.6)';
+  setTimeout(() => { runBtn.style.transition = ''; runBtn.style.filter = ''; }, 130);
+});
+
+/* ============================================================
+   ВЫБОР ТОЧКИ
+   ============================================================ */
+function selectPOI(p){
+  if (!p){ S.selectedPOI = null; S.selectedPaths = null; render(); updateSelectedPanel(); return; }
+  S.selectedPOI = p.poi;
+  const p1 = [], p2 = [];
+  for (const t of S.trees1){
+    const d = t.dist[p.cell];
+    if (!isFinite(d)) continue;
+    const path = buildPath(t.parent, t.unit.cell, p.cell);
+    p1.push({ unit: t.unit, dist: d, path });
+  }
+  for (const t of S.trees2){
+    const d = t.dist[p.cell];
+    if (!isFinite(d)) continue;
+    const path = buildPath(t.parent, t.unit.cell, p.cell);
+    p2.push({ unit: t.unit, dist: d, path });
+  }
+  p1.sort((a,b) => a.dist - b.dist);
+  p2.sort((a,b) => a.dist - b.dist);
+  S.selectedPaths = { p1, p2 };
+  scheduleRender();
+  updateSelectedPanel();
+  updateTables();
+}
+
+/* ============================================================
+   ПАНЕЛЬ ВЫБРАННОЙ
+   ============================================================ */
+function updateSelectedPanel(){
+  if (!S.calculated){
+    if (S.selectedPOI){
+      const m = S.markers.find(x => x.kind === 'poi' && x.n === S.selectedPOI.n);
+      selPanel.innerHTML = `<div class="hint">Выбрана точка <b>${m ? m.name : 'Т'+S.selectedPOI.n}</b>.<br>
+        Нажмите <b>«Рассчитать»</b> (или <b>Space</b>), чтобы построить пути и метрики.</div>`;
+    } else {
+      selPanel.innerHTML = `<div class="hint">Кликните по точке интереса, чтобы увидеть пути от каждого юнита обеих команд.</div>`;
+    }
+    return;
+  }
+  const p = S.poiAnalyzed.find(x => S.selectedPOI && x.poi.n === S.selectedPOI.n);
+  if (!p){
+    selPanel.innerHTML = `<div class="hint">Кликните по точке интереса, чтобы увидеть пути от каждого юнита обеих команд.</div>`;
+    return;
+  }
+  const kindLabel = {
+    contested: '<span class="tag tag-hot">спорная</span>',
+    home1:     '<span class="tag tag-home1">домашняя И1</span>',
+    home2:     '<span class="tag tag-home2">домашняя И2</span>',
+    inaccessible: '<span class="tag tag-na">недостижима</span>',
+  }[p.kind];
+  const rel = p.relevance;
+  const pct = Math.round(rel.value*100);
+
+  let h = `<h3 style="margin-top:0">Точка Т${p.poi.n} ${kindLabel}</h3>`;
+  h += `<div class="kv"><b>D(И1):</b> ${isFinite(p.D1)?p.D1.toFixed(1)+' кл.':'—'} <span class="dim">(${p.best1Unit?p.best1Unit.name:'—'})</span></div>`;
+  h += `<div class="kv"><b>D(И2):</b> ${isFinite(p.D2)?p.D2.toFixed(1)+' кл.':'—'} <span class="dim">(${p.best2Unit?p.best2Unit.name:'—'})</span></div>`;
+  if (isFinite(p.adv)){
+    const who = p.adv > 0 ? 'Игрок 1' : 'Игрок 2';
+    h += `<div class="kv"><b>Преимущество:</b> ${who} на ${Math.abs(p.adv).toFixed(1)} кл.</div>`;
+  }
+  h += `<h4>Релевантность = ${pct}%</h4>`;
+  const bar = (v,col) => `<div class="bar"><i style="width:${Math.round(v*100)}%;background:${col}"></i></div>`;
+  h += `<div class="kv"><b>Баланс:</b> ${(rel.balance*100).toFixed(0)}% ${bar(rel.balance,'#ffd166')}</div>`;
+  h += `<div class="kv"><b>На кратч. пути:</b> ${(rel.betweenness*100).toFixed(0)}% ${bar(rel.betweenness,'#7dd3fc')}</div>`;
+  h += `<div class="kv"><b>Плотность (${rel.neighbors} сос.):</b> ${(rel.density*100).toFixed(0)}% ${bar(rel.density,'#a78bfa')}</div>`;
+
+  if (S.selectedPaths){
+    h += `<h4>Пути Игрока 1 (${S.selectedPaths.p1.length})</h4>`;
+    if (!S.selectedPaths.p1.length) h += `<div class="hint">нет пути</div>`;
+    S.selectedPaths.p1.forEach((r,i) => {
+      const col = PALETTE_T1[i%PALETTE_T1.length];
+      h += `<div class="kv"><span class="pill" style="border-left:6px solid ${col}">${r.unit.name}</span><b>${r.dist.toFixed(1)} кл.</b></div>`;
+    });
+    h += `<h4>Пути Игрока 2 (${S.selectedPaths.p2.length})</h4>`;
+    if (!S.selectedPaths.p2.length) h += `<div class="hint">нет пути</div>`;
+    S.selectedPaths.p2.forEach((r,i) => {
+      const col = PALETTE_T2[i%PALETTE_T2.length];
+      h += `<div class="kv"><span class="pill" style="border-left:6px solid ${col}">${r.unit.name}</span><b>${r.dist.toFixed(1)} кл.</b></div>`;
+    });
+  }
+  selPanel.innerHTML = h;
+}
+
+/* ============================================================
+   РАСЧЁТ
+   ============================================================ */
+function recalc(){
+  if (!S.cleanCanvas) return;
+  const t0 = performance.now();
+  const W = S.W, H = S.H, N = W*H;
+
+  const hotTresh  = Math.max(0, parseFloat(hotEl.value) || 0);
+  const homeThr   = Math.max(2, Math.min(30, parseInt(homeThrEl.value,10) || 10));
+  const nmsRadius = Math.max(10, parseInt(nmsEl.value,10) || 60);
+  const maxSuggest= Math.max(1, Math.min(20, parseInt(maxSugEl.value,10) || 5));
+
+  buildBlocked();
+
+  for (const m of S.markers){
+    const s = snapToWalkable(m.x, m.y, S.blocked, W, H);
+    if (s.cell >= 0){
+      m.x = s.x; m.y = s.y;
+      m.cell = s.cell;
+      m.snapped = s.offset > 0.5;
+      m.offset = s.offset;
+    } else {
+      m.cell = -1; m.snapped = true; m.offset = Infinity;
+    }
+  }
+
+  S.P1  = S.markers.filter(m => m.kind === 'p1'  && m.cell >= 0).map(m => ({ n:m.n, name:m.name, x:m.x, y:m.y, cell:m.cell }));
+  S.P2  = S.markers.filter(m => m.kind === 'p2'  && m.cell >= 0).map(m => ({ n:m.n, name:m.name, x:m.x, y:m.y, cell:m.cell }));
+  S.POI = S.markers.filter(m => m.kind === 'poi' && m.cell >= 0).map(m => ({ n:m.n, name:m.name, x:m.x, y:m.y, cell:m.cell }));
+
+  if (!S.P1.length || !S.P2.length || !S.POI.length){
+    tablesEl.innerHTML = `<div class="panel"><b class="bad">Нет данных для расчёта.</b><br>
+      Игрок 1: ${S.P1.length}, Игрок 2: ${S.P2.length}, точки: ${S.POI.length}.</div>`;
+    S.calculated = false;
+    return;
+  }
+
+  S.trees1 = S.P1.map(u => ({ unit: u, ...dijkstraFrom(u.cell, S.blocked, W, H) }));
+  S.trees2 = S.P2.map(u => ({ unit: u, ...dijkstraFrom(u.cell, S.blocked, W, H) }));
+
+  const d1 = new Float32Array(N).fill(Infinity);
+  const d2 = new Float32Array(N).fill(Infinity);
+  for (const t of S.trees1) for (let i = 0; i < N; i++) if (t.dist[i] < d1[i]) d1[i] = t.dist[i];
+  for (const t of S.trees2) for (let i = 0; i < N; i++) if (t.dist[i] < d2[i]) d2[i] = t.dist[i];
+  S.d1 = d1; S.d2 = d2;
+
+  let sh = Infinity;
+  for (const u2 of S.P2){
+    const dd = d1[u2.cell];
+    if (isFinite(dd) && dd < sh) sh = dd;
+  }
+  S.shortest1to2 = sh;
+
+  const NEIGHBOR_R = 120;
+  S.poiAnalyzed = S.POI.map((poi, i) => {
+    const c = poi.cell;
+    const D1 = d1[c], D2 = d2[c];
+    const f1 = isFinite(D1), f2 = isFinite(D2);
+    const kind = classifyPOI(D1, D2, homeThr);
+    const rel  = computeRelevance(D1, D2, poi, S.POI, sh, NEIGHBOR_R);
+    const adv  = (f1 && f2) ? (D2 - D1) : (f2 ? -Infinity : (f1 ? Infinity : NaN));
+    const perP1 = S.trees1.map(t => ({ unit: t.unit, dist: t.dist[c] })).filter(o => isFinite(o.dist)).sort((a,b) => a.dist - b.dist);
+    const perP2 = S.trees2.map(t => ({ unit: t.unit, dist: t.dist[c] })).filter(o => isFinite(o.dist)).sort((a,b) => a.dist - b.dist);
+    return {
+      idx: i+1, poi, D1, D2, f1, f2, adv, kind, relevance: rel,
+      best1Unit: perP1[0]?.unit || null, best2Unit: perP2[0]?.unit || null,
+      perP1, perP2,
+      snapped: poi.snapped, offset: poi.offset,
+    };
+  });
+
+  S.suggestions = suggestPoints(S.blocked, d1, d2, S.POI.map(o => o.cell), W, H, { nmsRadius, maxSuggest });
+  S.advices = analyzeExisting(S.poiAnalyzed);
+
+  // ==== СВОДКА / ОБЩИЙ ПЕРЕКОС ====
+  S.summary = computeSummary(S.poiAnalyzed);
+
+  S.voronoiCanvas = null;
+  S.calculated = true;
+  S.stale = false;
+  runBtn.classList.remove('dirty');
+
+  if (S.selectedPOI){
+    const p = S.poiAnalyzed.find(x => x.poi.n === S.selectedPOI.n);
+    if (p) selectPOI(p); else { S.selectedPOI = null; S.selectedPaths = null; }
+  }
+
+  updateStatus();
+  updateSelectedPanel();
+  updateTables();
+  scheduleRender();
+
+  const ms = (performance.now() - t0).toFixed(0);
+  console.log('Расчёт за', ms, 'мс');
+}
+
+/* ---------- Сводка (общий перекос) ---------- */
+function computeSummary(pts){
+  const acc = {
+    all:      { d1: 0, d2: 0, n: 0 },
+    contested:{ d1: 0, d2: 0, n: 0 },
+    home1:    { d1: 0, d2: 0, n: 0 },
+    home2:    { d1: 0, d2: 0, n: 0 },
+    unreach:  0,
+  };
+  for (const p of pts){
+    if (!isFinite(p.D1) || !isFinite(p.D2)){
+      acc.unreach++;
+      continue;
+    }
+    const bucket =
+      p.kind === 'contested' ? acc.contested :
+      p.kind === 'home1'     ? acc.home1 :
+      p.kind === 'home2'     ? acc.home2 : null;
+    if (bucket){ bucket.d1 += p.D1; bucket.d2 += p.D2; bucket.n++; }
+    acc.all.d1 += p.D1; acc.all.d2 += p.D2; acc.all.n++;
+  }
+
+  // adv = D2 − D1 (>0 → Игрок 1 ближе суммарно)
+  const mk = (b) => {
+    const adv = b.d2 - b.d1;
+    const total = b.d1 + b.d2;
+    const skewPct = total > 0 ? (adv / total) * 100 : 0;
+    return { ...b, adv, skewPct };
+  };
+
+  return {
+    all:       mk(acc.all),
+    contested: mk(acc.contested),
+    home1:     mk(acc.home1),
+    home2:     mk(acc.home2),
+    unreach:   acc.unreach,
+  };
+}
+
+runBtn.addEventListener('click', () => {
+  try { recalc(); }
+  catch(e){
+    tablesEl.innerHTML = `<div class="panel"><b class="bad">Ошибка:</b> ${e.message}</div>`;
+    console.error(e);
+  }
+});
+
+/* ============================================================
+   СТАТУС
+   ============================================================ */
+function updateStatus(){
+  if (!S.cleanCanvas){ statusEl.innerHTML = ''; return; }
+  if (!S.calculated){
+    statusEl.innerHTML = `<div class="status-msg status-stale">Позиции не рассчитаны — нажмите <b>«Рассчитать»</b> или <b>Space</b>.</div>`;
+  } else if (S.stale){
+    statusEl.innerHTML = `<div class="status-msg status-stale">Позиции изменены — нажмите <b>«Рассчитать»</b> или <b>Space</b> для обновления анализа.</div>`;
+  } else {
+    statusEl.innerHTML = `<div class="status-msg status-ok">Анализ актуален.</div>`;
+  }
+}
+
+/* ============================================================
+   ТАБЛИЦЫ
+   ============================================================ */
+function fmtD(v){ return isFinite(v) ? `<span class="ok">${v.toFixed(1)}</span>` : `<span class="bad">—</span>`; }
+function fmtAdv(a){
+  if (!isFinite(a)) return `<span class="dim">—</span>`;
+  const s = a > 0 ? '+' : '';
+  const cls = a > 0 ? 'ok' : (a < 0 ? 'bad' : 'dim');
+  return `<span class="${cls}">${s}${a.toFixed(1)}</span>`;
+}
+function kindTag(p){
+  switch (p.kind){
+    case 'contested': return `<span class="tag tag-hot">спорная</span>`;
+    case 'home1':     return `<span class="tag tag-home1">домашняя И1</span>`;
+    case 'home2':     return `<span class="tag tag-home2">домашняя И2</span>`;
+    default:          return `<span class="tag tag-na">недостижима</span>`;
+  }
+}
+
+function updateTables(){
+  if (!S.calculated) return;
+  const sel = S.selectedPOI ? S.selectedPOI.n : null;
+
+  /* 1: расстояния */
+  let h1 = `<table><tr><th>Точка</th><th>Тип</th><th>И1 → Т (кл.)</th><th>И2 → Т (кл.)</th><th>Δ (И2−И1)</th></tr>`;
+  for (const p of S.poiAnalyzed){
+    const cls = sel === p.poi.n ? 'sel' : '';
+    h1 += `<tr class="clickable ${cls}" data-poi="${p.poi.n}">
+      <td>Т${p.idx}${p.snapped ? ' <span class="warn" title="центроид сдвинут из стены">⚠</span>' : ''}</td>
+      <td>${kindTag(p)}</td>
+      <td>${fmtD(p.D1)} <span class="dim">(${p.best1Unit?p.best1Unit.name:'—'})</span></td>
+      <td>${fmtD(p.D2)} <span class="dim">(${p.best2Unit?p.best2Unit.name:'—'})</span></td>
+      <td>${fmtAdv(p.adv)}</td>
+    </tr>`;
+  }
+  h1 += `</table>`;
+
+  /* 2: ценность */
+  let h2 = `<table><tr><th>Точка</th><th>Тип</th><th>Ценность</th><th>Баланс</th><th>На пути</th><th>Соседей</th><th>Комментарий</th></tr>`;
+  const sortedRel = [...S.poiAnalyzed].sort((a,b) => b.relevance.value - a.relevance.value);
+  for (const p of sortedRel){
+    const rel = p.relevance;
+    const pct = Math.round(rel.value*100);
+    const cls = sel === p.poi.n ? 'sel' : '';
+    const col = rel.value > 0.65 ? '#4ade80' : rel.value > 0.4 ? '#ffd166' : '#7a828f';
+    let note = '';
+    if (p.kind === 'inaccessible') note = '<span class="bad">недостижима</span>';
+    else if (rel.value > 0.65) note = '<span class="ok">высокая — держать</span>';
+    else if (rel.value > 0.4)  note = '<span class="warn">средняя</span>';
+    else                        note = '<span class="dim">низкая — на отшибе</span>';
+    h2 += `<tr class="clickable ${cls}" data-poi="${p.poi.n}">
+      <td>Т${p.idx}</td>
+      <td>${kindTag(p)}</td>
+      <td><b style="color:${col}">${pct}%</b><div class="bar"><i style="width:${pct}%;background:${col}"></i></div></td>
+      <td>${(rel.balance*100).toFixed(0)}%</td>
+      <td>${(rel.betweenness*100).toFixed(0)}%</td>
+      <td>${rel.neighbors}</td>
+      <td style="white-space:normal">${note}</td>
+    </tr>`;
+  }
+  h2 += `</table>`;
+
+  /* 3: добавить */
+  let h3;
+  if (!S.suggestions.length){
+    h3 = `<div class="hint">Свободных сбалансированных зон не найдено.</div>`;
+  } else {
+    h3 = `<table><tr><th>#</th><th>Позиция</th><th>До ближайшей</th><th>И1 / И2</th><th>Δ</th></tr>`;
+    S.suggestions.forEach((s, i) => {
+      const gapTxt = isFinite(s.gap) ? `${s.gap.toFixed(0)} кл.` : '—';
+      h3 += `<tr>
+        <td><span class="tag tag-add">+${i+1}</span></td>
+        <td>(${s.x}, ${s.y})</td>
+        <td>${gapTxt}</td>
+        <td>И1 ${s.d1.toFixed(0)} / И2 ${s.d2.toFixed(0)}</td>
+        <td>${fmtAdv(s.d2 - s.d1)}</td>
+      </tr>`;
+    });
+    h3 += `</table>`;
+  }
+
+  /* 4: убрать/перенести — только спорные */
+  const contest = S.advices.filter(a => a.poi.kind === 'contested');
+  const toFix = contest.filter(a => a.kind !== 'keep');
+  let h4;
+  if (!contest.length){
+    h4 = `<div class="hint">Спорных точек нет.</div>`;
+  } else if (!toFix.length){
+    h4 = `<div class="hint"><span class="ok">Все спорные точки сбалансированы.</span></div>`;
+  } else {
+    h4 = `<table><tr><th>Точка</th><th>Рекомендация</th><th>Причина</th></tr>`;
+    for (const a of toFix){
+      const tag = a.kind === 'remove' ? `<span class="tag tag-rm">убрать</span>` : `<span class="tag tag-move">перенести</span>`;
+      const rec = a.kind === 'remove' ? 'удалить' : 'сдвинуть к фронту / разнести';
+      h4 += `<tr><td>Т${a.poi.poi.n}</td><td>${tag} ${rec}</td><td style="white-space:normal" class="dim">${a.notes.join('; ')}</td></tr>`;
+    }
+    h4 += `</table>`;
+  }
+
+  /* 5: СВОДКА — новая */
+  const h5 = buildSummaryHTML(S.summary, S.poiAnalyzed, toFix.length, S.suggestions.length);
+
+  tablesEl.innerHTML = `
+    <details open><summary>📊 Сводка / перекос баланса</summary><div class="body">${h5}</div></details>
+    <details><summary>📏 Расстояния до точек интереса</summary><div class="body">${h1}</div></details>
+    <details><summary>🎯 Ценность точек (релевантность)</summary><div class="body">${h2}</div></details>
+    <details><summary>💡 Куда добавить новые точки</summary><div class="body">${h3}</div></details>
+    <details><summary>⚠️ Убрать/перенести (только спорные)</summary><div class="body">${h4}</div></details>
+  `;
+
+  tablesEl.querySelectorAll('tr[data-poi]').forEach(tr => {
+    tr.addEventListener('click', () => {
+      const n = parseInt(tr.dataset.poi, 10);
+      const p = S.poiAnalyzed.find(x => x.poi.n === n);
+      if (p) selectPOI(p);
+    });
+  });
+}
+
+/* ---------- Рендер сводки ---------- */
+function buildSummaryHTML(sm, pts, toFixCount, sugCount){
+  if (!sm) return '';
+  const row = (label, bucket, kind) => {
+    if (bucket.n === 0 && kind !== 'all'){
+      return `<div class="n">${label}</div><div class="n">—</div><div class="n">—</div><div class="n">точек нет</div>`;
+    }
+    const cls = bucket.adv > 0.001 ? 'ok' : bucket.adv < -0.001 ? 'bad' : 'dim';
+    const who = bucket.adv > 0 ? 'Игрок 1' : 'Игрок 2';
+    const sign = bucket.adv > 0 ? '+' : '';
+    const advTxt = Math.abs(bucket.adv) < 0.05
+      ? `<span class="dim">паритет</span>`
+      : `<span class="${cls}">${who} ${sign}${bucket.adv.toFixed(1)} кл.</span>`;
+    return `
+      <div>${label} <span class="n">(${bucket.n})</span></div>
+      <div class="v1">${bucket.d1.toFixed(1)}</div>
+      <div class="v2">${bucket.d2.toFixed(1)}</div>
+      <div class="adv">${advTxt}</div>`;
+  };
+
+  // Итог
+  const adv = sm.all.adv;
+  const skewPct = sm.all.skewPct;   // знак: + → И1
+  const skewAbs = Math.min(100, Math.abs(skewPct));
+  const skewColor = adv > 0.5 ? '#22c55e' : adv < -0.5 ? '#ef4444' : '#7a828f';
+  const skewWho = Math.abs(adv) < 0.5
+    ? 'Паритет'
+    : (adv > 0 ? 'Перевес Игрока 1' : 'Перевес Игрока 2');
+  const skewSign = adv > 0 ? '+' : '';
+
+  const cHome1 = pts.filter(p => p.kind === 'home1').length;
+  const cHome2 = pts.filter(p => p.kind === 'home2').length;
+  const cCont  = pts.filter(p => p.kind === 'contested').length;
+  const cNA    = pts.filter(p => p.kind === 'inaccessible').length;
+
+  // Текстовый вердикт по перекосу
+  let verdict;
+  if (cCont === 0){
+    verdict = `<span class="warn">Нет спорных точек — сравнивать нечего. Добавьте точки у линии фронта.</span>`;
+  } else if (Math.abs(adv) < 1){
+    verdict = `<span class="ok">Идеальный паритет — суммарные расстояния сторон почти равны.</span>`;
+  } else if (Math.abs(adv) < sm.all.d1 * 0.05){
+    verdict = `<span class="warn">Небольшой перекос в пользу ${adv > 0 ? 'Игрока 1' : 'Игрока 2'} — вероятно, приемлемо.</span>`;
+  } else {
+    verdict = `<span class="bad">Заметный перекос в пользу ${adv > 0 ? 'Игрока 1' : 'Игрока 2'}. Пересмотрите позиции точек.</span>`;
+  }
+
+  // Смещение полосы: skewPct ∈ [-100..+100], рисуем ширину как |skewPct|*0.5% → до 50% ширины
+  const barW = Math.min(50, Math.abs(skewPct) / 2);
+  const barLeft = skewPct >= 0 ? 50 : (50 - barW);
+  const barColor = skewPct >= 0 ? 'linear-gradient(90deg,#22c55e,#4ade80)' : 'linear-gradient(90deg,#f87171,#ef4444)';
+
+  return `
+    <div class="summary-block">
+      <div class="hdr"></div>
+      <div class="hdr">Игрок 1 (Σ кл.)</div>
+      <div class="hdr">Игрок 2 (Σ кл.)</div>
+      <div class="hdr" style="text-align:right">Перевес</div>
+
+      ${row('Все точки',        sm.all,       'all')}
+      ${row('Спорные',          sm.contested, 'contested')}
+      ${row('Домашние И1',      sm.home1,     'home1')}
+      ${row('Домашние И2',      sm.home2,     'home2')}
+    </div>
+
+    <div style="margin-top:14px">
+      <div class="skew-big" style="color:${skewColor}">${skewWho} ${Math.abs(adv) < 0.5 ? '' : skewSign + skewPct.toFixed(1) + '%'}</div>
+      <div class="skew-bar">
+        <i style="left:${barLeft}%;width:${barW}%;background:${barColor}"></i>
+        <span></span>
+      </div>
+      <div class="hint" style="display:flex;justify-content:space-between">
+        <span>◀ Игрок 2</span><span>паритет</span><span>Игрок 1 ▶</span>
+      </div>
+    </div>
+
+    <table style="margin-top:14px">
+      <tr><td>Точек всего</td><td><b>${pts.length}</b></td></tr>
+      <tr><td>Спорных / домашних И1 / домашних И2</td><td><span class="warn">${cCont}</span> / <span class="ok">${cHome1}</span> / <span class="bad">${cHome2}</span></td></tr>
+      <tr><td>Недостижимых</td><td>${cNA || sm.unreach}</td></tr>
+      <tr><td>Сумма путей И1 → все точки</td><td><span class="v1">${sm.all.d1.toFixed(1)} кл.</span></td></tr>
+      <tr><td>Сумма путей И2 → все точки</td><td><span class="v2">${sm.all.d2.toFixed(1)} кл.</span></td></tr>
+      <tr><td>Разница (И2 − И1)</td><td><b class="${skewColor === '#22c55e' ? 'ok' : skewColor === '#ef4444' ? 'bad' : 'dim'}">${adv > 0 ? '+' : ''}${adv.toFixed(1)} кл.</b></td></tr>
+      <tr><td>Минимум И1↔И2</td><td>${isFinite(S.shortest1to2)?S.shortest1to2.toFixed(1)+' кл.':'—'}</td></tr>
+      <tr><td>Рекомендуется добавить</td><td><span class="info">${sugCount}</span></td></tr>
+      <tr><td>Убрать / перенести (спорные)</td><td><span class="warn">${toFixCount}</span></td></tr>
+    </table>
+
+    <div class="hint" style="margin-top:10px">${verdict}</div>
+  `;
+}
+
+/* ============================================================
+   ФАЙЛ
+   ============================================================ */
+fileIn.addEventListener('change', e => {
+  const f = e.target.files[0]; if (!f) return;
+  fileNameEl.textContent = f.name;
+  const url = URL.createObjectURL(f);
+  const im = new Image();
+  im.onload = () => { loadImage(im); URL.revokeObjectURL(url); };
+  im.onerror = () => { statusEl.textContent = 'Не удалось загрузить изображение.'; };
+  im.src = url;
+});
+
+/* ============================================================
+   ДЕМО
+   ============================================================ */
+demoBtn.addEventListener('click', () => {
+  fileNameEl.textContent = 'demo.png';
+  const w = 900, h = 640;
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  const g = c.getContext('2d');
+  g.fillStyle = '#ffffff'; g.fillRect(0,0,w,h);
+
+  g.fillStyle = '#0000ff';
+  g.fillRect(  0, 320, 300, 26);
+  g.fillRect(380, 320, 200, 26);
+  g.fillRect(700, 320, 200, 26);
+
+  g.fillStyle = '#000000';
+  g.fillRect(160, 100, 26, 170);
+  g.fillRect(680, 100, 26, 170);
+  g.fillRect(160, 440, 240, 24);
+  g.fillRect(540, 440, 240, 24);
+
+  const circle = (x,y,r,col) => { g.fillStyle=col; g.beginPath(); g.arc(x,y,r,0,Math.PI*2); g.fill(); };
+
+  circle(300,  60, 16, '#ffff00');
+  circle(450,  60, 16, '#ffff00');
+  circle(600,  60, 16, '#ffff00');
+  circle( 70, 560, 16, '#ffff00');
+  circle(130, 500, 16, '#ffff00');
+  circle(830, 560, 16, '#ffff00');
+  circle(770, 500, 16, '#ffff00');
+
+  circle( 70, 600, 17, '#00ff00');
+  circle(150, 600, 17, '#00ff00');
+  circle(830, 600, 17, '#ff0000');
+  circle(750, 600, 17, '#ff0000');
+
+  loadImage(c);
+});
+
+updateStatus();
+</script>
+</body>
+</html>
