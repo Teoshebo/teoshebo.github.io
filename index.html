@@ -2,22 +2,21 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8">
-<title>RTS Balance: перенос точек и игроков</title>
+<title>RTS Balance</title>
 <style>
   *{box-sizing:border-box}
   html,body{margin:0;padding:0}
   body{font-family:system-ui,"Segoe UI",Roboto,Arial,sans-serif;background:#16181d;color:#e8e8e8}
   .page{padding:12px 14px 24px}
 
-  /* === ЗАКРЕПЛЁННАЯ ШАПКА === */
   .toolbar{
     position:sticky;top:0;z-index:100;
-    background:linear-gradient(#1c1e24 80%, #1c1e2400);
+    background:linear-gradient(#1c1e24 85%, #1c1e2400);
     padding:10px 14px 12px;
     border-bottom:1px solid #2c2f37;
     backdrop-filter:blur(6px);
   }
-  .toolbar .row{display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin:0}
+  .toolbar .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:0}
   .toolbar .file-lbl{
     display:inline-flex;align-items:center;gap:8px;
     background:#141519;border:1px solid #3a3e46;border-radius:8px;
@@ -26,7 +25,7 @@
   }
   .toolbar .file-lbl:hover{border-color:#5a606b}
   .toolbar input[type=file]{display:none}
-  .file-name{color:#a7b0bd;max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .file-name{color:#a7b0bd;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .hot-hint{
     margin-left:auto;font-size:11.5px;color:#7a828f;
     display:flex;align-items:center;gap:6px;
@@ -35,6 +34,12 @@
     background:#141519;border:1px solid #3a3e46;border-bottom-width:2px;
     border-radius:5px;padding:1px 7px;font-size:11px;font-family:inherit;color:#c9ced8;
   }
+  .lang-select{
+    background:#141519;color:#c9ced8;border:1px solid #3a3e46;border-radius:8px;
+    padding:5px 8px;font-size:12.5px;cursor:pointer;font-family:inherit;
+  }
+  .lang-select:hover{border-color:#5a606b}
+  .lang-select:focus{outline:none;border-color:#3b82f6}
 
   h1{font-size:17px;margin:8px 0 10px}
   h3{font-size:14px;margin:10px 0 6px;color:#c9ced8}
@@ -95,7 +100,6 @@
   .status-stale{background:#3d2a0f;color:#ffd166;border:1px solid #6b4d1f}
   .status-ok{background:#0f2f1a;color:#8ef5b0;border:1px solid #1f6b38}
 
-  /* Сводка */
   .summary-block{display:grid;grid-template-columns:auto 1fr 1fr auto;gap:4px 12px;font-size:12.5px;align-items:center}
   .summary-block .hdr{color:#9aa0aa;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.05em}
   .summary-block .n{color:#7a828f}
@@ -104,56 +108,61 @@
   .summary-block .adv{text-align:right;font-weight:700}
   .skew-big{font-size:22px;font-weight:800;letter-spacing:.02em}
   .skew-bar{height:12px;background:#2c2f37;border-radius:6px;overflow:hidden;position:relative;margin:8px 0}
-  .skew-bar > i{position:absolute;top:0;bottom:0;width:50%;background:linear-gradient(90deg,#22c55e,#4ade80)}
-  .skew-bar > span{
-    position:absolute;top:0;bottom:0;left:50%;width:2px;background:#e8e8e8aa;
+  .skew-bar > i{position:absolute;top:0;bottom:0;background:linear-gradient(90deg,#22c55e,#4ade80)}
+  .skew-bar > span{position:absolute;top:0;bottom:0;left:50%;width:2px;background:#e8e8e8aa}
+
+  .copyright{
+    text-align:center;color:#6b7280;font-size:11.5px;
+    padding:16px 14px 20px;border-top:1px solid #23262e;margin-top:20px;
   }
+  .copyright a{color:#7dd3fc;text-decoration:none}
 </style>
 </head>
 <body>
 
-<!-- ===== ЗАКРЕПЛЁННАЯ ШАПКА ===== -->
 <div class="toolbar">
   <div class="row">
     <label class="file-lbl">
-      <span>📂 Выберите файл</span>
-      <span class="file-name" id="fileName">файл не выбран</span>
+      <span data-i18n="chooseFile">📂 Выберите файл</span>
+      <span class="file-name" id="fileName"></span>
       <input type="file" id="file" accept="image/png,image/*">
     </label>
-    <button id="demo" class="alt">Тестовая карта</button>
-    <button id="run" class="calc" disabled>Рассчитать</button>
-    <button id="reset" class="alt">Сбросить вид</button>
-    <button id="resetPos" class="alt">Вернуть объекты</button>
-    <div class="hot-hint">Запуск: <kbd>Space</kbd></div>
+    <button id="demo" class="alt" data-i18n="testMap">Тестовая карта</button>
+    <button id="run" class="calc" disabled data-i18n="calculate">Рассчитать</button>
+    <button id="reset" class="alt" data-i18n="resetView">Сбросить вид</button>
+    <button id="resetPos" class="alt" data-i18n="resetObjects">Вернуть объекты</button>
+    <select class="lang-select" id="lang" aria-label="Language">
+      <option value="ru">🇷🇺 RU</option>
+      <option value="en">🇬🇧 EN</option>
+      <option value="zh">🇨🇳 中文</option>
+      <option value="fr">🇫🇷 FR</option>
+      <option value="es">🇪🇸 ES</option>
+    </select>
+    <div class="hot-hint"><span data-i18n="run">Запуск:</span> <kbd>Space</kbd></div>
   </div>
 </div>
 
 <div class="page">
 
-<h1>RTS Balance — перетаскивание точек и игроков, анализ по кнопке</h1>
+<h1 data-i18n="title">RTS Balance — перетаскивание точек и игроков, анализ по кнопке</h1>
 
 <div class="panel">
   <div class="row">
-    <label>Допуск цвета: <input type="number" id="tol" value="20" min="0" max="120" step="1"></label>
-    <label>Спорная, ≤ <input type="number" id="hot" value="3" min="0" max="50" step="0.5"> кл.</label>
-    <label>Домашняя, порог <input type="number" id="homeThr" value="10" min="2" max="30" step="1"> %</label>
+    <label><span data-i18n="colorTol">Допуск цвета:</span> <input type="number" id="tol" value="20" min="0" max="120" step="1"></label>
+    <label><span data-i18n="contestedShort">Спорная, ≤</span> <input type="number" id="hot" value="3" min="0" max="50" step="0.5"> <span data-i18n="cellUnit">кл.</span></label>
+    <label><span data-i18n="homeShort">Домашняя, порог</span> <input type="number" id="homeThr" value="10" min="2" max="30" step="1"> %</label>
     <label>NMS: <input type="number" id="nmsRadius" value="60" min="10" max="200" step="5"> px</label>
-    <label>Макс. рек.: <input type="number" id="maxSuggest" value="5" min="1" max="20" step="1"></label>
+    <label><span data-i18n="maxRecs">Макс. рек.:</span> <input type="number" id="maxSuggest" value="5" min="1" max="20" step="1"></label>
   </div>
   <div class="row">
-    <label><input type="checkbox" id="othersBlocked"> Прочие цвета непроходимы</label>
-    <label><input type="checkbox" id="showVor" checked> Зоны</label>
-    <label><input type="checkbox" id="showFront" checked> Фронт</label>
-    <label><input type="checkbox" id="showMarks" checked> Метки</label>
-    <label><input type="checkbox" id="showSuggest" checked> Рекомендации</label>
-    <label><input type="checkbox" id="showPaths" checked> Пути до выбранной</label>
+    <label><input type="checkbox" id="othersBlocked"> <span data-i18n="otherImpassable">Прочие цвета непроходимы</span></label>
+    <label><input type="checkbox" id="showVor" checked> <span data-i18n="zones">Зоны</span></label>
+    <label><input type="checkbox" id="showFront" checked> <span data-i18n="front">Фронт</span></label>
+    <label><input type="checkbox" id="showMarks" checked> <span data-i18n="markers">Метки</span></label>
+    <label><input type="checkbox" id="showSuggest" checked> <span data-i18n="suggestions">Рекомендации</span></label>
+    <label><input type="checkbox" id="showPaths" checked> <span data-i18n="pathsToSelection">Пути до выбранной</span></label>
   </div>
-  <div class="hint">
-    <b>Игрок 1</b> = <code>00FF00</code>, <b>Игрок 2</b> = <code>FF0000</code>, <b>Точки</b> = <code>FFFF00</code>.
-    Непроходимо: <code>0000FF</code>, <code>000000</code>.
-    <br><b>Управление:</b> тащите маркеры, чтобы сдвинуть игроков и точки; ЛКМ по пустому месту — панорама; колесо — зум; клик по точке — выбрать её и увидеть пути.
-    <br>После перетаскивания нажмите <b>«Рассчитать»</b> (или <b>Space</b>), чтобы обновить анализ.
-  </div>
+  <div class="hint" id="hintBlock"></div>
   <div id="status"></div>
 </div>
 
@@ -161,7 +170,7 @@
   <div class="col-main"><canvas id="cv"></canvas></div>
   <div class="col-side">
     <div class="panel" id="selectedPanel">
-      <div class="hint">Кликните по точке интереса, чтобы увидеть пути от каждого юнита обеих команд.</div>
+      <div class="hint" id="clickHint">Кликните по точке интереса…</div>
     </div>
     <div id="tables"></div>
   </div>
@@ -169,8 +178,364 @@
 
 </div>
 
+<footer class="copyright" id="copyright"></footer>
+
 <script>
 "use strict";
+
+/* ============================================================
+   I18N
+   ============================================================ */
+const I18N = {
+  ru: {
+    title: 'RTS Balance — перетаскивание точек и игроков, анализ по кнопке',
+    chooseFile: '📂 Выберите файл', noFile: 'файл не выбран',
+    testMap: 'Тестовая карта', calculate: 'Рассчитать',
+    resetView: 'Сбросить вид', resetObjects: 'Вернуть объекты',
+    run: 'Запуск:', colorTol: 'Допуск цвета:',
+    contestedShort: 'Спорная, ≤', cellUnit: 'кл.',
+    homeShort: 'Домашняя, порог', maxRecs: 'Макс. рек.:',
+    otherImpassable: 'Прочие цвета непроходимы',
+    zones: 'Зоны', front: 'Фронт', markers: 'Метки',
+    suggestions: 'Рекомендации', pathsToSelection: 'Пути до выбранной',
+    hintHTML: '<b>Игрок 1</b> = <code>00FF00</code>, <b>Игрок 2</b> = <code>FF0000</code>, <b>Точки</b> = <code>FFFF00</code>. Непроходимо: <code>0000FF</code>, <code>000000</code>.<br><b>Управление:</b> тащите маркеры, чтобы сдвинуть игроков и точки; ЛКМ по пустому месту — панорама; колесо — зум; клик по точке — выбрать её и увидеть пути.<br>После перетаскивания нажмите <b>«Рассчитать»</b> (или <b>Space</b>), чтобы обновить анализ.',
+    statusNotCalc: 'Позиции не рассчитаны — нажмите <b>«Рассчитать»</b> или <b>Space</b>.',
+    statusStale: 'Позиции изменены — нажмите <b>«Рассчитать»</b> или <b>Space</b> для обновления анализа.',
+    statusOk: 'Анализ актуален.',
+    hintClickPOI: 'Кликните по точке интереса, чтобы увидеть пути от каждого юнита обеих команд.',
+    hintImageLoaded: 'Изображение <b>{w}×{h}</b> загружено. Перенесите маркеры при необходимости и нажмите <b>«Рассчитать»</b> (или <b>Space</b>).',
+    hintSelectedNotCalc: 'Выбрана точка <b>{name}</b>.<br>Нажмите <b>«Рассчитать»</b> (или <b>Space</b>), чтобы построить пути и метрики.',
+    pointPrefix: 'Точка',
+    tagContested: 'спорная', tagHome1: 'домашняя И1', tagHome2: 'домашняя И2', tagInaccessible: 'недостижима',
+    labelD1: 'D(И1):', labelD2: 'D(И2):',
+    labelAdvantage: 'Преимущество:', advantageWho: '{who} на {d} кл.',
+    player1: 'Игрок 1', player2: 'Игрок 2',
+    labelRelevance: 'Релевантность = {p}%',
+    labelBalance: 'Баланс:', labelShortestPath: 'На кратч. пути:',
+    labelDensity: 'Плотность ({n} сос.):',
+    pathsPlayer1: 'Пути Игрока 1 ({n})', pathsPlayer2: 'Пути Игрока 2 ({n})',
+    noPath: 'нет пути',
+    nameP1: 'И1·', nameP2: 'И2·', namePOI: 'Т',
+    tableSummary: '📊 Сводка / перекос баланса',
+    tableDistances: '📏 Расстояния до точек интереса',
+    tableValue: '🎯 Ценность точек (релевантность)',
+    tableAdd: '💡 Куда добавить новые точки',
+    tableFix: '⚠️ Убрать/перенести (только спорные)',
+    thPoint: 'Точка', thType: 'Тип',
+    thD1: 'И1 → Т', thD2: 'И2 → Т', thDelta: 'Δ (И2−И1)',
+    thRelevanceValue: 'Ценность', thBalance: 'Баланс', thOnPath: 'На пути',
+    thNeighbors: 'Соседей', thComment: 'Комментарий',
+    thRecommendation: 'Рекомендация', thReason: 'Причина',
+    thPos: 'Позиция', thGap: 'До ближайшей', thD1D2Short: 'И1 / И2',
+    tagRemove: 'убрать', tagMove: 'перенести',
+    recRemove: 'удалить', recMove: 'сдвинуть к фронту / разнести',
+    noteHigh: 'высокая — держать', noteMid: 'средняя', noteLow: 'низкая — на отшибе',
+    noteUnreachable: 'недостижима', noteBalanced: 'сбалансирована',
+    noteStrongSkew: 'сильный перекос (Δ={a} кл.)', noteModerateSkew: 'умеренный перекос (Δ={a} кл.)',
+    noteDuplicate: 'дублирует Т{idx} ({d} px)', noteHome: 'домашняя — рекомендации не нужны',
+    noFreeZones: 'Свободных сбалансированных зон не найдено.',
+    noContestedPoints: 'Спорных точек нет.',
+    allContestedBalanced: 'Все спорные точки сбалансированы.',
+    smAllPoints: 'Все точки', smContested: 'Спорные',
+    smHome1: 'Домашние И1', smHome2: 'Домашние И2',
+    smP1Sum: 'Игрок 1 (Σ кл.)', smP2Sum: 'Игрок 2 (Σ кл.)', smAdvantage: 'Перевес',
+    smParity: 'паритет',
+    smSkewP1: 'Перевес Игрока 1', smSkewP2: 'Перевес Игрока 2', smSkewParity: 'Паритет',
+    smLeftP2: '◀ Игрок 2', smRightP1: 'Игрок 1 ▶',
+    smTotalPoints: 'Точек всего',
+    smBreakdown: 'Спорных / домашних И1 / домашних И2',
+    smUnreachable: 'Недостижимых',
+    smSumPath1: 'Сумма путей И1 → все точки', smSumPath2: 'Сумма путей И2 → все точки',
+    smDiff: 'Разница (И2 − И1)', smMinDistance: 'Минимум И1↔И2',
+    smRecAdd: 'Рекомендуется добавить', smRecRemove: 'Убрать / перенести (спорные)',
+    smVerdictNoContested: 'Нет спорных точек — сравнивать нечего. Добавьте точки у линии фронта.',
+    smVerdictParity: 'Идеальный паритет — суммарные расстояния сторон почти равны.',
+    smVerdictSmallSkew: 'Небольшой перекос в пользу {who} — вероятно, приемлемо.',
+    smVerdictBigSkew: 'Заметный перекос в пользу {who}. Пересмотрите позиции точек.',
+    copyright: 'Свободная лицензия, сделано Teo Rihn с помощью DeepSeek',
+  },
+
+  en: {
+    title: 'RTS Balance — drag points & players, on-demand analysis',
+    chooseFile: '📂 Choose file', noFile: 'no file',
+    testMap: 'Test map', calculate: 'Calculate',
+    resetView: 'Reset view', resetObjects: 'Reset objects',
+    run: 'Run:', colorTol: 'Color tolerance:',
+    contestedShort: 'Contested, ≤', cellUnit: 'cells',
+    homeShort: 'Home, threshold', maxRecs: 'Max recs.:',
+    otherImpassable: 'Other colors impassable',
+    zones: 'Zones', front: 'Front', markers: 'Markers',
+    suggestions: 'Suggestions', pathsToSelection: 'Paths to selection',
+    hintHTML: '<b>Player 1</b> = <code>00FF00</code>, <b>Player 2</b> = <code>FF0000</code>, <b>Points</b> = <code>FFFF00</code>. Impassable: <code>0000FF</code>, <code>000000</code>.<br><b>Controls:</b> drag markers to move players and points; LMB on empty space — pan; wheel — zoom; click a point — select and see paths.<br>After dragging, press <b>"Calculate"</b> (or <b>Space</b>) to refresh the analysis.',
+    statusNotCalc: 'Positions not calculated — press <b>"Calculate"</b> or <b>Space</b>.',
+    statusStale: 'Positions changed — press <b>"Calculate"</b> or <b>Space</b> to refresh.',
+    statusOk: 'Analysis is up to date.',
+    hintClickPOI: 'Click a point of interest to see paths from every unit of both teams.',
+    hintImageLoaded: 'Image <b>{w}×{h}</b> loaded. Move markers if needed and press <b>"Calculate"</b> (or <b>Space</b>).',
+    hintSelectedNotCalc: 'Selected point <b>{name}</b>.<br>Press <b>"Calculate"</b> (or <b>Space</b>) to compute paths and metrics.',
+    pointPrefix: 'Point',
+    tagContested: 'contested', tagHome1: 'home P1', tagHome2: 'home P2', tagInaccessible: 'unreachable',
+    labelD1: 'D(P1):', labelD2: 'D(P2):',
+    labelAdvantage: 'Advantage:', advantageWho: '{who} by {d} cells',
+    player1: 'Player 1', player2: 'Player 2',
+    labelRelevance: 'Relevance = {p}%',
+    labelBalance: 'Balance:', labelShortestPath: 'On shortest path:',
+    labelDensity: 'Density ({n} nb.):',
+    pathsPlayer1: 'Player 1 paths ({n})', pathsPlayer2: 'Player 2 paths ({n})',
+    noPath: 'no path',
+    nameP1: 'P1·', nameP2: 'P2·', namePOI: 'T',
+    tableSummary: '📊 Summary / balance skew',
+    tableDistances: '📏 Distances to points of interest',
+    tableValue: '🎯 Point value (relevance)',
+    tableAdd: '💡 Where to add new points',
+    tableFix: '⚠️ Remove/move (contested only)',
+    thPoint: 'Point', thType: 'Type',
+    thD1: 'P1 → T', thD2: 'P2 → T', thDelta: 'Δ (P2−P1)',
+    thRelevanceValue: 'Value', thBalance: 'Balance', thOnPath: 'On path',
+    thNeighbors: 'Neighbors', thComment: 'Comment',
+    thRecommendation: 'Recommendation', thReason: 'Reason',
+    thPos: 'Position', thGap: 'To nearest', thD1D2Short: 'P1 / P2',
+    tagRemove: 'remove', tagMove: 'move',
+    recRemove: 'delete', recMove: 'move to front / separate',
+    noteHigh: 'high — keep', noteMid: 'medium', noteLow: 'low — on the fringe',
+    noteUnreachable: 'unreachable', noteBalanced: 'balanced',
+    noteStrongSkew: 'strong skew (Δ={a} cells)', noteModerateSkew: 'moderate skew (Δ={a} cells)',
+    noteDuplicate: 'duplicates T{idx} ({d} px)', noteHome: 'home — no suggestions needed',
+    noFreeZones: 'No free balanced zones found.',
+    noContestedPoints: 'No contested points.',
+    allContestedBalanced: 'All contested points are balanced.',
+    smAllPoints: 'All points', smContested: 'Contested',
+    smHome1: 'Home P1', smHome2: 'Home P2',
+    smP1Sum: 'Player 1 (Σ cells)', smP2Sum: 'Player 2 (Σ cells)', smAdvantage: 'Advantage',
+    smParity: 'parity',
+    smSkewP1: 'Player 1 advantage', smSkewP2: 'Player 2 advantage', smSkewParity: 'Parity',
+    smLeftP2: '◀ Player 2', smRightP1: 'Player 1 ▶',
+    smTotalPoints: 'Total points',
+    smBreakdown: 'Contested / home P1 / home P2',
+    smUnreachable: 'Unreachable',
+    smSumPath1: 'Sum of P1 paths → all points', smSumPath2: 'Sum of P2 paths → all points',
+    smDiff: 'Difference (P2 − P1)', smMinDistance: 'Minimum P1↔P2',
+    smRecAdd: 'Recommended to add', smRecRemove: 'Remove / move (contested)',
+    smVerdictNoContested: 'No contested points — nothing to compare. Add points near the front line.',
+    smVerdictParity: 'Ideal parity — total distances of both sides are almost equal.',
+    smVerdictSmallSkew: 'Slight skew toward {who} — likely acceptable.',
+    smVerdictBigSkew: 'Noticeable skew toward {who}. Reconsider point positions.',
+    copyright: 'Free license, made by Teo Rihn with the help of DeepSeek',
+  },
+
+  zh: {
+    title: 'RTS 平衡 —— 拖动兴趣点与玩家，按钮触发分析',
+    chooseFile: '📂 选择文件', noFile: '未选择文件',
+    testMap: '测试地图', calculate: '计算',
+    resetView: '重置视图', resetObjects: '重置对象',
+    run: '运行：', colorTol: '颜色容差：',
+    contestedShort: '争议，≤', cellUnit: '格',
+    homeShort: '主方，阈值', maxRecs: '最大建议：',
+    otherImpassable: '其他颜色不可通行',
+    zones: '区域', front: '前线', markers: '标记',
+    suggestions: '建议', pathsToSelection: '到选中点的路径',
+    hintHTML: '<b>玩家 1</b> = <code>00FF00</code>，<b>玩家 2</b> = <code>FF0000</code>，<b>兴趣点</b> = <code>FFFF00</code>。不可通行：<code>0000FF</code>、<code>000000</code>。<br><b>操作：</b>拖动标记移动玩家和兴趣点；空白处左键 —— 平移；滚轮 —— 缩放；点击兴趣点 —— 选中并查看路径。<br>拖动后按 <b>“计算”</b>（或 <b>Space</b>）刷新分析。',
+    statusNotCalc: '位置未计算 —— 按 <b>“计算”</b> 或 <b>Space</b>。',
+    statusStale: '位置已改变 —— 按 <b>“计算”</b> 或 <b>Space</b> 刷新。',
+    statusOk: '分析已是最新。',
+    hintClickPOI: '点击兴趣点以查看双方每个单位的路径。',
+    hintImageLoaded: '图像 <b>{w}×{h}</b> 已加载。如需移动标记后按 <b>“计算”</b>（或 <b>Space</b>）。',
+    hintSelectedNotCalc: '已选中点 <b>{name}</b>。<br>按 <b>“计算”</b>（或 <b>Space</b>）以计算路径和指标。',
+    pointPrefix: '点',
+    tagContested: '争议', tagHome1: '主方 P1', tagHome2: '主方 P2', tagInaccessible: '不可达',
+    labelD1: 'D(P1)：', labelD2: 'D(P2)：',
+    labelAdvantage: '优势：', advantageWho: '{who} 领先 {d} 格',
+    player1: '玩家 1', player2: '玩家 2',
+    labelRelevance: '价值 = {p}%',
+    labelBalance: '平衡：', labelShortestPath: '位于最短路径：',
+    labelDensity: '密度（{n} 邻居）：',
+    pathsPlayer1: '玩家 1 路径（{n}）', pathsPlayer2: '玩家 2 路径（{n}）',
+    noPath: '无路径',
+    nameP1: '玩1·', nameP2: '玩2·', namePOI: '点',
+    tableSummary: '📊 汇总 / 平衡偏差',
+    tableDistances: '📏 到兴趣点的距离',
+    tableValue: '🎯 兴趣点价值（相关性）',
+    tableAdd: '💡 建议添加新点的位置',
+    tableFix: '⚠️ 移除/移动（仅争议点）',
+    thPoint: '点', thType: '类型',
+    thD1: 'P1 → 点', thD2: 'P2 → 点', thDelta: 'Δ (P2−P1)',
+    thRelevanceValue: '价值', thBalance: '平衡', thOnPath: '在路径上',
+    thNeighbors: '邻居', thComment: '备注',
+    thRecommendation: '建议', thReason: '原因',
+    thPos: '位置', thGap: '到最近', thD1D2Short: 'P1 / P2',
+    tagRemove: '移除', tagMove: '移动',
+    recRemove: '删除', recMove: '移向前线 / 分离',
+    noteHigh: '高 —— 保留', noteMid: '中', noteLow: '低 —— 边缘位置',
+    noteUnreachable: '不可达', noteBalanced: '已平衡',
+    noteStrongSkew: '严重偏差（Δ={a} 格）', noteModerateSkew: '中等偏差（Δ={a} 格）',
+    noteDuplicate: '与 T{idx} 重复（{d} px）', noteHome: '主方 —— 无需建议',
+    noFreeZones: '未找到空闲的均衡区域。',
+    noContestedPoints: '没有争议点。',
+    allContestedBalanced: '所有争议点已均衡。',
+    smAllPoints: '所有点', smContested: '争议',
+    smHome1: '主方 P1', smHome2: '主方 P2',
+    smP1Sum: '玩家 1（Σ 格）', smP2Sum: '玩家 2（Σ 格）', smAdvantage: '优势',
+    smParity: '平衡',
+    smSkewP1: '玩家 1 优势', smSkewP2: '玩家 2 优势', smSkewParity: '平衡',
+    smLeftP2: '◀ 玩家 2', smRightP1: '玩家 1 ▶',
+    smTotalPoints: '点总数',
+    smBreakdown: '争议 / 主方 P1 / 主方 P2',
+    smUnreachable: '不可达',
+    smSumPath1: 'P1 到所有点的路径总和', smSumPath2: 'P2 到所有点的路径总和',
+    smDiff: '差异（P2 − P1）', smMinDistance: '最小 P1↔P2',
+    smRecAdd: '建议添加', smRecRemove: '移除 / 移动（争议）',
+    smVerdictNoContested: '没有争议点 —— 无可比较。请在前线附近添加点。',
+    smVerdictParity: '完美平衡 —— 双方总距离几乎相等。',
+    smVerdictSmallSkew: '轻微偏向 {who} —— 可能可以接受。',
+    smVerdictBigSkew: '明显偏向 {who}。请重新考虑点的位置。',
+    copyright: '自由许可，由 Teo Rihn 在 DeepSeek 帮助下制作',
+  },
+
+  fr: {
+    title: 'RTS Balance — glisser points & joueurs, analyse à la demande',
+    chooseFile: '📂 Choisir un fichier', noFile: 'aucun fichier',
+    testMap: 'Carte test', calculate: 'Calculer',
+    resetView: 'Réinitialiser la vue', resetObjects: 'Réinitialiser les objets',
+    run: 'Lancer :', colorTol: 'Tolérance de couleur :',
+    contestedShort: 'Contesté, ≤', cellUnit: 'cell.',
+    homeShort: 'Domicile, seuil', maxRecs: 'Max conseils :',
+    otherImpassable: 'Autres couleurs infranchissables',
+    zones: 'Zones', front: 'Front', markers: 'Marqueurs',
+    suggestions: 'Suggestions', pathsToSelection: 'Chemins vers la sélection',
+    hintHTML: '<b>Joueur 1</b> = <code>00FF00</code>, <b>Joueur 2</b> = <code>FF0000</code>, <b>Points</b> = <code>FFFF00</code>. Infranchissable : <code>0000FF</code>, <code>000000</code>.<br><b>Commandes :</b> faites glisser les marqueurs pour déplacer joueurs et points ; clic gauche sur un espace vide — panoramique ; molette — zoom ; clic sur un point — le sélectionner et voir les chemins.<br>Après déplacement, appuyez sur <b>« Calculer »</b> (ou <b>Space</b>) pour actualiser l\'analyse.',
+    statusNotCalc: 'Positions non calculées — appuyez sur <b>« Calculer »</b> ou <b>Space</b>.',
+    statusStale: 'Positions modifiées — appuyez sur <b>« Calculer »</b> ou <b>Space</b> pour actualiser.',
+    statusOk: 'Analyse à jour.',
+    hintClickPOI: 'Cliquez sur un point d\'intérêt pour voir les chemins de chaque unité des deux équipes.',
+    hintImageLoaded: 'Image <b>{w}×{h}</b> chargée. Déplacez les marqueurs si besoin puis appuyez sur <b>« Calculer »</b> (ou <b>Space</b>).',
+    hintSelectedNotCalc: 'Point sélectionné <b>{name}</b>.<br>Appuyez sur <b>« Calculer »</b> (ou <b>Space</b>) pour calculer chemins et métriques.',
+    pointPrefix: 'Point',
+    tagContested: 'contesté', tagHome1: 'domicile J1', tagHome2: 'domicile J2', tagInaccessible: 'inaccessible',
+    labelD1: 'D(J1) :', labelD2: 'D(J2) :',
+    labelAdvantage: 'Avantage :', advantageWho: '{who} de {d} cell.',
+    player1: 'Joueur 1', player2: 'Joueur 2',
+    labelRelevance: 'Pertinence = {p}%',
+    labelBalance: 'Équilibre :', labelShortestPath: 'Sur le plus court chemin :',
+    labelDensity: 'Densité ({n} voisins) :',
+    pathsPlayer1: 'Chemins Joueur 1 ({n})', pathsPlayer2: 'Chemins Joueur 2 ({n})',
+    noPath: 'pas de chemin',
+    nameP1: 'J1·', nameP2: 'J2·', namePOI: 'P',
+    tableSummary: '📊 Synthèse / déséquilibre',
+    tableDistances: '📏 Distances vers les points',
+    tableValue: '🎯 Valeur des points (pertinence)',
+    tableAdd: '💡 Où ajouter de nouveaux points',
+    tableFix: '⚠️ Retirer/déplacer (contestés seulement)',
+    thPoint: 'Point', thType: 'Type',
+    thD1: 'J1 → P', thD2: 'J2 → P', thDelta: 'Δ (J2−J1)',
+    thRelevanceValue: 'Valeur', thBalance: 'Équilibre', thOnPath: 'Sur chemin',
+    thNeighbors: 'Voisins', thComment: 'Commentaire',
+    thRecommendation: 'Conseil', thReason: 'Raison',
+    thPos: 'Position', thGap: 'Au plus proche', thD1D2Short: 'J1 / J2',
+    tagRemove: 'retirer', tagMove: 'déplacer',
+    recRemove: 'supprimer', recMove: 'déplacer vers le front / séparer',
+    noteHigh: 'élevée — garder', noteMid: 'moyenne', noteLow: 'faible — excentré',
+    noteUnreachable: 'inaccessible', noteBalanced: 'équilibré',
+    noteStrongSkew: 'fort déséquilibre (Δ={a} cell.)', noteModerateSkew: 'léger déséquilibre (Δ={a} cell.)',
+    noteDuplicate: 'duplique T{idx} ({d} px)', noteHome: 'domicile — aucun conseil nécessaire',
+    noFreeZones: 'Aucune zone libre équilibrée trouvée.',
+    noContestedPoints: 'Aucun point contesté.',
+    allContestedBalanced: 'Tous les points contestés sont équilibrés.',
+    smAllPoints: 'Tous les points', smContested: 'Contestés',
+    smHome1: 'Domicile J1', smHome2: 'Domicile J2',
+    smP1Sum: 'Joueur 1 (Σ cell.)', smP2Sum: 'Joueur 2 (Σ cell.)', smAdvantage: 'Avantage',
+    smParity: 'parité',
+    smSkewP1: 'Avantage Joueur 1', smSkewP2: 'Avantage Joueur 2', smSkewParity: 'Parité',
+    smLeftP2: '◀ Joueur 2', smRightP1: 'Joueur 1 ▶',
+    smTotalPoints: 'Points au total',
+    smBreakdown: 'Contestés / domicile J1 / domicile J2',
+    smUnreachable: 'Inaccessibles',
+    smSumPath1: 'Somme des chemins J1 → tous les points', smSumPath2: 'Somme des chemins J2 → tous les points',
+    smDiff: 'Différence (J2 − J1)', smMinDistance: 'Minimum J1↔J2',
+    smRecAdd: 'Ajouts recommandés', smRecRemove: 'Retirer / déplacer (contestés)',
+    smVerdictNoContested: 'Aucun point contesté — rien à comparer. Ajoutez des points près du front.',
+    smVerdictParity: 'Parité idéale — les distances totales des deux camps sont presque égales.',
+    smVerdictSmallSkew: 'Léger déséquilibre en faveur de {who} — probablement acceptable.',
+    smVerdictBigSkew: 'Déséquilibre notable en faveur de {who}. Revoyez la position des points.',
+    copyright: 'Licence libre, réalisé par Teo Rihn avec l\'aide de DeepSeek',
+  },
+
+  es: {
+    title: 'RTS Balance — arrastrar puntos y jugadores, análisis por botón',
+    chooseFile: '📂 Elegir archivo', noFile: 'sin archivo',
+    testMap: 'Mapa de prueba', calculate: 'Calcular',
+    resetView: 'Restablecer vista', resetObjects: 'Restablecer objetos',
+    run: 'Ejecutar:', colorTol: 'Tolerancia de color:',
+    contestedShort: 'Disputado, ≤', cellUnit: 'celd.',
+    homeShort: 'Local, umbral', maxRecs: 'Máx. recom.:',
+    otherImpassable: 'Otros colores intransitables',
+    zones: 'Zonas', front: 'Frente', markers: 'Marcadores',
+    suggestions: 'Sugerencias', pathsToSelection: 'Rutas a la selección',
+    hintHTML: '<b>Jugador 1</b> = <code>00FF00</code>, <b>Jugador 2</b> = <code>FF0000</code>, <b>Puntos</b> = <code>FFFF00</code>. Intransitable: <code>0000FF</code>, <code>000000</code>.<br><b>Controles:</b> arrastra los marcadores para mover jugadores y puntos; clic izquierdo en espacio vacío — panorámica; rueda — zoom; clic en un punto — seleccionarlo y ver rutas.<br>Tras arrastrar, pulsa <b>« Calcular »</b> (o <b>Space</b>) para actualizar el análisis.',
+    statusNotCalc: 'Posiciones no calculadas — pulsa <b>« Calcular »</b> o <b>Space</b>.',
+    statusStale: 'Posiciones modificadas — pulsa <b>« Calcular »</b> o <b>Space</b> para actualizar.',
+    statusOk: 'Análisis actualizado.',
+    hintClickPOI: 'Haz clic en un punto de interés para ver rutas de cada unidad de ambos equipos.',
+    hintImageLoaded: 'Imagen <b>{w}×{h}</b> cargada. Mueve los marcadores si es necesario y pulsa <b>« Calcular »</b> (o <b>Space</b>).',
+    hintSelectedNotCalc: 'Punto seleccionado <b>{name}</b>.<br>Pulsa <b>« Calcular »</b> (o <b>Space</b>) para calcular rutas y métricas.',
+    pointPrefix: 'Punto',
+    tagContested: 'disputado', tagHome1: 'local J1', tagHome2: 'local J2', tagInaccessible: 'inaccesible',
+    labelD1: 'D(J1):', labelD2: 'D(J2):',
+    labelAdvantage: 'Ventaja:', advantageWho: '{who} por {d} celd.',
+    player1: 'Jugador 1', player2: 'Jugador 2',
+    labelRelevance: 'Relevancia = {p}%',
+    labelBalance: 'Equilibrio:', labelShortestPath: 'En ruta más corta:',
+    labelDensity: 'Densidad ({n} vec.):',
+    pathsPlayer1: 'Rutas Jugador 1 ({n})', pathsPlayer2: 'Rutas Jugador 2 ({n})',
+    noPath: 'sin ruta',
+    nameP1: 'J1·', nameP2: 'J2·', namePOI: 'P',
+    tableSummary: '📊 Resumen / desequilibrio',
+    tableDistances: '📏 Distancias a puntos de interés',
+    tableValue: '🎯 Valor de puntos (relevancia)',
+    tableAdd: '💡 Dónde añadir nuevos puntos',
+    tableFix: '⚠️ Quitar/mover (solo disputados)',
+    thPoint: 'Punto', thType: 'Tipo',
+    thD1: 'J1 → P', thD2: 'J2 → P', thDelta: 'Δ (J2−J1)',
+    thRelevanceValue: 'Valor', thBalance: 'Equilibrio', thOnPath: 'En ruta',
+    thNeighbors: 'Vecinos', thComment: 'Comentario',
+    thRecommendation: 'Recomendación', thReason: 'Motivo',
+    thPos: 'Posición', thGap: 'Al más cercano', thD1D2Short: 'J1 / J2',
+    tagRemove: 'quitar', tagMove: 'mover',
+    recRemove: 'eliminar', recMove: 'acercar al frente / separar',
+    noteHigh: 'alta — mantener', noteMid: 'media', noteLow: 'baja — en el borde',
+    noteUnreachable: 'inaccesible', noteBalanced: 'equilibrado',
+    noteStrongSkew: 'fuerte desequilibrio (Δ={a} celd.)', noteModerateSkew: 'desequilibrio moderado (Δ={a} celd.)',
+    noteDuplicate: 'duplica T{idx} ({d} px)', noteHome: 'local — sin sugerencias',
+    noFreeZones: 'No se encontraron zonas libres equilibradas.',
+    noContestedPoints: 'No hay puntos disputados.',
+    allContestedBalanced: 'Todos los puntos disputados están equilibrados.',
+    smAllPoints: 'Todos los puntos', smContested: 'Disputados',
+    smHome1: 'Local J1', smHome2: 'Local J2',
+    smP1Sum: 'Jugador 1 (Σ celd.)', smP2Sum: 'Jugador 2 (Σ celd.)', smAdvantage: 'Ventaja',
+    smParity: 'paridad',
+    smSkewP1: 'Ventaja Jugador 1', smSkewP2: 'Ventaja Jugador 2', smSkewParity: 'Paridad',
+    smLeftP2: '◀ Jugador 2', smRightP1: 'Jugador 1 ▶',
+    smTotalPoints: 'Puntos totales',
+    smBreakdown: 'Disputados / local J1 / local J2',
+    smUnreachable: 'Inaccesibles',
+    smSumPath1: 'Suma rutas J1 → todos los puntos', smSumPath2: 'Suma rutas J2 → todos los puntos',
+    smDiff: 'Diferencia (J2 − J1)', smMinDistance: 'Mínimo J1↔J2',
+    smRecAdd: 'Recomendado añadir', smRecRemove: 'Quitar / mover (disputados)',
+    smVerdictNoContested: 'Sin puntos disputados — nada que comparar. Añade puntos cerca del frente.',
+    smVerdictParity: 'Paridad ideal — las distancias totales de ambos bandos son casi iguales.',
+    smVerdictSmallSkew: 'Ligero desequilibrio a favor de {who} — probablemente aceptable.',
+    smVerdictBigSkew: 'Desequilibrio notable a favor de {who}. Revisa la posición de los puntos.',
+    copyright: 'Licencia libre, hecho por Teo Rihn con la ayuda de DeepSeek',
+  },
+};
+
+const LANG_KEY = 'rts-balance-lang';
+
+function t(key, params){
+  const dict = I18N[S.lang] || I18N.ru;
+  let s = dict[key] ?? I18N.ru[key] ?? key;
+  if (params) for (const [k, v] of Object.entries(params)) s = s.split('{'+k+'}').join(String(v));
+  return s;
+}
 
 /* ============================================================
    ЦВЕТА
@@ -199,6 +564,10 @@ const resetPosBtn = document.getElementById('resetPos');
 const selPanel = document.getElementById('selectedPanel');
 const tablesEl = document.getElementById('tables');
 const statusEl = document.getElementById('status');
+const hintBlock= document.getElementById('hintBlock');
+const clickHint= document.getElementById('clickHint');
+const copyrightEl = document.getElementById('copyright');
+const langSel  = document.getElementById('lang');
 const tolEl    = document.getElementById('tol');
 const hotEl    = document.getElementById('hot');
 const homeThrEl= document.getElementById('homeThr');
@@ -215,6 +584,8 @@ const showPathsEl  = document.getElementById('showPaths');
    СОСТОЯНИЕ
    ============================================================ */
 const S = {
+  lang: 'ru',
+  fileName: '',
   imgSource: null, W: 0, H: 0,
   origData: null, cleanData: null, cleanCanvas: null,
   bg: [255,255,255],
@@ -224,15 +595,50 @@ const S = {
   d1: null, d2: null,
   P1: [], P2: [], POI: [],
   poiAnalyzed: [], suggestions: [], advices: [],
-  summary: null,
-  shortest1to2: Infinity,
+  summary: null, shortest1to2: Infinity,
   voronoiCanvas: null,
   view: { scale: 1, offsetX: 0, offsetY: 0 },
   selectedPOI: null, selectedPaths: null,
   calculated: false, stale: true,
-  drag: null,
-  hoverMarker: null,
+  drag: null, hoverMarker: null,
 };
+
+/* ============================================================
+   ПРИМЕНЕНИЕ ЯЗЫКА
+   ============================================================ */
+function applyTranslations(){
+  document.documentElement.lang = S.lang;
+  document.title = t('title');
+
+  // Статические элементы
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    el.textContent = t(el.dataset.i18n);
+  });
+
+  // Блок-подсказка (HTML)
+  hintBlock.innerHTML = t('hintHTML');
+  copyrightEl.textContent = t('copyright');
+
+  // Имя файла
+  fileNameEl.textContent = S.fileName || t('noFile');
+
+  // Динамические части
+  updateStatus();
+  updateSelectedPanel();
+  if (S.calculated) updateTables();
+  else if (tablesEl.children.length) updateTables();
+  scheduleRender();
+}
+
+function setLang(lang){
+  if (!I18N[lang]) lang = 'ru';
+  S.lang = lang;
+  try { localStorage.setItem(LANG_KEY, lang); } catch(_){}
+  langSel.value = lang;
+  applyTranslations();
+}
+
+langSel.addEventListener('change', () => setLang(langSel.value));
 
 /* ============================================================
    MIN-HEAP
@@ -262,12 +668,10 @@ class MinHeap {
 }
 
 /* ============================================================
-   УТИЛИТЫ ЦВЕТА
+   УТИЛИТЫ
    ============================================================ */
 function getTol(){ return Math.min(120, Math.max(0, parseInt(tolEl.value,10) || 0)); }
-function near(r,g,b,c,tol){
-  return Math.abs(r-c[0]) <= tol && Math.abs(g-c[1]) <= tol && Math.abs(b-c[2]) <= tol;
-}
+function near(r,g,b,c,tol){ return Math.abs(r-c[0]) <= tol && Math.abs(g-c[1]) <= tol && Math.abs(b-c[2]) <= tol; }
 function computeBg(data){
   const counts = new Map();
   const step = Math.max(4, ((data.length/4) / 60000 | 0) * 4);
@@ -278,6 +682,18 @@ function computeBg(data){
   let bestKey = 0xffffff, bestN = 0;
   for (const [k,v] of counts) if (v > bestN){ bestN = v; bestKey = k; }
   return [(bestKey>>16)&255, (bestKey>>8)&255, bestKey&255];
+}
+
+function unitLabel(u){
+  if (!u) return '—';
+  if (u.kind === 'p1') return t('nameP1') + u.n;
+  if (u.kind === 'p2') return t('nameP2') + u.n;
+  return t('namePOI') + u.n;
+}
+function markerName(m){
+  if (m.kind === 'p1') return t('nameP1') + m.n;
+  if (m.kind === 'p2') return t('nameP2') + m.n;
+  return t('namePOI') + m.n;
 }
 
 /* ============================================================
@@ -300,10 +716,8 @@ function loadImage(src){
   detectMarkers();
   S.markersInit = S.markers.map(m => ({ ...m }));
 
-  S.calculated = false;
-  S.stale = true;
-  S.selectedPOI = null;
-  S.selectedPaths = null;
+  S.calculated = false; S.stale = true;
+  S.selectedPOI = null; S.selectedPaths = null;
   S.poiAnalyzed = []; S.suggestions = []; S.advices = []; S.summary = null;
   S.voronoiCanvas = null;
   S.view = { scale: 1, offsetX: 0, offsetY: 0 };
@@ -313,7 +727,7 @@ function loadImage(src){
   runBtn.classList.add('dirty');
   updateStatus();
   render();
-  selPanel.innerHTML = `<div class="hint">Изображение <b>${w}×${h}</b> загружено. Перенесите маркеры при необходимости и нажмите <b>«Рассчитать»</b> (или <b>Space</b>).</div>`;
+  selPanel.innerHTML = `<div class="hint">${t('hintImageLoaded', {w, h})}</div>`;
   tablesEl.innerHTML = '';
 }
 
@@ -347,18 +761,12 @@ function buildBlocked(){
   const othersBlock = othersEl.checked;
   for (let i = 0, p = 0; i < N; i++, p += 4){
     const r = data[p], g = data[p+1], b = data[p+2];
-    if (othersBlock){
-      blocked[i] = near(r,g,b,bg,bgTol) ? 0 : 1;
-    } else {
-      blocked[i] = (near(r,g,b,C_BLUE,tol) || near(r,g,b,C_BLACK,tol)) ? 1 : 0;
-    }
+    if (othersBlock) blocked[i] = near(r,g,b,bg,bgTol) ? 0 : 1;
+    else blocked[i] = (near(r,g,b,C_BLUE,tol) || near(r,g,b,C_BLACK,tol)) ? 1 : 0;
   }
   S.blocked = blocked;
 }
 
-/* ============================================================
-   КОМПОНЕНТЫ
-   ============================================================ */
 function findComponents(mask, W, H){
   const N = W*H;
   const labels = new Int32Array(N).fill(-1);
@@ -401,9 +809,9 @@ function detectMarkers(){
   const ys = findComponents(isY, W, H).filter(c => c.size >= 4).sort(byPos);
 
   S.markers = [];
-  gs.forEach((c, i) => S.markers.push({ kind:'p1', n:i+1, name:'И1·'+(i+1), x:c.cx, y:c.cy, cell:-1, snapped:false, offset:0 }));
-  rs.forEach((c, i) => S.markers.push({ kind:'p2', n:i+1, name:'И2·'+(i+1), x:c.cx, y:c.cy, cell:-1, snapped:false, offset:0 }));
-  ys.forEach((c, i) => S.markers.push({ kind:'poi', n:i+1, name:'Т'+(i+1),   x:c.cx, y:c.cy, cell:-1, snapped:false, offset:0 }));
+  gs.forEach((c, i) => S.markers.push({ kind:'p1', n:i+1, x:c.cx, y:c.cy, cell:-1, snapped:false, offset:0 }));
+  rs.forEach((c, i) => S.markers.push({ kind:'p2', n:i+1, x:c.cx, y:c.cy, cell:-1, snapped:false, offset:0 }));
+  ys.forEach((c, i) => S.markers.push({ kind:'poi',n:i+1, x:c.cx, y:c.cy, cell:-1, snapped:false, offset:0 }));
 }
 
 /* ============================================================
@@ -470,7 +878,7 @@ function snapToWalkable(cx, cy, blocked, W, H){
 }
 
 /* ============================================================
-   КЛАССИФИКАЦИЯ И РЕЛЕВАНТНОСТЬ
+   КЛАССИФИКАЦИЯ / РЕЛЕВАНТНОСТЬ
    ============================================================ */
 function classifyPOI(D1, D2, homeThrPct){
   if (!isFinite(D1) || !isFinite(D2)) return 'inaccessible';
@@ -574,22 +982,22 @@ function analyzeExisting(poiAnalyzed){
   const advices = [];
   for (const p of poiAnalyzed){
     if (p.kind !== 'contested'){
-      advices.push({ poi: p, kind: 'keep', notes: [p.kind === 'inaccessible' ? 'недостижима' : 'домашняя — рекомендации не нужны'] });
+      advices.push({ poi: p, kind: 'keep', notes: [p.kind === 'inaccessible' ? t('noteUnreachable') : t('noteHome')] });
       continue;
     }
     const a = Math.abs(p.adv);
     let kind = 'keep';
     const notes = [];
-    if (a > 10){ kind='move'; notes.push(`сильный перекос (Δ=${a.toFixed(1)} кл.)`); }
-    else if (a > 6){ kind='move'; notes.push(`умеренный перекос (Δ=${a.toFixed(1)} кл.)`); }
-    else notes.push('сбалансирована');
+    if (a > 10){ kind='move'; notes.push(t('noteStrongSkew', {a: a.toFixed(1)})); }
+    else if (a > 6){ kind='move'; notes.push(t('noteModerateSkew', {a: a.toFixed(1)})); }
+    else notes.push(t('noteBalanced'));
     let minD = Infinity, minT = null;
     for (const other of poiAnalyzed){
       if (other === p) continue;
       const dd = Math.hypot(p.poi.x - other.poi.x, p.poi.y - other.poi.y);
       if (dd < minD){ minD = dd; minT = other; }
     }
-    if (minD < 25){ notes.push(`дублирует Т${minT.idx} (${minD.toFixed(0)} px)`); if (kind==='keep') kind='move'; }
+    if (minD < 25){ notes.push(t('noteDuplicate', {idx: minT.idx, d: minD.toFixed(0)})); if (kind==='keep') kind='move'; }
     advices.push({ poi: p, kind, notes });
   }
   return advices;
@@ -653,9 +1061,7 @@ function render(){
   ctx.fillStyle = '#0d0e12';
   ctx.fillRect(0, 0, cv.width, cv.height);
   ctx.setTransform(scale, 0, 0, scale, offsetX, offsetY);
-
   ctx.drawImage(S.cleanCanvas, 0, 0);
-
   const inv = 1/scale;
 
   if (S.calculated && !S.stale && (showVorEl.checked || showFrontEl.checked)){
@@ -703,8 +1109,7 @@ function drawMarkers(inv){
     const r = (m.kind === 'poi' ? (isSel ? 15 : 11) : 12) * inv;
     ctx.save();
     if (isSel || isHover){
-      ctx.globalAlpha = 0.35;
-      ctx.fillStyle = color;
+      ctx.globalAlpha = 0.35; ctx.fillStyle = color;
       ctx.beginPath(); ctx.arc(m.x, m.y, r + 5*inv, 0, Math.PI*2); ctx.fill();
       ctx.globalAlpha = 1;
     }
@@ -713,19 +1118,16 @@ function drawMarkers(inv){
     ctx.beginPath(); ctx.arc(m.x, m.y, r, 0, Math.PI*2); ctx.stroke();
     ctx.strokeStyle = color;
     ctx.beginPath(); ctx.arc(m.x, m.y, r, 0, Math.PI*2); ctx.stroke();
-    ctx.globalAlpha = 0.3;
-    ctx.fillStyle = color;
+    ctx.globalAlpha = 0.3; ctx.fillStyle = color;
     ctx.beginPath(); ctx.arc(m.x, m.y, r, 0, Math.PI*2); ctx.fill();
     ctx.globalAlpha = 1;
     ctx.beginPath(); ctx.arc(m.x, m.y, 2.5*inv, 0, Math.PI*2);
     ctx.fillStyle = color; ctx.fill();
 
     if (S.calculated && m.snapped && m.cell >= 0){
-      const sx = m.cell % S.W;
-      const sy = (m.cell - sx) / S.W;
+      const sx = m.cell % S.W, sy = (m.cell - sx) / S.W;
       ctx.setLineDash([3*inv, 3*inv]);
-      ctx.lineWidth = 1.5*inv;
-      ctx.strokeStyle = '#ff8c00';
+      ctx.lineWidth = 1.5*inv; ctx.strokeStyle = '#ff8c00';
       ctx.beginPath(); ctx.moveTo(m.x, m.y); ctx.lineTo(sx + 0.5, sy + 0.5); ctx.stroke();
       ctx.setLineDash([]);
       ctx.fillStyle = '#ff8c00';
@@ -733,7 +1135,7 @@ function drawMarkers(inv){
     }
 
     ctx.font = `bold ${12*inv}px system-ui, sans-serif`;
-    const label = m.name + (S.calculated && m.snapped ? ' ⚠' : '');
+    const label = markerName(m) + (S.calculated && m.snapped ? ' ⚠' : '');
     const tw = ctx.measureText(label).width;
     ctx.fillStyle = 'rgba(0,0,0,0.82)';
     ctx.fillRect(m.x + 14*inv, m.y - 22*inv, tw + 8*inv, 16*inv);
@@ -785,12 +1187,10 @@ function drawRemoveMark(x, y, inv){
 function drawMoveMark(x, y, inv){
   const r = 14*inv;
   ctx.save();
-  ctx.lineWidth = 3*inv;
-  ctx.strokeStyle = '#f59e0b';
+  ctx.lineWidth = 3*inv; ctx.strokeStyle = '#f59e0b';
   ctx.beginPath(); ctx.arc(x, y, r, Math.PI * 0.15, Math.PI * 1.55); ctx.stroke();
   const ang = Math.PI * 1.55;
-  const hx = x + r*Math.cos(ang);
-  const hy = y + r*Math.sin(ang);
+  const hx = x + r*Math.cos(ang), hy = y + r*Math.sin(ang);
   ctx.beginPath();
   ctx.moveTo(hx, hy); ctx.lineTo(hx - 5*inv, hy - 5*inv);
   ctx.moveTo(hx, hy); ctx.lineTo(hx + 5*inv, hy - 5*inv);
@@ -800,22 +1200,19 @@ function drawMoveMark(x, y, inv){
 function drawSelectedPaths(inv){
   const P = S.selectedPaths;
   ctx.save();
-  ctx.lineJoin = 'round';
-  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round'; ctx.lineCap = 'round';
   const drawOne = (group, palette) => {
     group.forEach((r, i) => {
       if (!r.path || r.path.length < 2) return;
       const col = palette[i % palette.length];
-      ctx.lineWidth = 5*inv;
-      ctx.strokeStyle = 'rgba(0,0,0,0.55)';
+      ctx.lineWidth = 5*inv; ctx.strokeStyle = 'rgba(0,0,0,0.55)';
       ctx.beginPath();
       for (let k = 0; k < r.path.length; k++){
         const idx = r.path[k], x = idx%S.W, y = (idx-x)/S.W;
         if (k===0) ctx.moveTo(x+0.5, y+0.5); else ctx.lineTo(x+0.5, y+0.5);
       }
       ctx.stroke();
-      ctx.lineWidth = 2.8*inv;
-      ctx.strokeStyle = col;
+      ctx.lineWidth = 2.8*inv; ctx.strokeStyle = col;
       ctx.beginPath();
       for (let k = 0; k < r.path.length; k++){
         const idx = r.path[k], x = idx%S.W, y = (idx-x)/S.W;
@@ -824,7 +1221,7 @@ function drawSelectedPaths(inv){
       ctx.stroke();
       const mid = r.path[Math.floor(r.path.length/2)];
       const mx = mid%S.W, my = (mid-mx)/S.W;
-      const label = r.unit.name + '  ' + r.dist.toFixed(1);
+      const label = unitLabel(r.unit) + '  ' + r.dist.toFixed(1);
       ctx.font = `bold ${11*inv}px system-ui, sans-serif`;
       const tw = ctx.measureText(label).width;
       const pad = 4*inv;
@@ -908,8 +1305,7 @@ function endDrag(e){
   if (!S.drag) return;
   const d = S.drag;
   S.drag = null;
-  cv.classList.remove('dragging','pan');
-  cv.classList.add('pan');
+  cv.classList.remove('dragging','pan'); cv.classList.add('pan');
   if (d.mode === 'marker'){
     if (d.moved){
       const s = snapToWalkable(d.marker.x, d.marker.y, S.blocked, S.W, S.H);
@@ -938,7 +1334,7 @@ function endDrag(e){
 }
 cv.addEventListener('pointerup', endDrag);
 cv.addEventListener('pointercancel', endDrag);
-cv.addEventListener('pointerleave', e => { if (!S.drag) { S.hoverMarker = null; scheduleRender(); } });
+cv.addEventListener('pointerleave', () => { if (!S.drag) { S.hoverMarker = null; scheduleRender(); } });
 cv.addEventListener('wheel', e => {
   e.preventDefault();
   if (!S.cleanCanvas) return;
@@ -962,31 +1358,23 @@ resetBtn.addEventListener('click', () => {
 resetPosBtn.addEventListener('click', () => {
   if (!S.markersInit.length) return;
   S.markers = S.markersInit.map(m => ({ ...m }));
-  S.calculated = false;
-  S.stale = true;
-  S.selectedPOI = null;
-  S.selectedPaths = null;
+  S.calculated = false; S.stale = true;
+  S.selectedPOI = null; S.selectedPaths = null;
   S.voronoiCanvas = null;
   S.poiAnalyzed = []; S.suggestions = []; S.advices = []; S.summary = null;
   tablesEl.innerHTML = '';
   runBtn.classList.add('dirty');
-  updateStatus();
-  updateSelectedPanel();
-  scheduleRender();
+  updateStatus(); updateSelectedPanel(); scheduleRender();
 });
 
-/* ============================================================
-   ГОРЯЧАЯ КЛАВИША — ПРОБЕЛ
-   ============================================================ */
+/* ==== ПРОБЕЛ ==== */
 document.addEventListener('keydown', e => {
   if (e.code !== 'Space' || e.repeat) return;
-  const t = e.target;
-  const tag = (t.tagName || '').toLowerCase();
-  if (tag === 'input' || tag === 'textarea' || tag === 'select' || t.isContentEditable) return;
+  const tag = (e.target.tagName || '').toLowerCase();
+  if (tag === 'input' || tag === 'textarea' || tag === 'select' || e.target.isContentEditable) return;
   e.preventDefault();
   if (runBtn.disabled) return;
   runBtn.click();
-  // Небольшая визуальная вспышка кнопки
   runBtn.style.transition = 'none';
   runBtn.style.filter = 'brightness(1.6)';
   setTimeout(() => { runBtn.style.transition = ''; runBtn.style.filter = ''; }, 130);
@@ -999,17 +1387,17 @@ function selectPOI(p){
   if (!p){ S.selectedPOI = null; S.selectedPaths = null; render(); updateSelectedPanel(); return; }
   S.selectedPOI = p.poi;
   const p1 = [], p2 = [];
-  for (const t of S.trees1){
-    const d = t.dist[p.cell];
+  for (const tr of S.trees1){
+    const d = tr.dist[p.cell];
     if (!isFinite(d)) continue;
-    const path = buildPath(t.parent, t.unit.cell, p.cell);
-    p1.push({ unit: t.unit, dist: d, path });
+    const path = buildPath(tr.parent, tr.unit.cell, p.cell);
+    p1.push({ unit: tr.unit, dist: d, path });
   }
-  for (const t of S.trees2){
-    const d = t.dist[p.cell];
+  for (const tr of S.trees2){
+    const d = tr.dist[p.cell];
     if (!isFinite(d)) continue;
-    const path = buildPath(t.parent, t.unit.cell, p.cell);
-    p2.push({ unit: t.unit, dist: d, path });
+    const path = buildPath(tr.parent, tr.unit.cell, p.cell);
+    p2.push({ unit: tr.unit, dist: d, path });
   }
   p1.sort((a,b) => a.dist - b.dist);
   p2.sort((a,b) => a.dist - b.dist);
@@ -1026,52 +1414,52 @@ function updateSelectedPanel(){
   if (!S.calculated){
     if (S.selectedPOI){
       const m = S.markers.find(x => x.kind === 'poi' && x.n === S.selectedPOI.n);
-      selPanel.innerHTML = `<div class="hint">Выбрана точка <b>${m ? m.name : 'Т'+S.selectedPOI.n}</b>.<br>
-        Нажмите <b>«Рассчитать»</b> (или <b>Space</b>), чтобы построить пути и метрики.</div>`;
+      const nm = m ? markerName(m) : t('namePOI') + S.selectedPOI.n;
+      selPanel.innerHTML = `<div class="hint">${t('hintSelectedNotCalc', {name: nm})}</div>`;
     } else {
-      selPanel.innerHTML = `<div class="hint">Кликните по точке интереса, чтобы увидеть пути от каждого юнита обеих команд.</div>`;
+      selPanel.innerHTML = `<div class="hint">${t('hintClickPOI')}</div>`;
     }
     return;
   }
   const p = S.poiAnalyzed.find(x => S.selectedPOI && x.poi.n === S.selectedPOI.n);
   if (!p){
-    selPanel.innerHTML = `<div class="hint">Кликните по точке интереса, чтобы увидеть пути от каждого юнита обеих команд.</div>`;
+    selPanel.innerHTML = `<div class="hint">${t('hintClickPOI')}</div>`;
     return;
   }
   const kindLabel = {
-    contested: '<span class="tag tag-hot">спорная</span>',
-    home1:     '<span class="tag tag-home1">домашняя И1</span>',
-    home2:     '<span class="tag tag-home2">домашняя И2</span>',
-    inaccessible: '<span class="tag tag-na">недостижима</span>',
+    contested: `<span class="tag tag-hot">${t('tagContested')}</span>`,
+    home1:     `<span class="tag tag-home1">${t('tagHome1')}</span>`,
+    home2:     `<span class="tag tag-home2">${t('tagHome2')}</span>`,
+    inaccessible: `<span class="tag tag-na">${t('tagInaccessible')}</span>`,
   }[p.kind];
   const rel = p.relevance;
   const pct = Math.round(rel.value*100);
 
-  let h = `<h3 style="margin-top:0">Точка Т${p.poi.n} ${kindLabel}</h3>`;
-  h += `<div class="kv"><b>D(И1):</b> ${isFinite(p.D1)?p.D1.toFixed(1)+' кл.':'—'} <span class="dim">(${p.best1Unit?p.best1Unit.name:'—'})</span></div>`;
-  h += `<div class="kv"><b>D(И2):</b> ${isFinite(p.D2)?p.D2.toFixed(1)+' кл.':'—'} <span class="dim">(${p.best2Unit?p.best2Unit.name:'—'})</span></div>`;
+  let h = `<h3 style="margin-top:0">${t('pointPrefix')} ${t('namePOI')}${p.poi.n} ${kindLabel}</h3>`;
+  h += `<div class="kv"><b>${t('labelD1')}</b> ${isFinite(p.D1)?p.D1.toFixed(1)+' '+t('cellUnit'):'—'} <span class="dim">(${p.best1Unit?unitLabel(p.best1Unit):'—'})</span></div>`;
+  h += `<div class="kv"><b>${t('labelD2')}</b> ${isFinite(p.D2)?p.D2.toFixed(1)+' '+t('cellUnit'):'—'} <span class="dim">(${p.best2Unit?unitLabel(p.best2Unit):'—'})</span></div>`;
   if (isFinite(p.adv)){
-    const who = p.adv > 0 ? 'Игрок 1' : 'Игрок 2';
-    h += `<div class="kv"><b>Преимущество:</b> ${who} на ${Math.abs(p.adv).toFixed(1)} кл.</div>`;
+    const who = p.adv > 0 ? t('player1') : t('player2');
+    h += `<div class="kv"><b>${t('labelAdvantage')}</b> ${t('advantageWho', {who, d: Math.abs(p.adv).toFixed(1)})}</div>`;
   }
-  h += `<h4>Релевантность = ${pct}%</h4>`;
+  h += `<h4>${t('labelRelevance', {p: pct})}</h4>`;
   const bar = (v,col) => `<div class="bar"><i style="width:${Math.round(v*100)}%;background:${col}"></i></div>`;
-  h += `<div class="kv"><b>Баланс:</b> ${(rel.balance*100).toFixed(0)}% ${bar(rel.balance,'#ffd166')}</div>`;
-  h += `<div class="kv"><b>На кратч. пути:</b> ${(rel.betweenness*100).toFixed(0)}% ${bar(rel.betweenness,'#7dd3fc')}</div>`;
-  h += `<div class="kv"><b>Плотность (${rel.neighbors} сос.):</b> ${(rel.density*100).toFixed(0)}% ${bar(rel.density,'#a78bfa')}</div>`;
+  h += `<div class="kv"><b>${t('labelBalance')}</b> ${(rel.balance*100).toFixed(0)}% ${bar(rel.balance,'#ffd166')}</div>`;
+  h += `<div class="kv"><b>${t('labelShortestPath')}</b> ${(rel.betweenness*100).toFixed(0)}% ${bar(rel.betweenness,'#7dd3fc')}</div>`;
+  h += `<div class="kv"><b>${t('labelDensity', {n: rel.neighbors})}</b> ${(rel.density*100).toFixed(0)}% ${bar(rel.density,'#a78bfa')}</div>`;
 
   if (S.selectedPaths){
-    h += `<h4>Пути Игрока 1 (${S.selectedPaths.p1.length})</h4>`;
-    if (!S.selectedPaths.p1.length) h += `<div class="hint">нет пути</div>`;
+    h += `<h4>${t('pathsPlayer1', {n: S.selectedPaths.p1.length})}</h4>`;
+    if (!S.selectedPaths.p1.length) h += `<div class="hint">${t('noPath')}</div>`;
     S.selectedPaths.p1.forEach((r,i) => {
       const col = PALETTE_T1[i%PALETTE_T1.length];
-      h += `<div class="kv"><span class="pill" style="border-left:6px solid ${col}">${r.unit.name}</span><b>${r.dist.toFixed(1)} кл.</b></div>`;
+      h += `<div class="kv"><span class="pill" style="border-left:6px solid ${col}">${unitLabel(r.unit)}</span><b>${r.dist.toFixed(1)} ${t('cellUnit')}</b></div>`;
     });
-    h += `<h4>Пути Игрока 2 (${S.selectedPaths.p2.length})</h4>`;
-    if (!S.selectedPaths.p2.length) h += `<div class="hint">нет пути</div>`;
+    h += `<h4>${t('pathsPlayer2', {n: S.selectedPaths.p2.length})}</h4>`;
+    if (!S.selectedPaths.p2.length) h += `<div class="hint">${t('noPath')}</div>`;
     S.selectedPaths.p2.forEach((r,i) => {
       const col = PALETTE_T2[i%PALETTE_T2.length];
-      h += `<div class="kv"><span class="pill" style="border-left:6px solid ${col}">${r.unit.name}</span><b>${r.dist.toFixed(1)} кл.</b></div>`;
+      h += `<div class="kv"><span class="pill" style="border-left:6px solid ${col}">${unitLabel(r.unit)}</span><b>${r.dist.toFixed(1)} ${t('cellUnit')}</b></div>`;
     });
   }
   selPanel.innerHTML = h;
@@ -1085,32 +1473,27 @@ function recalc(){
   const t0 = performance.now();
   const W = S.W, H = S.H, N = W*H;
 
-  const hotTresh  = Math.max(0, parseFloat(hotEl.value) || 0);
   const homeThr   = Math.max(2, Math.min(30, parseInt(homeThrEl.value,10) || 10));
   const nmsRadius = Math.max(10, parseInt(nmsEl.value,10) || 60);
   const maxSuggest= Math.max(1, Math.min(20, parseInt(maxSugEl.value,10) || 5));
 
   buildBlocked();
-
   for (const m of S.markers){
     const s = snapToWalkable(m.x, m.y, S.blocked, W, H);
     if (s.cell >= 0){
-      m.x = s.x; m.y = s.y;
-      m.cell = s.cell;
-      m.snapped = s.offset > 0.5;
-      m.offset = s.offset;
+      m.x = s.x; m.y = s.y; m.cell = s.cell;
+      m.snapped = s.offset > 0.5; m.offset = s.offset;
     } else {
       m.cell = -1; m.snapped = true; m.offset = Infinity;
     }
   }
 
-  S.P1  = S.markers.filter(m => m.kind === 'p1'  && m.cell >= 0).map(m => ({ n:m.n, name:m.name, x:m.x, y:m.y, cell:m.cell }));
-  S.P2  = S.markers.filter(m => m.kind === 'p2'  && m.cell >= 0).map(m => ({ n:m.n, name:m.name, x:m.x, y:m.y, cell:m.cell }));
-  S.POI = S.markers.filter(m => m.kind === 'poi' && m.cell >= 0).map(m => ({ n:m.n, name:m.name, x:m.x, y:m.y, cell:m.cell }));
+  S.P1  = S.markers.filter(m => m.kind === 'p1'  && m.cell >= 0).map(m => ({ kind:'p1', n:m.n, x:m.x, y:m.y, cell:m.cell }));
+  S.P2  = S.markers.filter(m => m.kind === 'p2'  && m.cell >= 0).map(m => ({ kind:'p2', n:m.n, x:m.x, y:m.y, cell:m.cell }));
+  S.POI = S.markers.filter(m => m.kind === 'poi' && m.cell >= 0).map(m => ({ kind:'poi',n:m.n, x:m.x, y:m.y, cell:m.cell }));
 
   if (!S.P1.length || !S.P2.length || !S.POI.length){
-    tablesEl.innerHTML = `<div class="panel"><b class="bad">Нет данных для расчёта.</b><br>
-      Игрок 1: ${S.P1.length}, Игрок 2: ${S.P2.length}, точки: ${S.POI.length}.</div>`;
+    tablesEl.innerHTML = `<div class="panel"><b class="bad">—</b> P1: ${S.P1.length}, P2: ${S.P2.length}, POI: ${S.POI.length}</div>`;
     S.calculated = false;
     return;
   }
@@ -1120,8 +1503,8 @@ function recalc(){
 
   const d1 = new Float32Array(N).fill(Infinity);
   const d2 = new Float32Array(N).fill(Infinity);
-  for (const t of S.trees1) for (let i = 0; i < N; i++) if (t.dist[i] < d1[i]) d1[i] = t.dist[i];
-  for (const t of S.trees2) for (let i = 0; i < N; i++) if (t.dist[i] < d2[i]) d2[i] = t.dist[i];
+  for (const tr of S.trees1) for (let i = 0; i < N; i++) if (tr.dist[i] < d1[i]) d1[i] = tr.dist[i];
+  for (const tr of S.trees2) for (let i = 0; i < N; i++) if (tr.dist[i] < d2[i]) d2[i] = tr.dist[i];
   S.d1 = d1; S.d2 = d2;
 
   let sh = Infinity;
@@ -1139,25 +1522,21 @@ function recalc(){
     const kind = classifyPOI(D1, D2, homeThr);
     const rel  = computeRelevance(D1, D2, poi, S.POI, sh, NEIGHBOR_R);
     const adv  = (f1 && f2) ? (D2 - D1) : (f2 ? -Infinity : (f1 ? Infinity : NaN));
-    const perP1 = S.trees1.map(t => ({ unit: t.unit, dist: t.dist[c] })).filter(o => isFinite(o.dist)).sort((a,b) => a.dist - b.dist);
-    const perP2 = S.trees2.map(t => ({ unit: t.unit, dist: t.dist[c] })).filter(o => isFinite(o.dist)).sort((a,b) => a.dist - b.dist);
+    const perP1 = S.trees1.map(tr => ({ unit: tr.unit, dist: tr.dist[c] })).filter(o => isFinite(o.dist)).sort((a,b) => a.dist - b.dist);
+    const perP2 = S.trees2.map(tr => ({ unit: tr.unit, dist: tr.dist[c] })).filter(o => isFinite(o.dist)).sort((a,b) => a.dist - b.dist);
     return {
       idx: i+1, poi, D1, D2, f1, f2, adv, kind, relevance: rel,
       best1Unit: perP1[0]?.unit || null, best2Unit: perP2[0]?.unit || null,
-      perP1, perP2,
-      snapped: poi.snapped, offset: poi.offset,
+      perP1, perP2, snapped: poi.snapped, offset: poi.offset,
     };
   });
 
   S.suggestions = suggestPoints(S.blocked, d1, d2, S.POI.map(o => o.cell), W, H, { nmsRadius, maxSuggest });
   S.advices = analyzeExisting(S.poiAnalyzed);
-
-  // ==== СВОДКА / ОБЩИЙ ПЕРЕКОС ====
   S.summary = computeSummary(S.poiAnalyzed);
 
   S.voronoiCanvas = null;
-  S.calculated = true;
-  S.stale = false;
+  S.calculated = true; S.stale = false;
   runBtn.classList.remove('dirty');
 
   if (S.selectedPOI){
@@ -1165,16 +1544,10 @@ function recalc(){
     if (p) selectPOI(p); else { S.selectedPOI = null; S.selectedPaths = null; }
   }
 
-  updateStatus();
-  updateSelectedPanel();
-  updateTables();
-  scheduleRender();
-
-  const ms = (performance.now() - t0).toFixed(0);
-  console.log('Расчёт за', ms, 'мс');
+  updateStatus(); updateSelectedPanel(); updateTables(); scheduleRender();
+  console.log('recalc', (performance.now() - t0).toFixed(0), 'ms');
 }
 
-/* ---------- Сводка (общий перекос) ---------- */
 function computeSummary(pts){
   const acc = {
     all:      { d1: 0, d2: 0, n: 0 },
@@ -1184,10 +1557,7 @@ function computeSummary(pts){
     unreach:  0,
   };
   for (const p of pts){
-    if (!isFinite(p.D1) || !isFinite(p.D2)){
-      acc.unreach++;
-      continue;
-    }
+    if (!isFinite(p.D1) || !isFinite(p.D2)){ acc.unreach++; continue; }
     const bucket =
       p.kind === 'contested' ? acc.contested :
       p.kind === 'home1'     ? acc.home1 :
@@ -1195,28 +1565,23 @@ function computeSummary(pts){
     if (bucket){ bucket.d1 += p.D1; bucket.d2 += p.D2; bucket.n++; }
     acc.all.d1 += p.D1; acc.all.d2 += p.D2; acc.all.n++;
   }
-
-  // adv = D2 − D1 (>0 → Игрок 1 ближе суммарно)
   const mk = (b) => {
     const adv = b.d2 - b.d1;
     const total = b.d1 + b.d2;
     const skewPct = total > 0 ? (adv / total) * 100 : 0;
     return { ...b, adv, skewPct };
   };
-
   return {
-    all:       mk(acc.all),
-    contested: mk(acc.contested),
-    home1:     mk(acc.home1),
-    home2:     mk(acc.home2),
-    unreach:   acc.unreach,
+    all: mk(acc.all), contested: mk(acc.contested),
+    home1: mk(acc.home1), home2: mk(acc.home2),
+    unreach: acc.unreach,
   };
 }
 
 runBtn.addEventListener('click', () => {
   try { recalc(); }
   catch(e){
-    tablesEl.innerHTML = `<div class="panel"><b class="bad">Ошибка:</b> ${e.message}</div>`;
+    tablesEl.innerHTML = `<div class="panel"><b class="bad">Error:</b> ${e.message}</div>`;
     console.error(e);
   }
 });
@@ -1226,13 +1591,9 @@ runBtn.addEventListener('click', () => {
    ============================================================ */
 function updateStatus(){
   if (!S.cleanCanvas){ statusEl.innerHTML = ''; return; }
-  if (!S.calculated){
-    statusEl.innerHTML = `<div class="status-msg status-stale">Позиции не рассчитаны — нажмите <b>«Рассчитать»</b> или <b>Space</b>.</div>`;
-  } else if (S.stale){
-    statusEl.innerHTML = `<div class="status-msg status-stale">Позиции изменены — нажмите <b>«Рассчитать»</b> или <b>Space</b> для обновления анализа.</div>`;
-  } else {
-    statusEl.innerHTML = `<div class="status-msg status-ok">Анализ актуален.</div>`;
-  }
+  if (!S.calculated)      statusEl.innerHTML = `<div class="status-msg status-stale">${t('statusNotCalc')}</div>`;
+  else if (S.stale)       statusEl.innerHTML = `<div class="status-msg status-stale">${t('statusStale')}</div>`;
+  else                    statusEl.innerHTML = `<div class="status-msg status-ok">${t('statusOk')}</div>`;
 }
 
 /* ============================================================
@@ -1247,10 +1608,10 @@ function fmtAdv(a){
 }
 function kindTag(p){
   switch (p.kind){
-    case 'contested': return `<span class="tag tag-hot">спорная</span>`;
-    case 'home1':     return `<span class="tag tag-home1">домашняя И1</span>`;
-    case 'home2':     return `<span class="tag tag-home2">домашняя И2</span>`;
-    default:          return `<span class="tag tag-na">недостижима</span>`;
+    case 'contested': return `<span class="tag tag-hot">${t('tagContested')}</span>`;
+    case 'home1':     return `<span class="tag tag-home1">${t('tagHome1')}</span>`;
+    case 'home2':     return `<span class="tag tag-home2">${t('tagHome2')}</span>`;
+    default:          return `<span class="tag tag-na">${t('tagInaccessible')}</span>`;
   }
 }
 
@@ -1258,22 +1619,32 @@ function updateTables(){
   if (!S.calculated) return;
   const sel = S.selectedPOI ? S.selectedPOI.n : null;
 
+  // Сохраняем открытые details
+  const openState = {};
+  tablesEl.querySelectorAll('details[data-key]').forEach(d => { openState[d.dataset.key] = d.open; });
+  const isFirstRender = Object.keys(openState).length === 0;
+
   /* 1: расстояния */
-  let h1 = `<table><tr><th>Точка</th><th>Тип</th><th>И1 → Т (кл.)</th><th>И2 → Т (кл.)</th><th>Δ (И2−И1)</th></tr>`;
+  const U = t('cellUnit');
+  let h1 = `<table><tr>
+    <th>${t('thPoint')}</th><th>${t('thType')}</th>
+    <th>${t('thD1')} (${U})</th><th>${t('thD2')} (${U})</th><th>${t('thDelta')}</th></tr>`;
   for (const p of S.poiAnalyzed){
     const cls = sel === p.poi.n ? 'sel' : '';
     h1 += `<tr class="clickable ${cls}" data-poi="${p.poi.n}">
-      <td>Т${p.idx}${p.snapped ? ' <span class="warn" title="центроид сдвинут из стены">⚠</span>' : ''}</td>
+      <td>${t('namePOI')}${p.idx}${p.snapped ? ' <span class="warn" title="⚠">⚠</span>' : ''}</td>
       <td>${kindTag(p)}</td>
-      <td>${fmtD(p.D1)} <span class="dim">(${p.best1Unit?p.best1Unit.name:'—'})</span></td>
-      <td>${fmtD(p.D2)} <span class="dim">(${p.best2Unit?p.best2Unit.name:'—'})</span></td>
+      <td>${fmtD(p.D1)} <span class="dim">(${p.best1Unit?unitLabel(p.best1Unit):'—'})</span></td>
+      <td>${fmtD(p.D2)} <span class="dim">(${p.best2Unit?unitLabel(p.best2Unit):'—'})</span></td>
       <td>${fmtAdv(p.adv)}</td>
     </tr>`;
   }
   h1 += `</table>`;
 
   /* 2: ценность */
-  let h2 = `<table><tr><th>Точка</th><th>Тип</th><th>Ценность</th><th>Баланс</th><th>На пути</th><th>Соседей</th><th>Комментарий</th></tr>`;
+  let h2 = `<table><tr>
+    <th>${t('thPoint')}</th><th>${t('thType')}</th><th>${t('thRelevanceValue')}</th>
+    <th>${t('thBalance')}</th><th>${t('thOnPath')}</th><th>${t('thNeighbors')}</th><th>${t('thComment')}</th></tr>`;
   const sortedRel = [...S.poiAnalyzed].sort((a,b) => b.relevance.value - a.relevance.value);
   for (const p of sortedRel){
     const rel = p.relevance;
@@ -1281,12 +1652,12 @@ function updateTables(){
     const cls = sel === p.poi.n ? 'sel' : '';
     const col = rel.value > 0.65 ? '#4ade80' : rel.value > 0.4 ? '#ffd166' : '#7a828f';
     let note = '';
-    if (p.kind === 'inaccessible') note = '<span class="bad">недостижима</span>';
-    else if (rel.value > 0.65) note = '<span class="ok">высокая — держать</span>';
-    else if (rel.value > 0.4)  note = '<span class="warn">средняя</span>';
-    else                        note = '<span class="dim">низкая — на отшибе</span>';
+    if (p.kind === 'inaccessible') note = `<span class="bad">${t('noteUnreachable')}</span>`;
+    else if (rel.value > 0.65) note = `<span class="ok">${t('noteHigh')}</span>`;
+    else if (rel.value > 0.4)  note = `<span class="warn">${t('noteMid')}</span>`;
+    else                        note = `<span class="dim">${t('noteLow')}</span>`;
     h2 += `<tr class="clickable ${cls}" data-poi="${p.poi.n}">
-      <td>Т${p.idx}</td>
+      <td>${t('namePOI')}${p.idx}</td>
       <td>${kindTag(p)}</td>
       <td><b style="color:${col}">${pct}%</b><div class="bar"><i style="width:${pct}%;background:${col}"></i></div></td>
       <td>${(rel.balance*100).toFixed(0)}%</td>
@@ -1300,50 +1671,60 @@ function updateTables(){
   /* 3: добавить */
   let h3;
   if (!S.suggestions.length){
-    h3 = `<div class="hint">Свободных сбалансированных зон не найдено.</div>`;
+    h3 = `<div class="hint">${t('noFreeZones')}</div>`;
   } else {
-    h3 = `<table><tr><th>#</th><th>Позиция</th><th>До ближайшей</th><th>И1 / И2</th><th>Δ</th></tr>`;
+    h3 = `<table><tr><th>#</th><th>${t('thPos')}</th><th>${t('thGap')}</th><th>${t('thD1D2Short')}</th><th>${t('thDelta')}</th></tr>`;
     S.suggestions.forEach((s, i) => {
-      const gapTxt = isFinite(s.gap) ? `${s.gap.toFixed(0)} кл.` : '—';
+      const gapTxt = isFinite(s.gap) ? `${s.gap.toFixed(0)} ${U}` : '—';
       h3 += `<tr>
         <td><span class="tag tag-add">+${i+1}</span></td>
         <td>(${s.x}, ${s.y})</td>
         <td>${gapTxt}</td>
-        <td>И1 ${s.d1.toFixed(0)} / И2 ${s.d2.toFixed(0)}</td>
+        <td>${t('nameP1').replace('·','')} ${s.d1.toFixed(0)} / ${t('nameP2').replace('·','')} ${s.d2.toFixed(0)}</td>
         <td>${fmtAdv(s.d2 - s.d1)}</td>
       </tr>`;
     });
     h3 += `</table>`;
   }
 
-  /* 4: убрать/перенести — только спорные */
+  /* 4: убрать/перенести */
   const contest = S.advices.filter(a => a.poi.kind === 'contested');
   const toFix = contest.filter(a => a.kind !== 'keep');
   let h4;
   if (!contest.length){
-    h4 = `<div class="hint">Спорных точек нет.</div>`;
+    h4 = `<div class="hint">${t('noContestedPoints')}</div>`;
   } else if (!toFix.length){
-    h4 = `<div class="hint"><span class="ok">Все спорные точки сбалансированы.</span></div>`;
+    h4 = `<div class="hint"><span class="ok">${t('allContestedBalanced')}</span></div>`;
   } else {
-    h4 = `<table><tr><th>Точка</th><th>Рекомендация</th><th>Причина</th></tr>`;
+    h4 = `<table><tr><th>${t('thPoint')}</th><th>${t('thRecommendation')}</th><th>${t('thReason')}</th></tr>`;
     for (const a of toFix){
-      const tag = a.kind === 'remove' ? `<span class="tag tag-rm">убрать</span>` : `<span class="tag tag-move">перенести</span>`;
-      const rec = a.kind === 'remove' ? 'удалить' : 'сдвинуть к фронту / разнести';
-      h4 += `<tr><td>Т${a.poi.poi.n}</td><td>${tag} ${rec}</td><td style="white-space:normal" class="dim">${a.notes.join('; ')}</td></tr>`;
+      const tag = a.kind === 'remove'
+        ? `<span class="tag tag-rm">${t('tagRemove')}</span>`
+        : `<span class="tag tag-move">${t('tagMove')}</span>`;
+      const rec = a.kind === 'remove' ? t('recRemove') : t('recMove');
+      h4 += `<tr><td>${t('namePOI')}${a.poi.poi.n}</td><td>${tag} ${rec}</td>
+        <td style="white-space:normal" class="dim">${a.notes.join('; ')}</td></tr>`;
     }
     h4 += `</table>`;
   }
 
-  /* 5: СВОДКА — новая */
+  /* 5: сводка */
   const h5 = buildSummaryHTML(S.summary, S.poiAnalyzed, toFix.length, S.suggestions.length);
 
   tablesEl.innerHTML = `
-    <details open><summary>📊 Сводка / перекос баланса</summary><div class="body">${h5}</div></details>
-    <details><summary>📏 Расстояния до точек интереса</summary><div class="body">${h1}</div></details>
-    <details><summary>🎯 Ценность точек (релевантность)</summary><div class="body">${h2}</div></details>
-    <details><summary>💡 Куда добавить новые точки</summary><div class="body">${h3}</div></details>
-    <details><summary>⚠️ Убрать/перенести (только спорные)</summary><div class="body">${h4}</div></details>
+    <details data-key="summary"><summary>${t('tableSummary')}</summary><div class="body">${h5}</div></details>
+    <details data-key="distances"><summary>${t('tableDistances')}</summary><div class="body">${h1}</div></details>
+    <details data-key="value"><summary>${t('tableValue')}</summary><div class="body">${h2}</div></details>
+    <details data-key="add"><summary>${t('tableAdd')}</summary><div class="body">${h3}</div></details>
+    <details data-key="fix"><summary>${t('tableFix')}</summary><div class="body">${h4}</div></details>
   `;
+
+  // Восстанавливаем/устанавливаем состояние открытия
+  tablesEl.querySelectorAll('details[data-key]').forEach(d => {
+    const k = d.dataset.key;
+    if (isFirstRender) d.open = (k === 'summary');
+    else d.open = !!openState[k];
+  });
 
   tablesEl.querySelectorAll('tr[data-poi]').forEach(tr => {
     tr.addEventListener('click', () => {
@@ -1354,19 +1735,20 @@ function updateTables(){
   });
 }
 
-/* ---------- Рендер сводки ---------- */
+/* ---------- Сводка ---------- */
 function buildSummaryHTML(sm, pts, toFixCount, sugCount){
   if (!sm) return '';
+  const U = t('cellUnit');
   const row = (label, bucket, kind) => {
     if (bucket.n === 0 && kind !== 'all'){
-      return `<div class="n">${label}</div><div class="n">—</div><div class="n">—</div><div class="n">точек нет</div>`;
+      return `<div class="n">${label}</div><div class="n">—</div><div class="n">—</div><div class="n">0</div>`;
     }
     const cls = bucket.adv > 0.001 ? 'ok' : bucket.adv < -0.001 ? 'bad' : 'dim';
-    const who = bucket.adv > 0 ? 'Игрок 1' : 'Игрок 2';
+    const who = bucket.adv > 0 ? t('player1') : t('player2');
     const sign = bucket.adv > 0 ? '+' : '';
     const advTxt = Math.abs(bucket.adv) < 0.05
-      ? `<span class="dim">паритет</span>`
-      : `<span class="${cls}">${who} ${sign}${bucket.adv.toFixed(1)} кл.</span>`;
+      ? `<span class="dim">${t('smParity')}</span>`
+      : `<span class="${cls}">${who} ${sign}${bucket.adv.toFixed(1)}</span>`;
     return `
       <div>${label} <span class="n">(${bucket.n})</span></div>
       <div class="v1">${bucket.d1.toFixed(1)}</div>
@@ -1374,14 +1756,12 @@ function buildSummaryHTML(sm, pts, toFixCount, sugCount){
       <div class="adv">${advTxt}</div>`;
   };
 
-  // Итог
   const adv = sm.all.adv;
-  const skewPct = sm.all.skewPct;   // знак: + → И1
-  const skewAbs = Math.min(100, Math.abs(skewPct));
+  const skewPct = sm.all.skewPct;
   const skewColor = adv > 0.5 ? '#22c55e' : adv < -0.5 ? '#ef4444' : '#7a828f';
   const skewWho = Math.abs(adv) < 0.5
-    ? 'Паритет'
-    : (adv > 0 ? 'Перевес Игрока 1' : 'Перевес Игрока 2');
+    ? t('smSkewParity')
+    : (adv > 0 ? t('smSkewP1') : t('smSkewP2'));
   const skewSign = adv > 0 ? '+' : '';
 
   const cHome1 = pts.filter(p => p.kind === 'home1').length;
@@ -1389,19 +1769,18 @@ function buildSummaryHTML(sm, pts, toFixCount, sugCount){
   const cCont  = pts.filter(p => p.kind === 'contested').length;
   const cNA    = pts.filter(p => p.kind === 'inaccessible').length;
 
-  // Текстовый вердикт по перекосу
   let verdict;
+  const whoTxt = adv > 0 ? t('player1') : t('player2');
   if (cCont === 0){
-    verdict = `<span class="warn">Нет спорных точек — сравнивать нечего. Добавьте точки у линии фронта.</span>`;
+    verdict = `<span class="warn">${t('smVerdictNoContested')}</span>`;
   } else if (Math.abs(adv) < 1){
-    verdict = `<span class="ok">Идеальный паритет — суммарные расстояния сторон почти равны.</span>`;
+    verdict = `<span class="ok">${t('smVerdictParity')}</span>`;
   } else if (Math.abs(adv) < sm.all.d1 * 0.05){
-    verdict = `<span class="warn">Небольшой перекос в пользу ${adv > 0 ? 'Игрока 1' : 'Игрока 2'} — вероятно, приемлемо.</span>`;
+    verdict = `<span class="warn">${t('smVerdictSmallSkew', {who: whoTxt})}</span>`;
   } else {
-    verdict = `<span class="bad">Заметный перекос в пользу ${adv > 0 ? 'Игрока 1' : 'Игрока 2'}. Пересмотрите позиции точек.</span>`;
+    verdict = `<span class="bad">${t('smVerdictBigSkew', {who: whoTxt})}</span>`;
   }
 
-  // Смещение полосы: skewPct ∈ [-100..+100], рисуем ширину как |skewPct|*0.5% → до 50% ширины
   const barW = Math.min(50, Math.abs(skewPct) / 2);
   const barLeft = skewPct >= 0 ? 50 : (50 - barW);
   const barColor = skewPct >= 0 ? 'linear-gradient(90deg,#22c55e,#4ade80)' : 'linear-gradient(90deg,#f87171,#ef4444)';
@@ -1409,14 +1788,14 @@ function buildSummaryHTML(sm, pts, toFixCount, sugCount){
   return `
     <div class="summary-block">
       <div class="hdr"></div>
-      <div class="hdr">Игрок 1 (Σ кл.)</div>
-      <div class="hdr">Игрок 2 (Σ кл.)</div>
-      <div class="hdr" style="text-align:right">Перевес</div>
+      <div class="hdr">${t('smP1Sum')}</div>
+      <div class="hdr">${t('smP2Sum')}</div>
+      <div class="hdr" style="text-align:right">${t('smAdvantage')}</div>
 
-      ${row('Все точки',        sm.all,       'all')}
-      ${row('Спорные',          sm.contested, 'contested')}
-      ${row('Домашние И1',      sm.home1,     'home1')}
-      ${row('Домашние И2',      sm.home2,     'home2')}
+      ${row(t('smAllPoints'),   sm.all,       'all')}
+      ${row(t('smContested'),   sm.contested, 'contested')}
+      ${row(t('smHome1'),       sm.home1,     'home1')}
+      ${row(t('smHome2'),       sm.home2,     'home2')}
     </div>
 
     <div style="margin-top:14px">
@@ -1426,20 +1805,20 @@ function buildSummaryHTML(sm, pts, toFixCount, sugCount){
         <span></span>
       </div>
       <div class="hint" style="display:flex;justify-content:space-between">
-        <span>◀ Игрок 2</span><span>паритет</span><span>Игрок 1 ▶</span>
+        <span>${t('smLeftP2')}</span><span>${t('smParity')}</span><span>${t('smRightP1')}</span>
       </div>
     </div>
 
     <table style="margin-top:14px">
-      <tr><td>Точек всего</td><td><b>${pts.length}</b></td></tr>
-      <tr><td>Спорных / домашних И1 / домашних И2</td><td><span class="warn">${cCont}</span> / <span class="ok">${cHome1}</span> / <span class="bad">${cHome2}</span></td></tr>
-      <tr><td>Недостижимых</td><td>${cNA || sm.unreach}</td></tr>
-      <tr><td>Сумма путей И1 → все точки</td><td><span class="v1">${sm.all.d1.toFixed(1)} кл.</span></td></tr>
-      <tr><td>Сумма путей И2 → все точки</td><td><span class="v2">${sm.all.d2.toFixed(1)} кл.</span></td></tr>
-      <tr><td>Разница (И2 − И1)</td><td><b class="${skewColor === '#22c55e' ? 'ok' : skewColor === '#ef4444' ? 'bad' : 'dim'}">${adv > 0 ? '+' : ''}${adv.toFixed(1)} кл.</b></td></tr>
-      <tr><td>Минимум И1↔И2</td><td>${isFinite(S.shortest1to2)?S.shortest1to2.toFixed(1)+' кл.':'—'}</td></tr>
-      <tr><td>Рекомендуется добавить</td><td><span class="info">${sugCount}</span></td></tr>
-      <tr><td>Убрать / перенести (спорные)</td><td><span class="warn">${toFixCount}</span></td></tr>
+      <tr><td>${t('smTotalPoints')}</td><td><b>${pts.length}</b></td></tr>
+      <tr><td>${t('smBreakdown')}</td><td><span class="warn">${cCont}</span> / <span class="ok">${cHome1}</span> / <span class="bad">${cHome2}</span></td></tr>
+      <tr><td>${t('smUnreachable')}</td><td>${cNA || sm.unreach}</td></tr>
+      <tr><td>${t('smSumPath1')}</td><td><span class="v1">${sm.all.d1.toFixed(1)} ${U}</span></td></tr>
+      <tr><td>${t('smSumPath2')}</td><td><span class="v2">${sm.all.d2.toFixed(1)} ${U}</span></td></tr>
+      <tr><td>${t('smDiff')}</td><td><b class="${skewColor === '#22c55e' ? 'ok' : skewColor === '#ef4444' ? 'bad' : 'dim'}">${adv > 0 ? '+' : ''}${adv.toFixed(1)} ${U}</b></td></tr>
+      <tr><td>${t('smMinDistance')}</td><td>${isFinite(S.shortest1to2)?S.shortest1to2.toFixed(1)+' '+U:'—'}</td></tr>
+      <tr><td>${t('smRecAdd')}</td><td><span class="info">${sugCount}</span></td></tr>
+      <tr><td>${t('smRecRemove')}</td><td><span class="warn">${toFixCount}</span></td></tr>
     </table>
 
     <div class="hint" style="margin-top:10px">${verdict}</div>
@@ -1451,11 +1830,12 @@ function buildSummaryHTML(sm, pts, toFixCount, sugCount){
    ============================================================ */
 fileIn.addEventListener('change', e => {
   const f = e.target.files[0]; if (!f) return;
+  S.fileName = f.name;
   fileNameEl.textContent = f.name;
   const url = URL.createObjectURL(f);
   const im = new Image();
   im.onload = () => { loadImage(im); URL.revokeObjectURL(url); };
-  im.onerror = () => { statusEl.textContent = 'Не удалось загрузить изображение.'; };
+  im.onerror = () => { statusEl.textContent = 'Error'; };
   im.src = url;
 });
 
@@ -1463,26 +1843,23 @@ fileIn.addEventListener('change', e => {
    ДЕМО
    ============================================================ */
 demoBtn.addEventListener('click', () => {
+  S.fileName = 'demo.png';
   fileNameEl.textContent = 'demo.png';
   const w = 900, h = 640;
   const c = document.createElement('canvas');
   c.width = w; c.height = h;
   const g = c.getContext('2d');
   g.fillStyle = '#ffffff'; g.fillRect(0,0,w,h);
-
   g.fillStyle = '#0000ff';
   g.fillRect(  0, 320, 300, 26);
   g.fillRect(380, 320, 200, 26);
   g.fillRect(700, 320, 200, 26);
-
   g.fillStyle = '#000000';
   g.fillRect(160, 100, 26, 170);
   g.fillRect(680, 100, 26, 170);
   g.fillRect(160, 440, 240, 24);
   g.fillRect(540, 440, 240, 24);
-
   const circle = (x,y,r,col) => { g.fillStyle=col; g.beginPath(); g.arc(x,y,r,0,Math.PI*2); g.fill(); };
-
   circle(300,  60, 16, '#ffff00');
   circle(450,  60, 16, '#ffff00');
   circle(600,  60, 16, '#ffff00');
@@ -1490,16 +1867,24 @@ demoBtn.addEventListener('click', () => {
   circle(130, 500, 16, '#ffff00');
   circle(830, 560, 16, '#ffff00');
   circle(770, 500, 16, '#ffff00');
-
   circle( 70, 600, 17, '#00ff00');
   circle(150, 600, 17, '#00ff00');
   circle(830, 600, 17, '#ff0000');
   circle(750, 600, 17, '#ff0000');
-
   loadImage(c);
 });
 
-updateStatus();
+/* ============================================================
+   СТАРТ
+   ============================================================ */
+(function init(){
+  let saved = 'ru';
+  try { saved = localStorage.getItem(LANG_KEY) || 'ru'; } catch(_){}
+  if (!I18N[saved]) saved = 'ru';
+  S.lang = saved;
+  langSel.value = saved;
+  applyTranslations();
+})();
 </script>
 </body>
 </html>
