@@ -271,7 +271,7 @@
       <span id="v3CellVal" style="color:#fd4">3</span></label>
     <label>HEIGHT PX <input type="range" id="v3Height" min="10" max="300" value="90" step="5">
       <span id="v3HeightVal" style="color:#fd4">90</span></label>
-    <label>REFRESH <input type="checkbox" id="v3Auto" checked></label>
+    
   </div>
   <div class="btnrow">
     <button id="v3Render" class="primary">RENDER 3D</button>
@@ -331,7 +331,7 @@ function invalidateTiles(){
   tileMap = null;
   lastPackedBytes = null;
   lastCompressedBytes = null;
-  if(document.getElementById('v3Auto').checked) schedule3D();
+  // 3D не перерисовывается автоматически — только по кнопке RENDER 3D
 }
 
 // ════════════════════════════════════════════════════════════
@@ -584,7 +584,7 @@ function render(){
   syncOverlay();
   drawOverlay(lettersOn);
 
-  if(document.getElementById('v3Auto').checked) schedule3D();
+//  if(document.getElementById('v3Auto').checked) schedule3D();
 }
 
 function tileFamilyColor(t){
