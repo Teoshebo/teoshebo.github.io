@@ -1,0 +1,1561 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Heightmap Editor + Tile Encoder + 3D</title>
+<script src="https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js"></script>
+<style>
+  *{box-sizing:border-box}
+  body{background:#111;color:#ddd;font-family:ui-monospace,Menlo,Consolas,monospace;margin:0;padding:16px;font-size:12px}
+  h1{font-size:13px;font-weight:normal;letter-spacing:3px;color:#888;margin:0 0 14px}
+  .tabs{display:flex;gap:2px;border-bottom:1px solid #333;margin-bottom:14px;max-width:1100px;flex-wrap:wrap}
+  .tab{background:#181818;color:#888;border:1px solid #333;border-bottom:0;padding:8px 18px;
+       font-family:inherit;font-size:11px;letter-spacing:2px;cursor:pointer;position:relative;top:1px}
+  .tab:hover{color:#ccc;background:#202020}
+  .tab.active{background:#111;color:#fd4;border-color:#fd4 #333 #111 #333}
+  .tab-content{display:none;max-width:1100px}
+  .tab-content.active{display:block}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-bottom:14px}
+  .grid label{display:flex;flex-direction:column;font-size:11px;gap:4px;color:#888}
+  .grid input,.grid select{background:#1a1a1a;color:#eee;border:1px solid #333;padding:5px 7px;width:100%;font-family:inherit;font-size:12px}
+  .grid input[type=checkbox]{width:auto;align-self:start}
+  .btnrow{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}
+  .btnrow button{background:#222;color:#eee;border:1px solid #444;padding:7px 14px;
+                 font-family:inherit;font-size:11px;letter-spacing:1px;cursor:pointer}
+  .btnrow button:hover{background:#333;border-color:#666}
+  .btnrow button.active{background:#606;border-color:#909}
+  .btnrow button.danger{background:#511;border-color:#833}
+  .btnrow button.good{background:#262;border-color:#484}
+  .btnrow button.primary{background:#225;border-color:#44a}
+  .section-title{color:#fd4;font-size:10px;letter-spacing:2px;margin:14px 0 6px;padding-bottom:4px;border-bottom:1px solid #222}
+  .stage{position:relative;display:inline-block;background:#000;
+         box-shadow:0 0 0 1px #333; line-height:0}
+  canvas{image-rendering:pixelated;display:block;margin:0;padding:0;border:0;
+         touch-action:none;user-select:none;-webkit-user-select:none}
+  canvas.overlay{position:absolute;top:0;left:0;pointer-events:none}
+  .legend{margin-top:12px;font-size:11px;color:#777;line-height:1.7;max-width:900px}
+  .legend b{color:#bbb}
+  .hint{color:#c9c;font-size:11px;margin:8px 0;max-width:900px}
+  .point-panel{padding:10px;background:#181818;border:1px solid #333;
+               display:flex;flex-wrap:wrap;gap:10px;align-items:end;margin-top:10px}
+  .point-panel label{display:flex;flex-direction:column;font-size:10px;gap:3px;color:#888}
+  .point-panel input{background:#0e0e0e;color:#eee;border:1px solid #333;padding:4px 6px;
+                     width:70px;font-family:inherit;font-size:11px}
+  .point-panel button{background:#222;color:#eee;border:1px solid #444;padding:5px 10px;
+                      font-family:inherit;font-size:10px;letter-spacing:1px;cursor:pointer}
+  .point-panel button.danger{background:#511;border-color:#833}
+  .active-id{color:#fd4;font-weight:bold;align-self:center}
+  .mode-row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:10px 0;
+            padding:8px;background:#181818;border:1px solid #333}
+  .mode-row span{color:#888;font-size:11px;letter-spacing:1px}
+  .mode-row label{display:flex;gap:5px;align-items:center;color:#aaa;font-size:11px}
+  .mode-row select{background:#1a1a1a;color:#eee;border:1px solid #333;padding:4px 6px;font-family:inherit;font-size:11px}
+  .brush-preview{width:32px;height:32px;border:1px solid #444;
+                 display:inline-flex;align-items:center;justify-content:center;
+                 font-size:11px;color:#000;font-weight:bold;margin-left:6px}
+  textarea{width:100%;height:80px;background:#0e0e0e;color:#eee;border:1px solid #333;
+           font-family:monospace;font-size:11px;padding:6px;resize:vertical}
+  .report{font-family:ui-monospace,Menlo,monospace;font-size:11px;line-height:1.55;
+          white-space:pre-wrap;background:#0e0e0e;border:1px solid #222;padding:8px;
+          margin-top:8px;border-radius:4px}
+  .ok{color:#86efac}.warn{color:#fbbf24}.err{color:#f87171}
+  .legend-mini{font-family:ui-monospace,monospace;font-size:11px;line-height:1.6}
+  .legend-mini .sw{display:inline-block;width:10px;height:10px;margin-right:6px;
+                   vertical-align:middle;border:1px solid #000}
+  #c3dWrap{background:#0b0d11;border:1px solid #222833;border-radius:8px;
+           padding:8px;display:flex;justify-content:center;align-items:center;
+           min-height:300px;overflow:auto}
+  #c3d{max-width:100%;max-height:80vh}
+</style>
+</head>
+<body>
+
+<h1>HEIGHTMAP EDITOR + TILE ENCODER + 3D</h1>
+
+<div class="tabs">
+  <button class="tab active" data-tab="map">MAP</button>
+  <button class="tab" data-tab="brush">BRUSH</button>
+  <button class="tab" data-tab="river">RIVER</button>
+  <button class="tab" data-tab="points">POINTS</button>
+  <button class="tab" data-tab="tiles">TILES</button>
+  <button class="tab" data-tab="view3d">3D VIEW</button>
+</div>
+
+<div class="tab-content active" id="tab-map">
+  <div class="grid">
+    <label>WIDTH  <input type="number" id="w" value="256" min="32" max="1024"></label>
+    <label>HEIGHT <input type="number" id="h" value="256" min="32" max="1024"></label>
+    <label>LEVELS <input type="number" id="levels" value="10" min="3" max="14"></label>
+    <label>FLATTEN BOTTOM <input type="number" id="flatten" value="3" min="0" max="10"></label>
+    <label>NOISE SCALE <input type="number" id="nscale" value="160" min="30" max="600"></label>
+    <label>OCTAVES <input type="number" id="oct" value="3" min="1" max="6"></label>
+    <label>PLAYABLE % <input type="number" id="flat" value="15" min="5" max="90"></label>
+    <label>EDGE BIAS <input type="number" id="edge" value="0" min="-6" max="6" step="0.1"></label>
+    <label>EDGE CURVE <input type="number" id="edgepow" value="1" min="0.3" max="4" step="0.1"></label>
+    <label>SYMMETRY
+      <select id="sym">
+        <option value="none">none</option>
+        <option value="mirror-x">mirror X</option>
+        <option value="mirror-y">mirror Y</option>
+        <option value="rotate-180" selected>rotate 180°</option>
+        <option value="quad">quad</option>
+        <option value="diag">diag</option>
+        <option value="anti-diag">anti-diag</option>
+      </select>
+    </label>
+    <label>SYM STRENGTH <input type="number" id="symstr" value="0.8" min="0" max="1" step="0.05"></label>
+    <label>PASSES  <input type="number" id="passes" value="8" min="0" max="80"></label>
+    <label>PASS W  <input type="number" id="pw" value="2" min="1" max="8"></label>
+    <label>PASS LEN<input type="number" id="plen" value="50" min="5" max="300"></label>
+    <label>SEED    <input type="number" id="seed" value="651422"></label>
+  </div>
+  <div class="btnrow">
+    <button id="gen" class="primary">GENERATE MAP</button>
+    <button id="rnd">RANDOM SEED</button>
+    <button id="dl">DOWNLOAD PNG</button>
+  </div>
+</div>
+
+<div class="tab-content" id="tab-brush">
+  <div class="section-title">BRUSH</div>
+  <div class="grid">
+    <label>MODE
+      <select id="bMode">
+        <option value="set" selected>SET (абсолют)</option>
+        <option value="raise">RAISE (подъём → темнее)</option>
+        <option value="lower">LOWER (спуск → светлее)</option>
+      </select>
+    </label>
+    <label>TARGET LEVEL <input type="number" id="bLevel" value="1" min="1" max="14"></label>
+    <label>STRENGTH <input type="number" id="bStrength" value="1" min="0.1" max="10" step="0.1"></label>
+    <label>RADIUS  <input type="number" id="bRadius" value="50" min="1" max="120"></label>
+    <label>SOFTNESS <input type="number" id="bSoft" value="0.5" min="0.05" max="1" step="0.05"></label>
+    <label>SHOW OVERRIDES <input type="checkbox" id="bShow" checked></label>
+  </div>
+  <div class="btnrow">
+    <button id="bOn">BRUSH: OFF</button>
+    <button id="bClear" class="danger">CLEAR ALL BRUSHES</button>
+  </div>
+  <div class="mode-row">
+    <span>1 = тёмный (верх), N = светлый (пол).</span>
+    <span>Цвет: <span class="brush-preview" id="bPreview"></span></span>
+  </div>
+  <div class="legend">
+    <b>SET:</b> кисть устанавливает целевой уровень.<br>
+    <b>RAISE:</b> подъём = темнее = индекс меньше.<br>
+    <b>LOWER:</b> спуск = светлее = индекс больше.<br>
+    <b>SOFTNESS:</b> 0.05 = почти жёсткий край, 0.5 = ядро 50% + мягкое затухание, 1.0 = мягкий градиент от центра.<br>
+    <b>ПКМ</b> — стирает оверрайд.
+  </div>
+</div>
+
+<div class="tab-content" id="tab-river">
+  <div class="section-title">RIVER ON MAP</div>
+  <div class="grid">
+    <label>RIVERS <input type="checkbox" id="rivOn" checked></label>
+    <label>RIVER SMOOTH <input type="number" id="rivSmooth" value="50" min="0" max="120"></label>
+  </div>
+  <div class="section-title">NEW POINT DEFAULTS</div>
+  <div class="grid">
+    <label>DEFAULT WIDTH <input type="number" id="dW" value="10" min="1" max="30" step="0.5"></label>
+    <label>DEFAULT TENSION <input type="number" id="dT" value="0.5" min="0.05" max="1.5" step="0.05"></label>
+    <label>DEFAULT W_AMP <input type="number" id="dA" value="0.3" min="0" max="1" step="0.05"></label>
+    <label>DEFAULT W_FREQ <input type="number" id="dF" value="0.02" min="0" max="0.5" step="0.005"></label>
+  </div>
+  <div class="mode-row">
+    <span>MODE:</span>
+    <button id="modeRiver" class="active">DRAW RIVER</button>
+    <button id="clrBtn" class="danger">CLEAR ALL RIVERS</button>
+    <label><input type="checkbox" id="showRiverPts" checked> RIVER PTS</label>
+  </div>
+  <div class="point-panel">
+    <span class="active-id" id="activeLabel">ACTIVE: —</span>
+    <label>X <input type="number" id="pX" disabled></label>
+    <label>Y <input type="number" id="pY" disabled></label>
+    <label>WIDTH <input type="number" id="pW" min="1" max="30" step="0.5" disabled></label>
+    <label>TENSION <input type="number" id="pT" min="0.05" max="1.5" step="0.05" disabled></label>
+    <label>W_AMP <input type="number" id="pA" min="0" max="1" step="0.05" disabled></label>
+    <label>W_FREQ <input type="number" id="pF" min="0" max="0.5" step="0.005" disabled></label>
+    <button id="applyAll">APPLY TO RIVER</button>
+    <button id="delActive" class="danger">DELETE ACTIVE</button>
+  </div>
+  <div class="legend">
+    <b>RIVER SMOOTH:</b> радиус сглаживания рельефа вокруг реки. 0 = без сглаживания, 50 = широкая долина, 100+ = очень широкая.
+  </div>
+</div>
+
+<div class="tab-content" id="tab-points">
+  <div class="section-title">AUTO-GENERATE POINTS</div>
+  <div class="grid">
+    <label>PLAYERS / TEAM <input type="number" id="aP" value="2" min="1" max="5"></label>
+    <label>HOME PTS / PLAYER <input type="number" id="aK" value="1" min="0" max="6"></label>
+    <label>FRONT PTS <input type="number" id="aF" value="4" min="0" max="20"></label>
+    <label>SPREAD <input type="number" id="aSpread" value="1" min="0.5" max="2" step="0.1"></label>
+    <label>EDGE MARGIN % <input type="number" id="aEdge" value="10" min="0" max="30"></label>
+    <label>HEIGHT MARGIN <input type="number" id="aHeight" value="10" min="0" max="40"></label>
+  </div>
+  <div class="btnrow">
+    <button id="genPts" class="good">GENERATE POINTS</button>
+    <button id="clrPts" class="danger">CLEAR POINTS</button>
+  </div>
+  <div class="mode-row">
+    <span>MODE:</span>
+    <button id="modeStart">DRAW START</button>
+    <button id="modeResPool">DRAW RESPOOL</button>
+    <span>|</span>
+    <label>TEAM <select id="team">
+      <option value="1">1 green</option><option value="2">2 red</option>
+      <option value="3">3 blue</option><option value="4">4 yellow</option>
+    </select></label>
+  </div>
+  <div class="mode-row">
+    <span>LAYERS:</span>
+    <label><input type="checkbox" id="showStarts" checked> STARTS</label>
+    <label><input type="checkbox" id="showResPool" checked> RESPOOL</label>
+  </div>
+</div>
+
+<div class="tab-content" id="tab-tiles">
+  <div class="section-title">TILE RESOLVER</div>
+  <div class="grid">
+    <label>THRESHOLD Δ <input type="number" id="tThresh" value="15" min="1" max="255"></label>
+    <label>BIT MODE
+      <select id="tBit">
+        <option value="8">8 bit (uint8)</option>
+        <option value="16le">16 bit LE</option>
+        <option value="32le" selected>32 bit LE</option>
+        <option value="32be">32 bit BE</option>
+      </select>
+    </label>
+    <label>VIEW
+      <select id="tView">
+        <option value="height" selected>Heights</option>
+        <option value="tiles">Tiles</option>
+        <option value="both">Heights + Tiles</option>
+      </select>
+    </label>
+    <label>SHOW TILE LETTERS <input type="checkbox" id="tLetters" checked></label>
+  </div>
+  <div class="btnrow">
+    <button id="tResolve" class="primary">RESOLVE TILES</button>
+    <button id="tExport" class="good">EXPORT BASE64</button>
+    <button id="tVerify">VERIFY (decode)</button>
+    <button id="tCopy">COPY</button>
+  </div>
+  <div class="section-title">BASE64</div>
+  <textarea id="tOut" readonly placeholder="результат после EXPORT BASE64"></textarea>
+  <div class="report" id="tReport"></div>
+  <div class="legend-mini" style="margin-top:12px">
+    <div><span class="sw" style="background:rgb(80,200,255)"></span>Прямой 2/4/6/8</div>
+    <div><span class="sw" style="background:rgb(255,200,80)"></span>Внешний угол 1/3/7/9</div>
+    <div><span class="sw" style="background:rgb(255,80,200)"></span>Внутренний A/B/C/D</div>
+    <div style="opacity:.75;margin-top:6px">Δ&gt;15 — граница слоя</div>
+  </div>
+</div>
+
+<div class="tab-content" id="tab-view3d">
+  <div class="section-title">ISOMETRIC 3D VIEW</div>
+  <div class="grid">
+    <label>COLOR MODE
+      <select id="v3ColorMode">
+        <option value="gray">1 · Градации серого</option>
+        <option value="png">2 · Загруженный PNG</option>
+        <option value="palette" selected>3 · Палитра (как сейчас)</option>
+      </select>
+    </label>
+    <label>PNG (для режима 2)
+      <input type="file" id="v3PngFile" accept="image/*">
+    </label>
+    <label>CELL SIZE <input type="range" id="v3Cell" min="1" max="8" value="3" step="0.5">
+      <span id="v3CellVal" style="color:#fd4">3</span></label>
+    <label>HEIGHT PX <input type="range" id="v3Height" min="10" max="300" value="90" step="5">
+      <span id="v3HeightVal" style="color:#fd4">90</span></label>
+    <label>REFRESH <input type="checkbox" id="v3Auto" checked></label>
+  </div>
+  <div class="btnrow">
+    <button id="v3Render" class="primary">RENDER 3D</button>
+    <button id="v3Dl">DOWNLOAD 3D PNG</button>
+  </div>
+  <div id="c3dWrap"><canvas id="c3d" width="10" height="10"></canvas></div>
+  <div class="legend">
+    <b>1 · Серый:</b> высота как градация, тёмное = выше.<br>
+    <b>2 · PNG:</b> цвет из загруженного изображения (автоматически ресайзится под сетку карты).<br>
+    <b>3 · Палитра:</b> вода/лес/песок/снег по высоте.
+  </div>
+</div>
+
+<div class="stage" id="stage">
+  <canvas id="cv"></canvas>
+  <canvas class="overlay" id="ov"></canvas>
+</div>
+
+<script>
+// ════════════════════════════════════════════════════════════
+const TILE_ID = {
+  '1':175, '2':176, '3':177,
+  '4':188, '5':189, '6':190,
+  '7':201, '8':202, '9':203,
+  'A':199, 'B':200,
+  'C':212, 'D':213,
+};
+const TILE_NAME = {};
+for (const k in TILE_ID) TILE_NAME[TILE_ID[k]] = k;
+
+// ════════════════════════════════════════════════════════════
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+let perm;
+function initPerm(seed){const rng=mulberry32(seed);const p=new Uint8Array(256);for(let i=0;i<256;i++)p[i]=i;for(let i=255;i>0;i--){const j=Math.floor(rng()*(i+1));[p[i],p[j]]=[p[j],p[i]]}perm=new Uint8Array(512);for(let i=0;i<512;i++)perm[i]=p[i&255]}
+function fade(t){return t*t*t*(t*(t*6-15)+10)}
+function lerp(a,b,t){return a+(b-a)*t}
+function grad(h,x,y){switch(h&3){case 0:return x+y;case 1:return-x+y;case 2:return x-y;case 3:return-x-y}return 0}
+function perlin2(x,y){const X=Math.floor(x)&255,Y=Math.floor(y)&255;x-=Math.floor(x);y-=Math.floor(y);const u=fade(x),v=fade(y);const A=perm[X]+Y,B=perm[X+1]+Y;const n00=grad(perm[A],x,y),n10=grad(perm[B],x-1,y),n01=grad(perm[A+1],x,y-1),n11=grad(perm[B+1],x-1,y-1);return lerp(lerp(n00,n10,u),lerp(n01,n11,u),v)}
+function fbm(x,y,oct){let s=0,a=1,f=1,n=0;for(let i=0;i<oct;i++){s+=perlin2(x*f,y*f)*a;n+=a;f*=2;a*=0.5}return s/n}
+
+// ════════════════════════════════════════════════════════════
+let MANUAL = { w:256, h:256, levels:10 };
+let lastBaseLevel = null;
+let brushMask = null;
+let brushOn = false;
+let mode = 'river';
+let brushDown = false, brushErase = false;
+
+let tileMap = null;
+let tileViewMode = 'height';
+let tileThreshold = 15;
+let lastPackedBytes = null;
+let lastCompressedBytes = null;
+let lastGen = null;
+
+function invalidateTiles(){
+  tileMap = null;
+  lastPackedBytes = null;
+  lastCompressedBytes = null;
+  if(document.getElementById('v3Auto').checked) schedule3D();
+}
+
+// ════════════════════════════════════════════════════════════
+function generate(opts, riverPts){
+  const { w, h, levels, flatten, noiseScale, octaves, flatPct,
+          edgeBias, edgePow, symmetry, symStrength,
+          riversOn, riverSmooth, passes, passWidth, passLength, seed } = opts;
+  const rng = mulberry32(seed+999);
+  initPerm(seed);
+
+  const raw = new Float32Array(w*h);
+  for(let y=0;y<h;y++) for(let x=0;x<w;x++)
+    raw[y*w+x] = fbm(x/noiseScale, y/noiseScale, octaves);
+
+  const square = (w === h);
+  const field = new Float32Array(w*h);
+  const hw = (w-1)/2, hh = (h-1)/2;
+  for(let y=0;y<h;y++) for(let x=0;x<w;x++){
+    const i = y*w+x; let s = raw[i];
+    switch(symmetry){
+      case 'mirror-x': s = (raw[i] + raw[y*w+(w-1-x)])*0.5; break;
+      case 'mirror-y': s = (raw[i] + raw[(h-1-y)*w+x])*0.5; break;
+      case 'rotate-180': s = (raw[i] + raw[(h-1-y)*w+(w-1-x)])*0.5; break;
+      case 'quad': {
+        const a=raw[i], b=raw[y*w+(w-1-x)], c=raw[(h-1-y)*w+x], d=raw[(h-1-y)*w+(w-1-x)];
+        s = (a+b+c+d)*0.25; break;
+      }
+      case 'diag': if(square) s = (raw[i]+raw[x*w+y])*0.5; break;
+      case 'anti-diag': if(square) s = (raw[i]+raw[(w-1-x)*w+(w-1-y)])*0.5; break;
+    }
+    const noise = (1-symStrength)*raw[i] + symStrength*s;
+    const dx = (x-hw)/hw, dy = (y-hh)/hh;
+    const d = Math.min(1, Math.sqrt(dx*dx+dy*dy)/Math.SQRT2);
+    field[i] = noise + edgeBias*Math.pow(d, edgePow);
+  }
+
+  const sorted = Float32Array.from(field).sort();
+  const flatRatio = Math.max(0.05, Math.min(0.95, flatPct/100));
+  const flatThr = sorted[Math.floor(sorted.length * flatRatio)];
+  const maxF = sorted[sorted.length-1];
+  const range = Math.max(1e-9, maxF - flatThr);
+
+  const rawIdx = new Uint8Array(w*h);
+  for(let i=0;i<w*h;i++){
+    const v = field[i];
+    if(v <= flatThr) rawIdx[i] = levels-1;
+    else{
+      const t = (v - flatThr) / range;
+      let l = Math.floor((1-t)*(levels-1));
+      rawIdx[i] = Math.max(0, Math.min(levels-1, l));
+    }
+  }
+
+  const newFloorIdx = Math.max(0, levels-1-flatten);
+  const levelIdx = new Uint8Array(w*h);
+  for(let i=0;i<w*h;i++)
+    levelIdx[i] = rawIdx[i] >= newFloorIdx ? newFloorIdx : rawIdx[i];
+
+  if(passes > 0){
+    const cand=[];
+    for(let y=1;y<h-1;y++) for(let x=1;x<w-1;x++){
+      const i = y*w+x;
+      if(levelIdx[i] !== 1) continue;
+      if(levelIdx[i-1]===0||levelIdx[i+1]===0||levelIdx[i-w]===0||levelIdx[i+w]===0) cand.push(i);
+    }
+    for(let i=cand.length-1;i>0;i--){const j=Math.floor(rng()*(i+1));[cand[i],cand[j]]=[cand[j],cand[i]]}
+    let placed = 0;
+    for(const start of cand){
+      if(placed >= passes) break;
+      const sx = start%w, sy = (start-sx)/w;
+      let dx=0, dy=0;
+      if(levelIdx[start-1]===0) dx=1; else if(levelIdx[start+1]===0) dx=-1;
+      if(levelIdx[start-w]===0) dy=1; else if(levelIdx[start+w]===0) dy=-1;
+      if(dx===0 && dy===0) continue;
+      let cx=sx, cy=sy, dirX=dx, dirY=dy, drawn=0;
+      for(let step=0;step<passLength;step++){
+        for(let by=-passWidth;by<=passWidth;by++) for(let bx=-passWidth;bx<=passWidth;bx++){
+          if(Math.abs(bx)+Math.abs(by) > passWidth) continue;
+          const px=cx+bx, py=cy+by;
+          if(px<0||px>=w||py<0||py>=h) continue;
+          const pi = py*w+px;
+          if(levelIdx[pi]===1){ levelIdx[pi] = 0; drawn++; }
+        }
+        let ndx=dirX, ndy=dirY;
+        if(rng()<0.18){ if(dirX!==0){ndy=rng()<0.5?1:-1;ndx=0} else {ndx=rng()<0.5?1:-1;ndy=0} }
+        const ncx=cx+ndx, ncy=cy+ndy;
+        if(ncx<1||ncx>=w-1||ncy<1||ncy>=h-1) break;
+        if(levelIdx[ncy*w+ncx] !== 1) break;
+        cx=ncx; cy=ncy; dirX=ndx; dirY=ndy;
+      }
+      if(drawn>5) placed++;
+    }
+  }
+
+  // ─── RIVERS with distance-based terrain smoothing ───
+  const riverIdx = newFloorIdx + 1;
+  if(riversOn && riverPts && riverPts.length >= 2){
+    const riverMask = new Uint8Array(w*h);
+    const samples = cardinalSplineSamples(riverPts, 20);
+    let anyRiver = false;
+    for(const s of samples){
+      const rad = Math.max(1, Math.round(s.width));
+      const px = Math.round(s.x), py = Math.round(s.y);
+      const r2 = rad*rad;
+      for(let by=-rad;by<=rad;by++) for(let bx=-rad;bx<=rad;bx++){
+        if(bx*bx+by*by > r2) continue;
+        const nx = px+bx, ny = py+by;
+        if(nx<0||nx>=w||ny<0||ny>=h) continue;
+        riverMask[ny*w+nx] = 1; anyRiver = true;
+      }
+    }
+
+    if(anyRiver){
+      // chamfer 3-4 distance transform
+      const INF = 65535;
+      const dist = new Uint16Array(w*h).fill(INF);
+      for(let i=0;i<w*h;i++) if(riverMask[i]) dist[i] = 0;
+      for(let y=0;y<h;y++) for(let x=0;x<w;x++){
+        const i = y*w+x; let d = dist[i];
+        if(y>0) d = Math.min(d, dist[i-w]+3);
+        if(x>0) d = Math.min(d, dist[i-1]+3);
+        if(y>0&&x>0) d = Math.min(d, dist[i-w-1]+4);
+        if(y>0&&x<w-1) d = Math.min(d, dist[i-w+1]+4);
+        dist[i] = d;
+      }
+      for(let y=h-1;y>=0;y--) for(let x=w-1;x>=0;x--){
+        const i = y*w+x; let d = dist[i];
+        if(y<h-1) d = Math.min(d, dist[i+w]+3);
+        if(x<w-1) d = Math.min(d, dist[i+1]+3);
+        if(y<h-1&&x<w-1) d = Math.min(d, dist[i+w+1]+4);
+        if(y<h-1&&x>0) d = Math.min(d, dist[i+w-1]+4);
+        dist[i] = d;
+      }
+
+      const smoothR = Math.max(0, riverSmooth);
+      if(smoothR > 0){
+        for(let y=0;y<h;y++) for(let x=0;x<w;x++){
+          const i = y*w+x;
+          if(riverMask[i]) continue;
+          const dC = dist[i] / 3;
+          if(dC > smoothR) continue;
+          if(levelIdx[i] >= newFloorIdx) continue;
+          const t = Math.min(1, dC / smoothR);
+          const target = Math.round(newFloorIdx * (1 - t));
+          if(target > levelIdx[i]) levelIdx[i] = Math.min(newFloorIdx, target);
+        }
+      }
+
+      for(let i=0;i<w*h;i++) if(riverMask[i]) levelIdx[i] = riverIdx;
+    }
+  }
+
+  lastBaseLevel = levelIdx;
+  MANUAL.w = w; MANUAL.h = h; MANUAL.levels = levels;
+  if(!brushMask || brushMask.length !== w*h){
+    brushMask = new Uint8Array(w*h).fill(255);
+  }
+
+  return { levelIdx, w, h, floorIdx: newFloorIdx, riverIdx };
+}
+
+// ════════════════════════════════════════════════════════════
+function cardinalSplineSamples(points, samplesPerSeg){
+  if(points.length < 2) return [];
+  const pts = [points[0], ...points, points[points.length-1]];
+  const out = [];
+  for(let i=1;i<pts.length-2;i++){
+    const p0=pts[i-1], p1=pts[i], p2=pts[i+1], p3=pts[i+2];
+    const segT = (p1.tension + p2.tension) * 0.5;
+    for(let s=0;s<samplesPerSeg;s++){
+      const t = s/samplesPerSeg; const t2=t*t, t3=t2*t;
+      const h00=2*t3-3*t2+1, h10=t3-2*t2+t, h01=-2*t3+3*t2, h11=t3-t2;
+      const x = h00*p1.x + h10*segT*(p2.x-p0.x) + h01*p2.x + h11*segT*(p3.x-p1.x);
+      const y = h00*p1.y + h10*segT*(p2.y-p0.y) + h01*p2.y + h11*segT*(p3.y-p1.y);
+      const width = p1.width + (p2.width-p1.width)*t;
+      out.push({ x, y, width });
+    }
+  }
+  const last = points[points.length-1];
+  out.push({ x: last.x, y: last.y, width: last.width });
+  return out;
+}
+
+// ════════════════════════════════════════════════════════════
+let riverPoints = [];
+let starts = [];
+let resPool = [];
+let activePtIdx = -1;
+let draggingPtIdx = -1;
+let draggingStartIdx = -1, draggingResPoolIdx = -1;
+let renderTimer = null;
+let v3Timer = null;
+
+// ════════════════════════════════════════════════════════════
+const cv = document.getElementById('cv');
+const ctx = cv.getContext('2d');
+const ov = document.getElementById('ov');
+const octx = ov.getContext('2d');
+
+function finalIdxAt(i){
+  if(brushMask && brushMask[i] !== 255) return brushMask[i];
+  return lastBaseLevel[i];
+}
+
+function render(){
+  const { levelIdx, w, h } = generate(collectOpts(), riverPoints);
+  lastGen = { levelIdx, w, h };
+
+  cv.width = w; cv.height = h;
+  const img = new ImageData(w, h);
+  const showOv = document.getElementById('bShow').checked;
+  const lettersOn = document.getElementById('tLetters').checked;
+
+  for(let i=0;i<w*h;i++){
+    let idx = finalIdxAt(i);
+    const g = (idx+1)*0x10;
+    const hasBrush = brushMask && brushMask[i] !== 255;
+
+    if(tileViewMode === 'tiles' && tileMap){
+      const t = tileMap[i];
+      let rgb;
+      if(t){ rgb = tileFamilyColor(t); }
+      else { const v = (g * 0.25) | 0; rgb = [v,v,v]; }
+      img.data[i*4]=rgb[0]; img.data[i*4+1]=rgb[1]; img.data[i*4+2]=rgb[2];
+    } else if(tileViewMode === 'both' && tileMap){
+      const t = tileMap[i];
+      let rgb;
+      if(t){
+        const c = tileFamilyColor(t);
+        rgb = [(c[0]+g)>>1, (c[1]+g)>>1, (c[2]+g)>>1];
+      } else { rgb = [g,g,g]; }
+      img.data[i*4]=rgb[0]; img.data[i*4+1]=rgb[1]; img.data[i*4+2]=rgb[2];
+    } else {
+      if(hasBrush && showOv){
+        img.data[i*4]   = Math.min(255, g + 50);
+        img.data[i*4+1] = Math.max(0,   g - 20);
+        img.data[i*4+2] = Math.max(0,   g - 20);
+      } else {
+        img.data[i*4]=g; img.data[i*4+1]=g; img.data[i*4+2]=g;
+      }
+    }
+    img.data[i*4+3] = 255;
+  }
+  ctx.putImageData(img, 0, 0);
+
+  const maxSide = Math.min(window.innerWidth-60, 720);
+  const scale = Math.min(maxSide/w, maxSide/h, 4);
+  cv.style.width = Math.round(w*scale)+'px';
+  cv.style.height = Math.round(h*scale)+'px';
+  syncOverlay();
+  drawOverlay(lettersOn);
+
+  if(document.getElementById('v3Auto').checked) schedule3D();
+}
+
+function tileFamilyColor(t){
+  if(t===TILE_ID.A||t===TILE_ID.B||t===TILE_ID.C||t===TILE_ID.D) return [255,80,200];
+  if(t===TILE_ID['2']||t===TILE_ID['4']||t===TILE_ID['6']||t===TILE_ID['8']) return [80,200,255];
+  if(t===TILE_ID['1']||t===TILE_ID['3']||t===TILE_ID['7']||t===TILE_ID['9']) return [255,200,80];
+  return [200,200,200];
+}
+
+function syncOverlay(){
+  ov.width = cv.width; ov.height = cv.height;
+  ov.style.width = cv.style.width;
+  ov.style.height = cv.style.height;
+}
+
+function drawOverlay(lettersOn){
+  const w = cv.width, h = cv.height;
+  const rect = cv.getBoundingClientRect();
+  const scaleX = rect.width / w, scaleY = rect.height / h;
+
+  ov.width = w; ov.height = h;
+  ov.style.width = cv.style.width;
+  ov.style.height = cv.style.height;
+
+  octx.clearRect(0, 0, w, h);
+
+  if(lettersOn && tileMap && tileViewMode !== 'height' && scaleX >= 8){
+    octx.save();
+    octx.font = 'bold 10px monospace';
+    octx.textAlign = 'center'; octx.textBaseline = 'middle';
+    for(let y=0;y<h;y++) for(let x=0;x<w;x++){
+      const t = tileMap[y*w+x];
+      if(!t) continue;
+      octx.fillStyle = '#fff';
+      octx.fillText(TILE_NAME[t] || '?', x+0.5, y+0.55);
+    }
+    octx.restore();
+  }
+
+  const lineW = Math.max(1, 1/scaleX);
+
+  if(document.getElementById('rivOn').checked && riverPoints.length >= 2){
+    const samples = cardinalSplineSamples(riverPoints, 15);
+    octx.strokeStyle = 'rgba(80,160,255,0.85)';
+    octx.lineWidth = lineW * 1.5;
+    octx.beginPath();
+    for(let i=0;i<samples.length;i++){
+      const s = samples[i];
+      if(i===0) octx.moveTo(s.x, s.y);
+      else octx.lineTo(s.x, s.y);
+    }
+    octx.stroke();
+  }
+  if(document.getElementById('showRiverPts').checked){
+    for(let i=0;i<riverPoints.length;i++){
+      const p = riverPoints[i];
+      octx.fillStyle = (i===activePtIdx) ? '#ffdd44' : '#ff5050';
+      octx.strokeStyle = '#fff'; octx.lineWidth = lineW;
+      octx.beginPath();
+      octx.arc(p.x, p.y, Math.max(2, lineW*2.5), 0, Math.PI*2);
+      octx.fill(); octx.stroke();
+    }
+    for(let i=0;i<riverPoints.length-1;i++){
+      const a = riverPoints[i], b = riverPoints[i+1];
+      const mx = (a.x+b.x)*0.5, my = (a.y+b.y)*0.5;
+      octx.fillStyle = 'rgba(255,255,255,0.85)';
+      octx.beginPath();
+      octx.arc(mx, my, Math.max(1.5, lineW*1.5), 0, Math.PI*2);
+      octx.fill();
+    }
+  }
+
+  if(document.getElementById('showStarts').checked){
+    const rPix = Math.max(4, lineW*4);
+    for(const s of starts){
+      octx.fillStyle = TEAM_COLORS[s.team] || '#fff';
+      octx.strokeStyle = '#000'; octx.lineWidth = lineW*1.5;
+      octx.beginPath(); octx.arc(s.x, s.y, rPix, 0, Math.PI*2);
+      octx.fill(); octx.stroke();
+    }
+  }
+  if(document.getElementById('showResPool').checked){
+    const rPix = Math.max(2.5, lineW*2);
+    for(const p of resPool){
+      octx.fillStyle = 'rgba(255,240,120,0.95)';
+      octx.strokeStyle = '#000'; octx.lineWidth = lineW*1.2;
+      octx.beginPath(); octx.arc(p.x, p.y, rPix, 0, Math.PI*2);
+      octx.fill(); octx.stroke();
+    }
+  }
+}
+
+const TEAM_COLORS = {1:'#44ee44',2:'#ee4444',3:'#4488ff',4:'#ffdd44'};
+
+// ════════════════════════════════════════════════════════════
+function collectOpts(){
+  return {
+    w:+document.getElementById('w').value,
+    h:+document.getElementById('h').value,
+    levels:+document.getElementById('levels').value,
+    flatten:+document.getElementById('flatten').value,
+    noiseScale:+document.getElementById('nscale').value,
+    octaves:+document.getElementById('oct').value,
+    flatPct:+document.getElementById('flat').value,
+    edgeBias:+document.getElementById('edge').value,
+    edgePow:+document.getElementById('edgepow').value,
+    symmetry:document.getElementById('sym').value,
+    symStrength:+document.getElementById('symstr').value,
+    riversOn:document.getElementById('rivOn').checked,
+    riverSmooth:+document.getElementById('rivSmooth').value,
+    passes:+document.getElementById('passes').value,
+    passWidth:+document.getElementById('pw').value,
+    passLength:+document.getElementById('plen').value,
+    seed:+document.getElementById('seed').value,
+  };
+}
+
+// ════════════════════════════════════════════════════════════
+function grayAt(i){ return (finalIdxAt(i) + 1) * 16; }
+
+function resolveTileAt(x, y, w, h, T){
+  const hC = grayAt(y*w + x);
+  const hN  = (y>0)     ? grayAt((y-1)*w + x)   : null;
+  const hS  = (y<h-1)   ? grayAt((y+1)*w + x)   : null;
+  const hE  = (x<w-1)   ? grayAt(y*w + (x+1))   : null;
+  const hW  = (x>0)     ? grayAt(y*w + (x-1))   : null;
+  const hNW = (x>0&&y>0)         ? grayAt((y-1)*w + (x-1)) : null;
+  const hNE = (x<w-1&&y>0)       ? grayAt((y-1)*w + (x+1)) : null;
+  const hSW = (x>0&&y<h-1)       ? grayAt((y+1)*w + (x-1)) : null;
+  const hSE = (x<w-1&&y<h-1)     ? grayAt((y+1)*w + (x+1)) : null;
+
+  const Hi = v => v !== null && (v - hC) > T;
+  const HN=Hi(hN), HS=Hi(hS), HE=Hi(hE), HW=Hi(hW);
+  const HNW=Hi(hNW), HNE=Hi(hNE), HSW=Hi(hSW), HSE=Hi(hSE);
+
+  if(HN && HW) return TILE_ID['1'];
+  if(HN && HE) return TILE_ID['3'];
+  if(HS && HW) return TILE_ID['7'];
+  if(HS && HE) return TILE_ID['9'];
+
+  if(HNW && !HN && !HW) return TILE_ID.A;
+  if(HNE && !HN && !HE) return TILE_ID.B;
+  if(HSW && !HS && !HW) return TILE_ID.C;
+  if(HSE && !HS && !HE) return TILE_ID.D;
+
+  if(HN) return TILE_ID['2'];
+  if(HS) return TILE_ID['8'];
+  if(HE) return TILE_ID['6'];
+  if(HW) return TILE_ID['4'];
+
+  return 0;
+}
+
+function resolveAllTiles(){
+  if(!lastBaseLevel) return;
+  const w = MANUAL.w, h = MANUAL.h;
+  const T = tileThreshold;
+  tileMap = new Uint32Array(w*h);
+  for(let y=0;y<h;y++) for(let x=0;x<w;x++)
+    tileMap[y*w+x] = resolveTileAt(x, y, w, h, T);
+}
+
+// ════════════════════════════════════════════════════════════
+function packTiles(bitMode){
+  const n = tileMap.length;
+  let bytes;
+  if(bitMode === '8'){
+    bytes = new Uint8Array(n);
+    for(let i=0;i<n;i++) bytes[i] = tileMap[i] & 0xFF;
+  } else if(bitMode === '16le'){
+    bytes = new Uint8Array(n*2);
+    for(let i=0;i<n;i++){
+      bytes[i*2]   =  tileMap[i]       & 0xFF;
+      bytes[i*2+1] = (tileMap[i] >> 8) & 0xFF;
+    }
+  } else if(bitMode === '32le'){
+    bytes = new Uint8Array(n*4);
+    for(let i=0;i<n;i++){
+      const v = tileMap[i];
+      bytes[i*4]   =  v        & 0xFF;
+      bytes[i*4+1] = (v >> 8)  & 0xFF;
+      bytes[i*4+2] = (v >> 16) & 0xFF;
+      bytes[i*4+3] = (v >> 24) & 0xFF;
+    }
+  } else {
+    bytes = new Uint8Array(n*4);
+    for(let i=0;i<n;i++){
+      const v = tileMap[i];
+      bytes[i*4]   = (v >> 24) & 0xFF;
+      bytes[i*4+1] = (v >> 16) & 0xFF;
+      bytes[i*4+2] = (v >> 8)  & 0xFF;
+      bytes[i*4+3] =  v        & 0xFF;
+    }
+  }
+  return bytes;
+}
+function bytesToB64(bytes){
+  let bin = ''; const CH = 0x8000;
+  for(let i=0;i<bytes.length;i+=CH) bin += String.fromCharCode.apply(null, bytes.subarray(i, i+CH));
+  return btoa(bin);
+}
+
+function doExport(){
+  if(!tileMap){ resolveAllTiles(); if(!tileMap){ alert('Сначала GENERATE MAP'); return; } render(); }
+  const bit = document.getElementById('tBit').value;
+  lastPackedBytes = packTiles(bit);
+  lastCompressedBytes = pako.deflate(lastPackedBytes);
+  const b64 = bytesToB64(lastCompressedBytes);
+  document.getElementById('tOut').value = b64;
+  let mx = 0;
+  for(const v of tileMap) if(v > mx) mx = v;
+  const w = MANUAL.w, h = MANUAL.h;
+  document.getElementById('tReport').innerHTML =
+    `<span class="ok">✔</span> Экспорт готов\n` +
+    `W×H: ${w}×${h}  (пикселей: ${w*h})\n` +
+    `Threshold Δ: <b>${tileThreshold}</b>\n` +
+    `Bit mode: <b>${bit}</b>\n` +
+    `Max tile ID: ${mx}` +
+    (bit === '8' && mx > 255 ? ' <span class="err">(не влезает в 8 бит!)</span>' : '') +
+    `\nPacked: ${lastPackedBytes.length} B\nzlib: ${lastCompressedBytes.length} B\nbase64: ${b64.length} chars`;
+}
+
+function doVerify(){
+  if(!lastCompressedBytes){ alert('Сначала EXPORT BASE64'); return; }
+  const rep = document.getElementById('tReport');
+  try{
+    const raw = pako.inflate(lastCompressedBytes);
+    const bit = document.getElementById('tBit').value;
+    const stride = bit === '8' ? 1 : bit === '16le' ? 2 : 4;
+    const n = raw.length / stride;
+    const vals = new Uint32Array(n);
+    if(bit === '8'){ for(let i=0;i<n;i++) vals[i] = raw[i]; }
+    else if(bit === '16le'){ for(let i=0;i<n;i++) vals[i] = raw[i*2] | (raw[i*2+1] << 8); }
+    else if(bit === '32le'){ for(let i=0;i<n;i++) vals[i] = raw[i*4] | (raw[i*4+1]<<8) | (raw[i*4+2]<<16) | (raw[i*4+3]<<24); }
+    else { for(let i=0;i<n;i++) vals[i] = (raw[i*4]<<24) | (raw[i*4+1]<<16) | (raw[i*4+2]<<8) | raw[i*4+3]; }
+
+    let mismatch = 0, firstDiff = -1;
+    for(let i=0;i<tileMap.length && i<vals.length;i++){
+      if(vals[i] !== tileMap[i]){ mismatch++; if(firstDiff < 0) firstDiff = i; }
+    }
+    rep.innerHTML +=
+      `\n\n<span class="ok">── VERIFY ──</span>\n` +
+      `inflate → ${raw.length} B, values: ${vals.length}\n` +
+      `expect: ${MANUAL.w*MANUAL.h}\n` +
+      (mismatch === 0
+        ? `<span class="ok">✔ Full match</span>`
+        : `<span class="err">✘ mismatches: ${mismatch} (first at ${firstDiff})</span>`);
+  } catch(e){ rep.innerHTML += `\n<span class="err">Error: ${e.message}</span>`; }
+}
+
+// ════════════════════════════════════════════════════════════
+// 3D VIEW
+// ════════════════════════════════════════════════════════════
+const c3d = document.getElementById('c3d');
+let v3PngImage = null;
+let v3PngData = null;
+let v3PngW = 0, v3PngH = 0;
+
+const STOPS_3D = [
+  [0.00, [ 22, 44, 92]],
+  [0.12, [ 44, 96,164]],
+  [0.26, [ 74,152,152]],
+  [0.40, [ 92,172, 92]],
+  [0.56, [162,182, 74]],
+  [0.70, [192,162, 92]],
+  [0.84, [154,124,102]],
+  [0.93, [202,202,206]],
+  [1.00, [255,255,255]]
+];
+function palette3D(t){
+  t = Math.max(0, Math.min(1, t));
+  for(let i=0;i<STOPS_3D.length-1;i++){
+    const a = STOPS_3D[i], b = STOPS_3D[i+1];
+    if(t >= a[0] && t <= b[0]){
+      const k = (t - a[0]) / ((b[0] - a[0]) || 1);
+      return [
+        a[1][0] + (b[1][0] - a[1][0]) * k,
+        a[1][1] + (b[1][1] - a[1][1]) * k,
+        a[1][2] + (b[1][2] - a[1][2]) * k
+      ];
+    }
+  }
+  return STOPS_3D[STOPS_3D.length-1][1];
+}
+const rgbStr = c => `rgb(${c[0]|0},${c[1]|0},${c[2]|0})`;
+const shadeStr = (c,k) => `rgb(${Math.min(255,c[0]*k)|0},${Math.min(255,c[1]*k)|0},${Math.min(255,c[2]*k)|0})`;
+
+function schedule3D(){
+  if(v3Timer) return;
+  v3Timer = setTimeout(()=>{ v3Timer = null; render3D(); }, 250);
+}
+
+function render3D(){
+  if(!lastBaseLevel){ return; }
+  const w = MANUAL.w, h = MANUAL.h;
+  const levels = MANUAL.levels;
+  const maxIdx = levels - 1;
+  const denom = Math.max(1, maxIdx);
+
+  const cell = parseFloat(document.getElementById('v3Cell').value);
+  const heightPx = parseFloat(document.getElementById('v3Height').value);
+
+  const COS = Math.cos(Math.PI / 6);
+  const SIN = Math.sin(Math.PI / 6);
+
+  const W = Math.ceil((w + h) * COS * cell) + 8;
+  const H = Math.ceil((w + h) * SIN * cell + heightPx) + 8;
+
+  c3d.width = W;
+  c3d.height = H;
+
+  const ctx3 = c3d.getContext('2d');
+  ctx3.fillStyle = '#0b0d11';
+  ctx3.fillRect(0, 0, W, H);
+
+  const offX = h * COS * cell + 4;
+  const offY = heightPx + 4;
+
+  const px = (x, y, z) => [
+    (x - y) * COS * cell + offX,
+    (x + y) * SIN * cell - z + offY
+  ];
+
+  const zOf = (x, y) => {
+    if(x < 0 || y < 0 || x >= w || y >= h) return 0;
+    const idx = finalIdxAt(y * w + x);
+    // darker (lower idx) = taller
+    return (maxIdx - idx) / denom * heightPx;
+  };
+
+  const colorMode = document.getElementById('v3ColorMode').value;
+
+  if(colorMode === 'png'){
+    if(v3PngImage && (v3PngW !== w || v3PngH !== h || !v3PngData)){
+      const off = document.createElement('canvas');
+      off.width = w; off.height = h;
+      const oc = off.getContext('2d', { willReadFrequently: true });
+      oc.drawImage(v3PngImage, 0, 0, w, h);
+      v3PngData = oc.getImageData(0, 0, w, h).data;
+      v3PngW = w; v3PngH = h;
+    }
+  }
+
+  const colorOf = (x, y, z) => {
+    if(colorMode === 'gray'){
+      const idx = finalIdxAt(y * w + x);
+      const v = Math.round(idx / denom * 255);
+      return [v, v, v];
+    }
+    if(colorMode === 'png'){
+      if(v3PngData && x >= 0 && y >= 0 && x < w && y < h){
+        const p = (y * w + x) * 4;
+        return [ v3PngData[p], v3PngData[p+1], v3PngData[p+2] ];
+      }
+      const idx = finalIdxAt(y * w + x);
+      const v = Math.round(idx / denom * 255);
+      return [v, v, v];
+    }
+    return palette3D(z / Math.max(1, heightPx));
+  };
+
+  function poly(pts, color){
+    ctx3.beginPath();
+    ctx3.moveTo(pts[0][0], pts[0][1]);
+    for(let i=1;i<pts.length;i++) ctx3.lineTo(pts[i][0], pts[i][1]);
+    ctx3.closePath();
+    ctx3.fillStyle = color;
+    ctx3.strokeStyle = color;
+    ctx3.lineWidth = 1;
+    ctx3.fill();
+    ctx3.stroke();
+  }
+
+  for(let s = 0; s <= w + h - 2; s++){
+    const x0 = Math.max(0, s - h + 1);
+    const x1 = Math.min(w - 1, s);
+    for(let x = x0; x <= x1; x++){
+      const y = s - x;
+      const z = zOf(x, y);
+      const col = colorOf(x, y, z);
+
+      const zx = zOf(x + 1, y);
+      if(zx < z - 0.05){
+        poly([px(x+1,y,z), px(x+1,y+1,z), px(x+1,y+1,zx), px(x+1,y,zx)],
+             shadeStr(col, 0.70));
+      }
+      const zy = zOf(x, y + 1);
+      if(zy < z - 0.05){
+        poly([px(x,y+1,z), px(x+1,y+1,z), px(x+1,y+1,zy), px(x,y+1,zy)],
+             shadeStr(col, 0.50));
+      }
+      poly([px(x,y,z), px(x+1,y,z), px(x+1,y+1,z), px(x,y+1,z)], rgbStr(col));
+    }
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+document.querySelectorAll('.tab').forEach(t=>{
+  t.addEventListener('click',()=>{
+    document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(x=>x.classList.remove('active'));
+    t.classList.add('active');
+    document.getElementById('tab-'+t.dataset.tab).classList.add('active');
+    if(t.dataset.tab === 'view3d') render3D();
+  });
+});
+
+// ════════════════════════════════════════════════════════════
+function brushColor(level){
+  const v = (level+1)*0x10;
+  return `rgb(${v},${v},${v})`;
+}
+function updateBrushPreview(){
+  const levels = +document.getElementById('levels').value;
+  let lv = +document.getElementById('bLevel').value;
+  if(lv < 1) lv = 1;
+  if(lv > levels) lv = levels;
+  document.getElementById('bLevel').value = lv;
+  document.getElementById('bLevel').max = levels;
+  document.getElementById('bPreview').style.background = brushColor(lv-1);
+}
+['bLevel','levels'].forEach(id=>{
+  document.getElementById(id).addEventListener('input', updateBrushPreview);
+});
+
+function setBrush(on){
+  brushOn = on;
+  mode = on ? 'brush' : (mode === 'brush' ? 'river' : mode);
+  const b = document.getElementById('bOn');
+  b.classList.toggle('active', on);
+  b.textContent = 'BRUSH: ' + (on ? 'ON' : 'OFF');
+  if(on){
+    document.getElementById('modeRiver').classList.remove('active');
+    document.getElementById('modeStart').classList.remove('active');
+    document.getElementById('modeResPool').classList.remove('active');
+  } else {
+    document.getElementById('modeRiver').classList.add('active');
+  }
+  cv.style.cursor = on ? 'crosshair' : 'default';
+}
+document.getElementById('bOn').addEventListener('click', ()=> setBrush(!brushOn));
+document.getElementById('bClear').addEventListener('click', ()=>{
+  if(!brushMask) return;
+  brushMask.fill(255);
+  invalidateTiles(); render();
+});
+document.getElementById('bShow').addEventListener('change', render);
+
+// RAISE = подъём = темнее = индекс МЕНЬШЕ
+// LOWER = спуск = светлее = индекс БОЛЬШЕ
+// Softness: линейный градиент с твёрдым ядром
+function paintBrush(cx, cy, brushMode, targetLevel, strength, radius, softness, erase){
+  if(!brushMask) return;
+  const w = cv.width, h = cv.height;
+  const r = Math.max(1, radius);
+  const r2 = r * r;
+  const maxLvl = MANUAL.levels - 1;
+
+  const s = Math.max(0.01, Math.min(1.0, softness));
+  const innerR = r * (1 - s);
+  const fallR  = Math.max(0.0001, r - innerR);
+
+  for(let yy = -r; yy <= r; yy++){
+    for(let xx = -r; xx <= r; xx++){
+      const d2 = xx*xx + yy*yy;
+      if(d2 > r2) continue;
+      const px = cx + xx, py = cy + yy;
+      if(px<0 || px>=w || py<0 || py>=h) continue;
+      const i = py*w + px;
+      if(erase){ brushMask[i] = 255; continue; }
+
+      const d = Math.sqrt(d2);
+      let alpha;
+      if(d <= innerR) alpha = 1;
+      else alpha = 1 - (d - innerR) / fallR;
+      if(alpha <= 0) continue;
+
+      let cur = brushMask[i];
+      if(cur === 255) cur = lastBaseLevel[i];
+
+      let nv;
+      if(brushMode === 'set'){
+        nv = cur * (1 - alpha) + targetLevel * alpha;
+      } else if(brushMode === 'raise'){
+        nv = cur - strength * alpha;
+      } else {
+        nv = cur + strength * alpha;
+      }
+      brushMask[i] = Math.max(0, Math.min(maxLvl, Math.round(nv)));
+    }
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+function setMode(m){
+  mode = m;
+  brushOn = false;
+  document.getElementById('bOn').classList.remove('active');
+  document.getElementById('bOn').textContent = 'BRUSH: OFF';
+  document.getElementById('modeRiver').classList.toggle('active', m==='river');
+  document.getElementById('modeStart').classList.toggle('active', m==='start');
+  document.getElementById('modeResPool').classList.toggle('active', m==='resPool');
+  cv.style.cursor = 'crosshair';
+  drawOverlay(document.getElementById('tLetters').checked);
+}
+document.getElementById('modeRiver').addEventListener('click',()=>setMode('river'));
+document.getElementById('modeStart').addEventListener('click',()=>setMode('start'));
+document.getElementById('modeResPool').addEventListener('click',()=>setMode('resPool'));
+
+// ════════════════════════════════════════════════════════════
+const DRAG_T = 12;
+
+function eventToImage(e){
+  const w = cv.width, h = cv.height;
+  const cw = cv.clientWidth || 1;
+  const ch = cv.clientHeight || 1;
+  if(typeof e.offsetX === 'number' && e.target === cv){
+    return [ e.offsetX / cw * w, e.offsetY / ch * h ];
+  }
+  const rect = cv.getBoundingClientRect();
+  return [
+    (e.clientX - rect.left) / rect.width  * w,
+    (e.clientY - rect.top)  / rect.height * h
+  ];
+}
+
+cv.addEventListener('pointerdown', e=>{
+  e.preventDefault();
+  try{ cv.setPointerCapture(e.pointerId); }catch(_){}
+
+  if(mode === 'brush'){
+    brushDown = true;
+    brushErase = (e.button === 2);
+    const [ix, iy] = eventToImage(e);
+    const bm = document.getElementById('bMode').value;
+    const lv = +document.getElementById('bLevel').value - 1;
+    const st = +document.getElementById('bStrength').value;
+    const r  = +document.getElementById('bRadius').value;
+    const s  = +document.getElementById('bSoft').value;
+    paintBrush(Math.round(ix), Math.round(iy), bm, lv, st, r, s, brushErase);
+    invalidateTiles(); render();
+    return;
+  }
+
+  const [ix, iy] = eventToImage(e);
+  if(ix<0||ix>=cv.width||iy<0||iy>=cv.height) return;
+
+  if(mode === 'river'){
+    const pi = hitPt(ix, iy);
+    if(pi >= 0){ activePtIdx = pi; draggingPtIdx = pi; drawOverlay(document.getElementById('tLetters').checked); return; }
+    const mi = hitMid(ix, iy);
+    if(mi >= 0){
+      const a = riverPoints[mi], b = riverPoints[mi+1];
+      riverPoints.splice(mi+1, 0, {
+        x:(a.x+b.x)*0.5, y:(a.y+b.y)*0.5,
+        width:(a.width+b.width)*0.5, tension:(a.tension+b.tension)*0.5,
+        wAmp:(a.wAmp+b.wAmp)*0.5, wFreq:(a.wFreq+b.wFreq)*0.5,
+      });
+      activePtIdx = mi+1;
+      invalidateTiles(); render();
+      return;
+    }
+    const def = getDefaults();
+    const offset = 30;
+    let x2 = ix + offset;
+    if(x2 >= cv.width) x2 = ix - offset;
+    if(x2 < 0) x2 = ix;
+    riverPoints.push({ x: ix, y: iy, ...def });
+    riverPoints.push({ x: x2, y: iy, ...def });
+    activePtIdx = riverPoints.length-2;
+    invalidateTiles(); render();
+  } else if(mode === 'start'){
+    const s = hitStart(ix, iy);
+    if(s >= 0){ draggingStartIdx = s; return; }
+    const team = +document.getElementById('team').value;
+    starts.push({ x: ix, y: iy, team });
+    drawOverlay(document.getElementById('tLetters').checked);
+  } else if(mode === 'resPool'){
+    const r = hitResPool(ix, iy);
+    if(r >= 0){ draggingResPoolIdx = r; return; }
+    resPool.push({ x: ix, y: iy });
+    drawOverlay(document.getElementById('tLetters').checked);
+  }
+});
+
+cv.addEventListener('pointermove', e=>{
+  if(mode === 'brush'){
+    if(!brushDown) return;
+    e.preventDefault();
+    const [ix, iy] = eventToImage(e);
+    const bm = document.getElementById('bMode').value;
+    const lv = +document.getElementById('bLevel').value - 1;
+    const st = +document.getElementById('bStrength').value;
+    const r  = +document.getElementById('bRadius').value;
+    const s  = +document.getElementById('bSoft').value;
+    paintBrush(Math.round(ix), Math.round(iy), bm, lv, st, r, s, brushErase);
+    invalidateTiles(); render();
+    return;
+  }
+  if(draggingPtIdx < 0 && draggingStartIdx < 0 && draggingResPoolIdx < 0) return;
+  e.preventDefault();
+  const [ix, iy] = eventToImage(e);
+  const cx = Math.max(0, Math.min(cv.width - 1, ix));
+  const cy = Math.max(0, Math.min(cv.height - 1, iy));
+  if(draggingPtIdx >= 0){
+    riverPoints[draggingPtIdx].x = cx;
+    riverPoints[draggingPtIdx].y = cy;
+    refreshPanel(); drawOverlay(document.getElementById('tLetters').checked); scheduleRender();
+  } else if(draggingStartIdx >= 0){
+    starts[draggingStartIdx].x = cx;
+    starts[draggingStartIdx].y = cy;
+    drawOverlay(document.getElementById('tLetters').checked);
+  } else if(draggingResPoolIdx >= 0){
+    resPool[draggingResPoolIdx].x = cx;
+    resPool[draggingResPoolIdx].y = cy;
+    drawOverlay(document.getElementById('tLetters').checked);
+  }
+});
+
+cv.addEventListener('pointerup', e=>{
+  if(mode === 'brush'){ brushDown = false; return; }
+  if(draggingPtIdx < 0 && draggingStartIdx < 0 && draggingResPoolIdx < 0) return;
+  e.preventDefault();
+  if(draggingPtIdx >= 0){ draggingPtIdx = -1; invalidateTiles(); render(); return; }
+  draggingStartIdx = -1; draggingResPoolIdx = -1;
+});
+
+cv.addEventListener('pointercancel', ()=>{
+  brushDown = false;
+  draggingPtIdx = -1; draggingStartIdx = -1; draggingResPoolIdx = -1;
+});
+
+cv.addEventListener('contextmenu', e=>{
+  e.preventDefault();
+  if(mode === 'brush'){
+    const [ix, iy] = eventToImage(e);
+    const r = +document.getElementById('bRadius').value;
+    paintBrush(Math.round(ix), Math.round(iy), 'set', 0, 1, r, 1, true);
+    invalidateTiles(); render();
+    return;
+  }
+  const [ix, iy] = eventToImage(e);
+  const pi = hitPt(ix, iy);
+  if(pi >= 0){ riverPoints.splice(pi, 1); activePtIdx = -1; refreshPanel(); invalidateTiles(); render(); return; }
+  const si = hitStart(ix, iy);
+  if(si >= 0){ starts.splice(si, 1); drawOverlay(document.getElementById('tLetters').checked); return; }
+  const ri = hitResPool(ix, iy);
+  if(ri >= 0){ resPool.splice(ri, 1); drawOverlay(document.getElementById('tLetters').checked); return; }
+});
+
+function hitPt(ix, iy){
+  for(let i=0;i<riverPoints.length;i++){
+    const p = riverPoints[i];
+    if(Math.hypot(p.x-ix, p.y-iy) < DRAG_T) return i;
+  }
+  return -1;
+}
+function hitMid(ix, iy){
+  for(let i=0;i<riverPoints.length-1;i++){
+    const a = riverPoints[i], b = riverPoints[i+1];
+    const mx = (a.x+b.x)*0.5, my = (a.y+b.y)*0.5;
+    if(Math.hypot(mx-ix, my-iy) < DRAG_T) return i;
+  }
+  return -1;
+}
+function hitStart(ix, iy){
+  for(let i=0;i<starts.length;i++)
+    if(Math.hypot(starts[i].x-ix, starts[i].y-iy) < DRAG_T) return i;
+  return -1;
+}
+function hitResPool(ix, iy){
+  for(let i=0;i<resPool.length;i++)
+    if(Math.hypot(resPool[i].x-ix, resPool[i].y-iy) < DRAG_T) return i;
+  return -1;
+}
+function getDefaults(){
+  return {
+    width:   +document.getElementById('dW').value,
+    tension: +document.getElementById('dT').value,
+    wAmp:    +document.getElementById('dA').value,
+    wFreq:   +document.getElementById('dF').value,
+  };
+}
+function scheduleRender(){
+  if(renderTimer) return;
+  renderTimer = setTimeout(()=>{ renderTimer = null; invalidateTiles(); render(); }, 1000);
+}
+
+// ════════════════════════════════════════════════════════════
+const panelInputs = ['pX','pY','pW','pT','pA','pF'].map(id=>document.getElementById(id));
+const activeLabel = document.getElementById('activeLabel');
+function refreshPanel(){
+  if(activePtIdx < 0 || !riverPoints[activePtIdx]){
+    activeLabel.textContent = 'ACTIVE: —';
+    for(const i of panelInputs){ i.disabled = true; i.value = ''; }
+    return;
+  }
+  const p = riverPoints[activePtIdx];
+  activeLabel.textContent = `ACTIVE: pt ${activePtIdx}`;
+  panelInputs[0].value = Math.round(p.x);
+  panelInputs[1].value = Math.round(p.y);
+  panelInputs[2].value = p.width;
+  panelInputs[3].value = p.tension;
+  panelInputs[4].value = p.wAmp;
+  panelInputs[5].value = p.wFreq;
+  for(const i of panelInputs) i.disabled = false;
+}
+['pX','pY','pW','pT','pA','pF'].forEach((id,k)=>{
+  document.getElementById(id).addEventListener('input', e=>{
+    if(activePtIdx < 0) return;
+    const key = ['x','y','width','tension','wAmp','wFreq'][k];
+    riverPoints[activePtIdx][key] = +e.target.value;
+    invalidateTiles();
+    drawOverlay(document.getElementById('tLetters').checked);
+    scheduleRender();
+  });
+});
+document.getElementById('applyAll').addEventListener('click',()=>{
+  if(activePtIdx<0) return;
+  const s = riverPoints[activePtIdx];
+  for(const p of riverPoints){
+    p.width = s.width; p.tension = s.tension;
+    p.wAmp = s.wAmp; p.wFreq = s.wFreq;
+  }
+  invalidateTiles(); render();
+});
+document.getElementById('delActive').addEventListener('click',()=>{
+  if(activePtIdx<0) return;
+  riverPoints.splice(activePtIdx, 1);
+  activePtIdx = -1;
+  refreshPanel(); invalidateTiles(); render();
+});
+
+// ════════════════════════════════════════════════════════════
+document.getElementById('gen').addEventListener('click', ()=>{ invalidateTiles(); render(); });
+document.getElementById('rnd').addEventListener('click', ()=>{
+  document.getElementById('seed').value = Math.floor(Math.random()*1e6);
+  invalidateTiles(); render();
+});
+document.getElementById('clrBtn').addEventListener('click', ()=>{
+  riverPoints = []; activePtIdx = -1; refreshPanel();
+  invalidateTiles(); render();
+});
+['rivOn','showRiverPts','showStarts','showResPool'].forEach(id=>{
+  document.getElementById(id).addEventListener('change', ()=>{
+    if(id === 'rivOn'){ invalidateTiles(); render(); }
+    else drawOverlay(document.getElementById('tLetters').checked);
+  });
+});
+document.getElementById('dl').addEventListener('click', ()=>{
+  cv.toBlob(b=>{
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(b);
+    a.download = `heightmap_${document.getElementById('seed').value}.png`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }, 'image/png');
+});
+
+['w','h','levels','flatten','nscale','oct','flat','edge','edgepow',
+ 'sym','symstr','passes','pw','plen','seed','rivSmooth'].forEach(id=>{
+  const el = document.getElementById(id);
+  if(!el) return;
+  el.addEventListener('input', invalidateTiles);
+  el.addEventListener('change', invalidateTiles);
+});
+
+// ════════════════════════════════════════════════════════════
+function distanceFromNonFloor(levelIdx, w, h, floorIdx){
+  const INF = 65535;
+  const dist = new Uint16Array(w*h).fill(INF);
+  for(let i=0;i<w*h;i++) if(levelIdx[i] !== floorIdx) dist[i] = 0;
+  for(let y=0;y<h;y++) for(let x=0;x<w;x++){
+    const i = y*w+x; let d = dist[i];
+    if(y>0) d = Math.min(d, dist[i-w]+3);
+    if(x>0) d = Math.min(d, dist[i-1]+3);
+    if(y>0&&x>0) d = Math.min(d, dist[i-w-1]+4);
+    if(y>0&&x<w-1) d = Math.min(d, dist[i-w+1]+4);
+    dist[i] = d;
+  }
+  for(let y=h-1;y>=0;y--) for(let x=w-1;x>=0;x--){
+    const i = y*w+x; let d = dist[i];
+    if(y<h-1) d = Math.min(d, dist[i+w]+3);
+    if(x<w-1) d = Math.min(d, dist[i+1]+3);
+    if(y<h-1&&x<w-1) d = Math.min(d, dist[i+w+1]+4);
+    if(y<h-1&&x>0) d = Math.min(d, dist[i+w-1]+4);
+    dist[i] = d;
+  }
+  return dist;
+}
+function sideOf(x,y,w,h,sym){
+  const cx=w/2,cy=h/2;
+  switch(sym){
+    case 'mirror-x':return x<cx?1:2;
+    case 'mirror-y':return y<cy?1:2;
+    case 'diag':return x<y?1:2;
+    case 'anti-diag':return x<(w-y)?1:2;
+    default:return (x-cx)+(y-cy)<0?1:2;
+  }
+}
+function mirrorPt(p,w,h,sym){
+  switch(sym){
+    case 'mirror-x':return {x:w-1-p.x, y:p.y};
+    case 'mirror-y':return {x:p.x, y:h-1-p.y};
+    case 'rotate-180':return {x:w-1-p.x, y:h-1-p.y};
+    case 'quad':return {x:w-1-p.x, y:h-1-p.y};
+    case 'diag':return {x:p.y, y:p.x};
+    case 'anti-diag':return {x:w-1-p.y, y:w-1-p.x};
+    default:return {x:w-1-p.x, y:h-1-p.y};
+  }
+}
+
+document.getElementById('genPts').addEventListener('click', ()=>{
+  if(!lastBaseLevel){ alert('Сначала GENERATE MAP'); return; }
+  const opts = collectOpts();
+  const { levelIdx, floorIdx, w, h } = lastGen;
+  const P = +document.getElementById('aP').value;
+  const K = +document.getElementById('aK').value;
+  const F = +document.getElementById('aF').value;
+  const spread = +document.getElementById('aSpread').value;
+  const edgePct = +document.getElementById('aEdge').value / 100;
+  const heightMargin = +document.getElementById('aHeight').value;
+  const seed = (+document.getElementById('seed').value) + 31337;
+  const rng = mulberry32(seed);
+  const minDistFromFloor = heightMargin * 3;
+  const dist = distanceFromNonFloor(levelIdx, w, h, floorIdx);
+
+  const minX = Math.floor(w * edgePct);
+  const maxX = Math.ceil(w * (1 - edgePct));
+  const minY = Math.floor(h * edgePct);
+  const maxY = Math.ceil(h * (1 - edgePct));
+
+  const playable = [];
+  for(let y=minY;y<maxY;y++) for(let x=minX;x<maxX;x++){
+    const i = y*w+x;
+    if(levelIdx[i] !== floorIdx) continue;
+    if(dist[i] < minDistFromFloor) continue;
+    playable.push({x,y});
+  }
+  if(playable.length < 20){ alert('Мало подходящих клеток.'); return; }
+
+  const cx = w/2, cy = h/2;
+  const minD = Math.min(w,h)*0.12*spread;
+  const sym = opts.symmetry;
+  function pick(arr, count, md){
+    const out = []; const sh = arr.slice();
+    for(let i=sh.length-1;i>0;i--){const j=Math.floor(rng()*(i+1));[sh[i],sh[j]]=[sh[j],sh[i]]}
+    for(const c of sh){
+      if(out.length >= count) break;
+      let ok = true;
+      for(const p of out) if(Math.hypot(c.x-p.x, c.y-p.y) < md){ ok = false; break; }
+      if(ok) out.push(c);
+    }
+    return out;
+  }
+  const t1 = playable.filter(p=>sideOf(p.x,p.y,w,h,sym)===1);
+  t1.sort((a,b)=>Math.hypot(b.x-cx,b.y-cy)-Math.hypot(a.x-cx,a.y-cy));
+  const s1 = pick(t1.slice(0, Math.max(P*20, 60)), P, minD*1.5);
+  const s2 = s1.map(p=>mirrorPt(p,w,h,sym));
+  const newStarts = [];
+  for(const s of s1) newStarts.push({x:s.x,y:s.y,team:1});
+  for(const s of s2) newStarts.push({x:s.x,y:s.y,team:2});
+
+  const newResPool = [];
+  for(const s of [...s1, ...s2]){
+    const near = playable.filter(p=>{
+      const d = Math.hypot(p.x-s.x, p.y-s.y);
+      return d > minD*0.4 && d < minD*1.6;
+    });
+    for(const p of pick(near, K, minD*0.5)) newResPool.push({x:p.x,y:p.y});
+  }
+
+  let axisFn;
+  switch(sym){
+    case 'mirror-x':axisFn=c=>Math.abs(c.x-cx);break;
+    case 'mirror-y':axisFn=c=>Math.abs(c.y-cy);break;
+    case 'diag':axisFn=c=>Math.abs(c.x-c.y)/Math.SQRT2;break;
+    case 'anti-diag':axisFn=c=>Math.abs(c.x+c.y-(w-1))/Math.SQRT2;break;
+    default:axisFn=c=>Math.abs((c.x-cx)+(c.y-cy))/Math.SQRT2;break;
+  }
+  const front = playable.slice().sort((a,b)=>axisFn(a)-axisFn(b));
+  const fronts = pick(front.slice(0, Math.max(F*30, 120)), F, minD*0.9);
+  for(const p of fronts) newResPool.push({x:p.x, y:p.y});
+
+  starts = newStarts;
+  resPool = newResPool;
+  drawOverlay(document.getElementById('tLetters').checked);
+});
+document.getElementById('clrPts').addEventListener('click', ()=>{
+  starts = []; resPool = [];
+  drawOverlay(document.getElementById('tLetters').checked);
+});
+
+// ════════════════════════════════════════════════════════════
+document.getElementById('tThresh').addEventListener('input', e=>{
+  tileThreshold = Math.max(1, Math.min(255, +e.target.value || 15));
+  invalidateTiles();
+});
+document.getElementById('tView').addEventListener('change', e=>{
+  tileViewMode = e.target.value;
+  render();
+});
+document.getElementById('tLetters').addEventListener('change', ()=>{
+  drawOverlay(document.getElementById('tLetters').checked);
+});
+document.getElementById('tResolve').addEventListener('click', ()=>{
+  if(!lastBaseLevel){ alert('Сначала GENERATE MAP'); return; }
+  resolveAllTiles();
+  render();
+  const btn = document.getElementById('tResolve');
+  const old = btn.textContent;
+  btn.textContent = 'RESOLVED ✓';
+  setTimeout(()=>{ btn.textContent = old; }, 700);
+});
+document.getElementById('tExport').addEventListener('click', doExport);
+document.getElementById('tVerify').addEventListener('click', doVerify);
+document.getElementById('tCopy').addEventListener('click', ()=>{
+  const ta = document.getElementById('tOut');
+  if(!ta.value){ alert('Сначала EXPORT BASE64'); return; }
+  ta.focus(); ta.select(); document.execCommand('copy');
+});
+
+// ════════════════════════════════════════════════════════════
+// 3D VIEW bindings
+// ════════════════════════════════════════════════════════════
+document.getElementById('v3Cell').addEventListener('input', e=>{
+  document.getElementById('v3CellVal').textContent = e.target.value;
+  render3D();
+});
+document.getElementById('v3Height').addEventListener('input', e=>{
+  document.getElementById('v3HeightVal').textContent = e.target.value;
+  render3D();
+});
+document.getElementById('v3Render').addEventListener('click', render3D);
+document.getElementById('v3ColorMode').addEventListener('change', ()=>{
+  if(document.getElementById('v3ColorMode').value === 'png'){
+    v3PngW = 0; v3PngH = 0;
+  }
+  render3D();
+});
+document.getElementById('v3PngFile').addEventListener('change', e=>{
+  const f = e.target.files[0];
+  if(!f) return;
+  const url = URL.createObjectURL(f);
+  const img = new Image();
+  img.onload = ()=>{
+    v3PngImage = img;
+    v3PngData = null;
+    v3PngW = 0; v3PngH = 0;
+    URL.revokeObjectURL(url);
+    document.getElementById('v3ColorMode').value = 'png';
+    render3D();
+  };
+  img.onerror = ()=>{ URL.revokeObjectURL(url); alert('Не удалось прочитать PNG'); };
+  img.src = url;
+});
+document.getElementById('v3Dl').addEventListener('click', ()=>{
+  if(!lastBaseLevel){ alert('Сначала GENERATE MAP'); return; }
+  c3d.toBlob(b=>{
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(b);
+    a.download = `heightmap_3d_${document.getElementById('seed').value}.png`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }, 'image/png');
+});
+
+// ════════════════════════════════════════════════════════════
+updateBrushPreview();
+render();
+refreshPanel();
+</script>
+</body>
+</html>
