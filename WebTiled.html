@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>RW Map Editor</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="app">
+  <div id="topbar">
+    <span class="logo">RW EDITOR</span>
+    <input type="file" id="fileInput" accept=".tmx,application/xml,text/xml" hidden>
+    <input type="file" id="tilesetInput" accept="image/png,image/*" hidden>
+    <button id="btnOpen" class="primary">📂 Открыть</button>
+    <button id="btnSave" class="save">💾 Сохранить</button>
+    <button id="btnAddTileset" title="Добавить tileset из PNG">＋ Tileset</button>
+    <button id="btnResize" title="Изменить размер карты">⤢ Размер</button>
+    <input type="text" id="mapName" placeholder="имя файла" title="Имя файла при сохранении">
+    <div class="sep"></div>
+    <button id="btnFit">Fit</button>
+    <button id="btnReset">1:1</button>
+    <div class="zoom-box">Zoom <b id="zoomVal">1.00</b></div>
+    <div class="sep"></div>
+    <button id="btnSettings">⚙</button>
+    <button id="btnHelp">?</button>
+    <span id="status">Загрузи .tmx файл</span>
+  </div>
+
+  <div id="main">
+    <div id="tools"></div>
+    <div id="wrap">
+      <canvas id="cv"></canvas>
+      <div id="fps">—</div>
+      <div id="info">—</div>
+      <div id="pickBanner" class="hidden">
+        <span id="pickBannerText">—</span>
+        <button id="btnPickCancel">Отмена</button>
+      </div>
+      <div id="rightPanel">
+        <div id="layers"><h3>LAYERS <span id="activeLayerLabel">—</span></h3></div>
+        <div id="brushPanel">
+          <h3>BRUSH
+            <button id="btnAddEmpty" title="Добавить пустоту в кисть">+EMPTY</button>
+            <button id="btnClearBrush">CLEAR</button>
+          </h3>
+          <div id="brushSettings" class="brush-settings"></div>
+          <div id="brushList"></div>
+          <div id="brushTotal">Σ 0</div>
+          <div id="classicPanel" class="classic-panel">
+            <div class="classic-title">CLASSIC TERRAIN</div>
+            <select id="classicSelect"></select>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="bottom">
+    <div id="bottomGrabber" title="Потяни, чтобы изменить высоту"></div>
+    <div id="tsTabs">
+      <button id="btnAtlasesTab" class="section-tab active">ATLASES</button>
+      <button id="btnTypesTab" class="section-tab types-tab active">TYPES</button>
+      <div id="tsTabsList"></div>
+      <div class="right">
+        <button id="btnToggleBottom" class="toggle">▼</button>
+      </div>
+    </div>
+    <div id="bottomBody">
+      <div id="tsBody"><div class="empty-msg">Загрузи карту, чтобы увидеть атласы</div></div>
+      <div id="typesBody"></div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js"></script>
+<script src="js/utils.js"></script>
+<script src="js/tmx.js"></script>
+<script src="js/map.js"></script>
+<script src="js/types.js"></script>
+<script src="js/storage.js"></script>
+<script src="js/generator.js"></script>
+<script src="js/render.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
