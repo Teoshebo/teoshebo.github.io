@@ -10,7 +10,6 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet">
 
 <style>
-    /* ===== БАЗА ===== */
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
@@ -33,7 +32,6 @@
         color: var(--text);
         min-height: 100vh;
         padding: 48px 20px 64px;
-        margin: 0;
         background-image:
             radial-gradient(circle at 20% 30%, rgba(60, 40, 120, 0.18) 0%, transparent 60%),
             radial-gradient(circle at 80% 70%, rgba(40, 80, 160, 0.12) 0%, transparent 50%);
@@ -45,7 +43,7 @@
     .hub-header {
         text-align: center;
         max-width: 720px;
-        margin: 0 auto 56px;
+        margin: 0 auto 40px;
     }
 
     .hub-header h1 {
@@ -65,11 +63,92 @@
         line-height: 1.5;
     }
 
+    /* ===== ПАНЕЛЬ УПРАВЛЕНИЯ ===== */
+    .controls {
+        max-width: 1080px;
+        margin: 0 auto 40px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .search-box {
+        position: relative;
+        flex: 1 1 260px;
+        max-width: 360px;
+    }
+
+    .search-box input {
+        width: 100%;
+        padding: 12px 16px 12px 42px;
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        color: var(--text);
+        font-family: inherit;
+        font-size: 14px;
+        outline: none;
+        transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .search-box input::placeholder { color: var(--text-dim); }
+
+    .search-box input:focus {
+        border-color: var(--border-hover);
+        box-shadow: 0 0 0 3px rgba(108, 92, 255, 0.15);
+    }
+
+    .search-box::before {
+        content: "🔍";
+        position: absolute;
+        left: 14px;
+        top: 50%;
+        transform: translateY(-50%);
+        font-size: 14px;
+        opacity: 0.6;
+        pointer-events: none;
+    }
+
+    .filters {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    .filter-btn {
+        padding: 9px 16px;
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        color: var(--text-dim);
+        font-family: inherit;
+        font-size: 13px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.18s ease;
+    }
+
+    .filter-btn:hover {
+        color: var(--text);
+        border-color: var(--border-hover);
+    }
+
+    .filter-btn.active {
+        background: linear-gradient(135deg, var(--accent), var(--accent-2));
+        color: #ffffff;
+        border-color: transparent;
+        box-shadow: 0 4px 14px rgba(108, 92, 255, 0.3);
+    }
+
     /* ===== СЕКЦИИ ===== */
     .section {
         max-width: 1080px;
-        margin: 0 auto 56px;
+        margin: 0 auto 48px;
     }
+
+    .section.hidden { display: none; }
 
     .section-title {
         font-size: 14px;
@@ -110,9 +189,9 @@
         overflow: hidden;
     }
 
-    .tool-card:not(.empty) {
-        cursor: pointer;
-    }
+    .tool-card.hidden { display: none; }
+
+    .tool-card:not(.empty) { cursor: pointer; }
 
     .tool-card:not(.empty):hover {
         transform: translateY(-4px);
@@ -127,6 +206,15 @@
         top: 0; left: 0; right: 0;
         height: 3px;
         background: linear-gradient(90deg, var(--accent), var(--accent-2));
+        opacity: 0.9;
+    }
+
+    .tool-card.perchance::before {
+        content: "";
+        position: absolute;
+        top: 0; left: 0; right: 0;
+        height: 3px;
+        background: linear-gradient(90deg, #ff5a8e, #ff9d5c);
         opacity: 0.9;
     }
 
@@ -174,157 +262,4 @@
     .btn-primary {
         background: linear-gradient(135deg, var(--accent), var(--accent-2));
         color: #ffffff;
-        box-shadow: 0 4px 14px rgba(108, 92, 255, 0.3);
-    }
-
-    .btn-primary:hover {
-        filter: brightness(1.12);
-        transform: translateY(-1px);
-    }
-
-    .btn-disabled {
-        background: transparent;
-        color: var(--text-dim);
-        border-color: var(--border);
-        cursor: not-allowed;
-        opacity: 0.7;
-    }
-
-    .btn-disabled:hover {
-        opacity: 0.7;
-    }
-
-    /* ===== ПУСТЫЕ КАРТОЧКИ ===== */
-    .tool-card.empty {
-        border-style: dashed;
-        background: transparent;
-        opacity: 0.55;
-    }
-
-    .tool-card.empty .tool-icon { opacity: 0.5; }
-
-    /* ===== КОНТАКТЫ ===== */
-    .contacts {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 12px;
-    }
-
-    .contact-link {
-        display: inline-flex;
-        align-items: center;
-        gap: 10px;
-        padding: 12px 18px;
-        background: var(--card);
-        border: 1px solid var(--border);
-        border-radius: 12px;
-        color: var(--text);
-        text-decoration: none;
-        font-size: 14px;
-        font-weight: 500;
-        transition: all 0.2s ease;
-    }
-
-    .contact-link:hover {
-        border-color: var(--border-hover);
-        background: var(--card-hover);
-        transform: translateY(-2px);
-        box-shadow: 0 8px 20px rgba(80, 60, 200, 0.18);
-    }
-
-    .contact-link .ico {
-        font-size: 16px;
-        opacity: 0.9;
-    }
-
-    /* ===== ФУТЕР ===== */
-    footer {
-        text-align: center;
-        color: var(--text-dim);
-        font-size: 12px;
-        margin-top: 24px;
-        opacity: 0.6;
-    }
-</style>
-</head>
-<body>
-
-<header class="hub-header">
-    <h1>Teoshebo Tools</h1>
-    <p class="subtitle">Набор инструментов для D&D, генерации карт и не только.</p>
-</header>
-
-<!-- ПРИОРИТЕТНЫЕ ИНСТРУМЕНТЫ -->
-<section class="section">
-    <h2 class="section-title">⭐ Приоритетные</h2>
-    <div class="grid grid-featured">
-
-        <!-- WebTiled -->
-        <article class="tool-card featured" onclick="if(event.target.tagName!=='A'&&event.target.tagName!=='SPAN') location.href='webtiled.html'">
-            <div class="tool-icon">🧩</div>
-            <h3>WebTiled</h3>
-            <p class="desc">Инструмент для работы с тайлами и картами.</p>
-            <div class="tool-actions">
-                <a href="webtiled.html" class="btn btn-primary">Открыть →</a>
-                <span class="btn btn-disabled" title="Документация ещё не готова">Документация · в разработке</span>
-            </div>
-        </article>
-
-        <!-- Пустой слот 1 -->
-        <article class="tool-card empty">
-            <div class="tool-icon">✨</div>
-            <h3>Скоро</h3>
-            <p class="desc">Здесь появится новый инструмент.</p>
-        </article>
-
-        <!-- Пустой слот 2 -->
-        <article class="tool-card empty">
-            <div class="tool-icon">✨</div>
-            <h3>Скоро</h3>
-            <p class="desc">Здесь появится новый инструмент.</p>
-        </article>
-
-    </div>
-</section>
-
-<!-- ОСТАЛЬНЫЕ ИНСТРУМЕНТЫ -->
-<section class="section">
-    <h2 class="section-title">🛠️ Инструменты</h2>
-    <div class="grid">
-
-        <article class="tool-card" onclick="if(event.target.tagName!=='A') location.href='Map_generator.html'">
-            <div class="tool-icon">🗺️</div>
-            <h3>Map Generator</h3>
-            <p class="desc">Генератор случайных карт для настольных игр.</p>
-            <div class="tool-actions">
-                <a href="Map_generator.html" class="btn btn-primary">Открыть →</a>
-            </div>
-        </article>
-
-        <!-- Сюда ты сам добавишь карточку старого инструмента, который переносишь из index -->
-
-    </div>
-</section>
-
-<!-- КОНТАКТЫ -->
-<section class="section">
-    <h2 class="section-title">📬 Связаться со мной</h2>
-    <div class="contacts">
-        <a href="https://github.com/teoshebo" class="contact-link" target="_blank" rel="noopener">
-            <span class="ico">🐙</span> GitHub
-        </a>
-        <a href="https://discord.gg/teoshebo" class="contact-link" target="_blank" rel="noopener">
-            <span class="ico">💬</span> Discord
-        </a>
-        <a href="mailto:teoshebo@gmail.com" class="contact-link">
-            <span class="ico">✉️</span> teoshebo@gmail.com
-        </a>
-    </div>
-</section>
-
-<footer>
-    © Teoshebo · GitHub Pages
-</footer>
-
-</body>
-</html>
+        box-shadow: 0 4px 14px rgba(108, 92, 255, 0.
