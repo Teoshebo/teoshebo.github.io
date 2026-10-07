@@ -83,7 +83,7 @@ canvas#cv.crosshair{cursor:crosshair}
   font-size:10px;padding:0 2px;font-family:inherit;line-height:1}
 #layers .layer-mv:hover:not(:disabled){color:#fd4}
 #layers .layer-mv:disabled{opacity:.2;cursor:default}
-#layers .layer-del:hover:not(:disabled){color:#f44 !important}
+#layers .layer-clr:hover:not(:disabled){color:#8cf !important}
 
 #brushPanel{background:rgba(16,16,16,.94);border:1px solid #333;padding:8px 10px;
   border-radius:4px;flex:none}
