@@ -627,6 +627,22 @@ function floodFill(tx, ty, newTile) {
   statusEl.textContent = 'Заливка: ' + changes.length + ' клеток';
 }
 
+// ─── Flood dominant (types) ───
+function runFloodDominant() {
+  if (!mapModel || !generator) { statusEl.textContent = 'Нет карты'; return; }
+  if (!mapModel.layers.Ground) { statusEl.textContent = 'Нет слоя Ground'; return; }
+  const changes = generator.floodDominant(0, 0, mapModel.W - 1, mapModel.H - 1);
+  if (!changes.length) { statusEl.textContent = 'FLOOD: нечего менять'; return; }
+  const data = mapModel.layers.Ground;
+  for (const c of changes) data[c.idx] = c.after;
+  renderer.invalidate();
+  mapModel.undoStack.push({ layer: 'Ground', changes });
+  if (mapModel.undoStack.length > 50) mapModel.undoStack.shift();
+  mapModel.redoStack.length = 0;
+  renderer.render();
+  statusEl.textContent = 'FLOOD: ' + changes.length + ' клеток перекрашено';
+}
+
 // ─── Rect ───
 function applyRect(x0, y0, x1, y1, tileFn) {
   const map = mapModel;
@@ -982,8 +998,6 @@ async function initFromParsed(parsed, filename) {
     startPick: (mode) => startPick(mode),
     endPick: () => endPick(),
     findTileset: (id) => renderer.findTileset(id),
-    // onChanged — ТОЛЬКО структурные изменения (add/remove type, add/remove solid).
-    // Текстовые поля дергают updateStrip() без rebuild.
     onChanged: () => { typesPanel.build(); }
   });
 
@@ -1169,6 +1183,7 @@ document.getElementById('btnHelp').addEventListener('click', () => alert(
   'Classic работает на АКТИВНОМ слое.'
 ));
 document.getElementById('btnAddEmpty').addEventListener('click', addEmptyToBrush);
+document.getElementById('btnFlood').addEventListener('click', runFloodDominant);
 document.getElementById('btnClearBrush').addEventListener('click', () => {
   brushGroup = [];
   if (brushPanel) brushPanel.build();
