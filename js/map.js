@@ -31,8 +31,6 @@ class MapModel {
     return this.layers[layer][idx];
   }
 
-  // ─── Слои ───
-
   addLayer(name, insertBefore) {
     if (this.layers[name]) return null;
     const data = new Uint32Array(this.W * this.H);
@@ -62,7 +60,13 @@ class MapModel {
     if (i >= 0) this.layerOrder.splice(i, 1);
   }
 
-  // ─── Resize ───
+  // Обнуление всех данных слоя. Слой остаётся в layerOrder.
+  clearLayer(name) {
+    const data = this.layers[name];
+    if (!data) return false;
+    data.fill(0);
+    return true;
+  }
 
   resize(newW, newH) {
     newW = Math.max(1, Math.floor(newW));
@@ -112,8 +116,6 @@ class MapModel {
     if (this.onChange) this.onChange(entry);
     return entry;
   }
-
-  // ─── Пакетные изменения ───
 
   applyBatch(layer, changes) {
     const data = this.layers[layer];
