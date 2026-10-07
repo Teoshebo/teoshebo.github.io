@@ -12,9 +12,6 @@ class LayersPanel {
     this.ctx = ctx;
   }
 
-  // Слои, которые RW требует по именам и порядку. Удалять нельзя.
-  static PROTECTED = new Set(['Ground', 'Units', 'Items']);
-
   build() {
     const map = this.ctx.getMap();
     const r = this.ctx.getRenderer();
@@ -91,14 +88,20 @@ class LayersPanel {
         this.moveLayer(name, 1);
       });
 
+      const clrBtn = document.createElement('button');
+      clrBtn.className = 'layer-mv layer-clr';
+      clrBtn.textContent = 'C';
+      clrBtn.title = 'Очистить слой (стереть все тайлы)';
+      clrBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.clearLayer(name);
+      });
+
       const delBtn = document.createElement('button');
       delBtn.className = 'layer-mv layer-del';
       delBtn.textContent = '×';
-      delBtn.title = LayersPanel.PROTECTED.has(name)
-        ? 'Обязательный слой RW — нельзя удалить'
-        : 'Удалить слой';
-      delBtn.disabled = LayersPanel.PROTECTED.has(name)
-        || map.layerOrder.length <= 1;
+      delBtn.title = 'Удалить слой';
+      delBtn.disabled = map.layerOrder.length <= 1;
       delBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         this.removeLayer(name);
@@ -115,7 +118,7 @@ class LayersPanel {
         r.render();
       });
 
-      row.append(cb, sw, nm, upBtn, dnBtn, delBtn, solo);
+      row.append(cb, sw, nm, upBtn, dnBtn, clrBtn, delBtn, solo);
       this.el.appendChild(row);
     });
   }
@@ -152,10 +155,20 @@ class LayersPanel {
     r.render();
   }
 
+  clearLayer(name) {
+    const map = this.ctx.getMap();
+    if (!map) return;
+    if (!map.layers[name]) return;
+    if (!confirm('Очистить слой "' + name + '"? Все тайлы будут стёрты.')) return;
+    map.clearLayer(name);
+    const r = this.ctx.getRenderer();
+    r.invalidate();
+    r.render();
+  }
+
   removeLayer(name) {
     const map = this.ctx.getMap();
     if (!map) return;
-    if (LayersPanel.PROTECTED.has(name)) return;
     if (!confirm('Удалить слой "' + name + '"? Данные будут потеряны.')) return;
 
     const active = this.ctx.getActiveLayer();
