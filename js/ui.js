@@ -368,9 +368,13 @@ class TilesetTabs {
       del.className = 'ts-del';
       del.textContent = '×';
       del.title = 'Удалить tileset';
+      del.dataset.tilesetIdx = String(i);
+      del.dataset.tilesetName = ts.name;
       del.addEventListener('click', (e) => {
+        e.preventDefault();
         e.stopPropagation();
-        this.handleTilesetDelete(i);
+        const idx = parseInt(del.dataset.tilesetIdx, 10);
+        this.handleTilesetDelete(idx);
       });
       this.tabsListEl.appendChild(del);
     });
@@ -379,48 +383,85 @@ class TilesetTabs {
     if (ts) this.bodyEl.appendChild(this.buildBlock(ts));
   }
 
+  // Защитная версия — работает и со старым map.js (без removeTileset /
+  // clearTilesetTiles), и с новым.
   handleTilesetDelete(idx) {
-    const map = this.ctx.getMap();
-    const r = this.ctx.getRenderer();
-    if (!map) return;
-    const ts = map.tilesets[idx];
-    if (!ts) return;
+    try {
+      const map = this.ctx.getMap();
+      const r = this.ctx.getRenderer();
+      if (!map) { alert('Карта не открыта'); return; }
+      const ts = map.tilesets[idx];
+      if (!ts) { alert('Tileset не найден (idx=' + idx + ')'); return; }
 
-    const maxId = ts.firstgid + ts.tilecount;
-    let usage = 0;
-    for (const lname of map.layerOrder) {
-      const data = map.layers[lname];
-      if (!data) continue;
-      for (let i = 0; i < data.length; i++) {
-        const id = data[i];
-        if (id >= ts.firstgid && id < maxId) usage++;
+      const maxId = ts.firstgid + ts.tilecount;
+      let usage = 0;
+      for (const lname of map.layerOrder) {
+        const data = map.layers[lname];
+        if (!data) continue;
+        for (let i = 0; i < data.length; i++) {
+          const id = data[i];
+          if (id >= ts.firstgid && id < maxId) usage++;
+        }
       }
+
+      const msg = usage > 0
+        ? 'Удалить tileset "' + ts.name + '"?\n\n' +
+          'Используется в карте: ' + usage + ' тайлов.\n' +
+          'Все они будут стёрты (одна undo-транзакция).'
+        : 'Удалить tileset "' + ts.name + '"?\n\nОн не используется.';
+      if (!confirm(msg)) return;
+
+      // 1. Стереть тайлы tileset'а из всех слоёв
+      if (usage > 0) {
+        if (typeof map.clearTilesetTiles === 'function') {
+          map.clearTilesetTiles(ts.firstgid, ts.tilecount);
+        } else {
+          // fallback для старого map.js
+          const layers = [];
+          for (const lname of map.layerOrder) {
+            const data = map.layers[lname];
+            if (!data) continue;
+            const changes = [];
+            for (let i = 0; i < data.length; i++) {
+              const id = data[i];
+              if (id >= ts.firstgid && id < maxId) {
+                changes.push({ idx: i, before: id, after: 0 });
+                data[i] = 0;
+              }
+            }
+            if (changes.length) layers.push({ layer: lname, changes });
+          }
+          if (layers.length && map.undoStack) {
+            map.undoStack.push({ type: 'multi', layers });
+            if (map.undoStack.length > 50) map.undoStack.shift();
+            if (map.redoStack) map.redoStack.length = 0;
+          }
+        }
+      }
+
+      // 2. Удалить tileset
+      if (typeof map.removeTileset === 'function') {
+        map.removeTileset(idx);
+      } else {
+        map.tilesets.splice(idx, 1);
+      }
+
+      // 3. Сбросить индекс активного tileset'а
+      if (this.activeIdx >= map.tilesets.length) {
+        this.activeIdx = Math.max(0, map.tilesets.length - 1);
+      }
+
+      // 4. Перерисовать
+      if (r) { r.invalidate(); r.render(); }
+      this.build();
+
+      const st = document.getElementById('status');
+      if (st) st.textContent = 'Удалён tileset "' + ts.name + '"' +
+        (usage ? ' (+' + usage + ' тайлов стёрто)' : '');
+    } catch (err) {
+      console.error('Tileset delete failed:', err);
+      alert('Ошибка удаления tileset: ' + err.message);
     }
-
-    const msg = usage > 0
-      ? 'Удалить tileset "' + ts.name + '"?\n\n' +
-        'Используется в карте: ' + usage + ' тайлов.\n' +
-        'Все они будут стёрты (одна undo-транзакция).'
-      : 'Удалить tileset "' + ts.name + '"?\n\nОн не используется.';
-    if (!confirm(msg)) return;
-
-    if (usage > 0) {
-      map.clearTilesetTiles(ts.firstgid, ts.tilecount);
-      if (r) r.invalidate();
-    }
-
-    map.removeTileset(idx);
-
-    if (this.activeIdx >= map.tilesets.length) {
-      this.activeIdx = Math.max(0, map.tilesets.length - 1);
-    }
-
-    this.build();
-    if (r) r.render();
-
-    const st = document.getElementById('status');
-    if (st) st.textContent = 'Удалён tileset "' + ts.name + '"' +
-      (usage ? ' (+' + usage + ' тайлов стёрто)' : '');
   }
 
   buildBlock(ts) {
