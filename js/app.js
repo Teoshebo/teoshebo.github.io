@@ -31,6 +31,11 @@ let rectStart = null, rectCurrent = null;
 let lastPaintKey = null;
 
 let settings = RW.Storage.loadSettings();
+if (settings.showMarkers == null) settings.showMarkers = false;
+if (settings.markerScale == null) settings.markerScale = 1;
+if (settings.canvasBg == null) settings.canvasBg = '#0a0a0a';
+if (settings.lang == null) settings.lang = 'en';
+RW.Storage.saveSettings(settings);
 
 const cv = document.getElementById('cv');
 const wrap = document.getElementById('wrap');
@@ -53,22 +58,129 @@ const mapNameEl = document.getElementById('mapName');
 const pickBannerEl = document.getElementById('pickBanner');
 const pickBannerTextEl = document.getElementById('pickBannerText');
 
+// ═══════════════════════════════════════════════
+// I18N
+// ═══════════════════════════════════════════════
+const I18N = {
+  en: {
+    'title': 'WebTiled',
+    'btn.open': '📂 Open',
+    'btn.save': '💾 Save',
+    'btn.resize': '⤢ Size',
+    'btn.merge': '⌘ Merge',
+    'btn.exportMap': '📷 _map',
+    'btn.fit': 'Fit',
+    'btn.reset': '1:1',
+    'btn.settings': 'Settings',
+    'btn.help': 'Help',
+    'tool.pan': 'PAN',
+    'tool.brush': 'BRUSH',
+    'tool.terrain': 'TERRAIN',
+    'tool.classic': 'CLS',
+    'tool.eraser': 'ERASE',
+    'tool.rect': 'RECT',
+    'tool.fill': 'FILL',
+    'tool.picker': 'PICK',
+    'tool.autotile': 'AUTO',
+    'tool.undo': 'UNDO',
+    'tool.redo': 'REDO',
+    'status.idle': 'Load .tmx file',
+    'tab.atlases': 'ATLASES',
+    'tab.types': 'TYPES',
+    'tab.gen': 'GENERATOR',
+    'tab.v3': '3D',
+    'settings.title': 'SETTINGS',
+    'settings.language': 'LANGUAGE',
+    'settings.appearance': 'APPEARANCE',
+    'settings.canvasBg': 'Canvas background',
+    'settings.markers': 'MARKERS',
+    'settings.showMarkers': 'Show markers',
+    'settings.markerSize': 'Marker size',
+    'settings.apply': 'APPLY',
+    'settings.cancel': 'CANCEL',
+    'settings.close': 'Close'
+  },
+  ru: {
+    'title': 'WebTiled',
+    'btn.open': '📂 Открыть',
+    'btn.save': '💾 Сохранить',
+    'btn.resize': '⤢ Размер',
+    'btn.merge': '⌘ Склейка',
+    'btn.exportMap': '📷 _map',
+    'btn.fit': 'Fit',
+    'btn.reset': '1:1',
+    'btn.settings': 'Настройки',
+    'btn.help': 'Помощь',
+    'tool.pan': 'PAN',
+    'tool.brush': 'КИСТЬ',
+    'tool.terrain': 'ЛАНДШАФТ',
+    'tool.classic': 'CLS',
+    'tool.eraser': 'ЛАСТИК',
+    'tool.rect': 'ПРЯМОУГ',
+    'tool.fill': 'ЗАЛИВКА',
+    'tool.picker': 'ПИПЕТКА',
+    'tool.autotile': 'АВТО',
+    'tool.undo': 'ОТМЕНА',
+    'tool.redo': 'ПОВТОР',
+    'status.idle': 'Загрузи .tmx файл',
+    'tab.atlases': 'АТЛАСЫ',
+    'tab.types': 'ТИПЫ',
+    'tab.gen': 'ГЕНЕРАТОР',
+    'tab.v3': '3D',
+    'settings.title': 'НАСТРОЙКИ',
+    'settings.language': 'ЯЗЫК',
+    'settings.appearance': 'ВНЕШНИЙ ВИД',
+    'settings.canvasBg': 'Фон канваса',
+    'settings.markers': 'МАРКЕРЫ',
+    'settings.showMarkers': 'Показывать маркеры',
+    'settings.markerSize': 'Размер маркеров',
+    'settings.apply': 'ПРИМЕНИТЬ',
+    'settings.cancel': 'ОТМЕНА',
+    'settings.close': 'Закрыть'
+  }
+};
+
+let currentLang = settings.lang || 'en';
+
+RW.I18N = {
+  get lang() { return currentLang; },
+  t(key) {
+    const dict = I18N[currentLang] || I18N.en;
+    return dict[key] != null ? dict[key] : (I18N.en[key] != null ? I18N.en[key] : key);
+  },
+  apply() {
+    document.querySelectorAll('[data-i18n]').forEach(el => {
+      const key = el.dataset.i18n;
+      el.textContent = this.t(key);
+    });
+    const titleEl = document.querySelector('title');
+    if (titleEl) titleEl.textContent = this.t('title');
+  },
+  set(lang) {
+    if (!I18N[lang]) return;
+    currentLang = lang;
+    settings.lang = lang;
+    RW.Storage.saveSettings(settings);
+    this.apply();
+  }
+};
+
 // ─── Tools ───
 const TOOLS = [
-  { id: 'pan', ic: '✋', label: 'PAN', title: 'Панорама (P)' },
+  { id: 'pan', ic: '✋', i18n: 'tool.pan', title: 'Pan (P)' },
   { sep: true },
-  { id: 'brush', ic: '🖌', label: 'BRUSH', title: 'Кисть (B)' },
-  { id: 'terrain', ic: '🌍', label: 'TERRAIN', title: 'Ландшафтная кисть (T)' },
-  { id: 'classic', ic: '▦', label: 'CLS', title: 'Классический автотайл (C)' },
-  { id: 'eraser', ic: '🧽', label: 'ERASE', title: 'Ластик (E)' },
-  { id: 'rect', ic: '▭', label: 'RECT', title: 'Прямоугольник (R)' },
-  { id: 'fill', ic: '🪣', label: 'FILL', title: 'Заливка (F)' },
-  { id: 'picker', ic: '💧', label: 'PICK', title: 'Пипетка (I)' },
+  { id: 'brush', ic: '🖌', i18n: 'tool.brush', title: 'Brush (B)' },
+  { id: 'terrain', ic: '🌍', i18n: 'tool.terrain', title: 'Terrain (T)' },
+  { id: 'classic', ic: '▦', i18n: 'tool.classic', title: 'Classic autotile (C)' },
+  { id: 'eraser', ic: '🧽', i18n: 'tool.eraser', title: 'Eraser (E)' },
+  { id: 'rect', ic: '▭', i18n: 'tool.rect', title: 'Rect (R)' },
+  { id: 'fill', ic: '🪣', i18n: 'tool.fill', title: 'Fill (F)' },
+  { id: 'picker', ic: '💧', i18n: 'tool.picker', title: 'Picker (I)' },
   { sep: true },
-  { id: 'autotile', ic: '⚙', label: 'AUTO', title: 'Автотайл области' },
+  { id: 'autotile', ic: '⚙', i18n: 'tool.autotile', title: 'Autotile area' },
   { sep: true },
-  { id: 'undo', ic: '↶', label: 'UNDO', title: 'Отмена (Ctrl+Z)' },
-  { id: 'redo', ic: '↷', label: 'REDO', title: 'Повтор (Ctrl+Y)' }
+  { id: 'undo', ic: '↶', i18n: 'tool.undo', title: 'Undo (Ctrl+Z)' },
+  { id: 'redo', ic: '↷', i18n: 'tool.redo', title: 'Redo (Ctrl+Y)' }
 ];
 
 function buildTools() {
@@ -84,7 +196,8 @@ function buildTools() {
     el.className = 'tool' + (t.id === activeTool ? ' active' : '');
     el.dataset.tool = t.id;
     el.title = t.title || '';
-    el.innerHTML = '<span class="ic">' + t.ic + '</span><span>' + t.label + '</span>';
+    el.innerHTML = '<span class="ic">' + t.ic + '</span>' +
+      '<span data-i18n="' + t.i18n + '">' + RW.I18N.t(t.i18n) + '</span>';
     el.addEventListener('click', () => handleToolClick(t.id));
     toolsEl.appendChild(el);
   }
@@ -115,9 +228,9 @@ function startPick(mode) {
   pickMode = mode;
   ensureAtlasesVisible();
   let label;
-  if (mode.kind === 'edge') label = 'Выберите тайл для ' + mode.role;
-  else if (mode.kind === 'solid') label = 'Выберите solid-тайл';
-  pickBannerTextEl.textContent = label + ' · клик по тайлу · повторный клик — убрать';
+  if (mode.kind === 'edge') label = 'Pick tile for ' + mode.role;
+  else if (mode.kind === 'solid') label = 'Pick solid tile';
+  pickBannerTextEl.textContent = label + ' · click tile · click again to clear';
   pickBannerEl.classList.remove('hidden');
   if (typesPanel) typesPanel.build();
   if (tilesetTabs) tilesetTabs.build();
@@ -129,7 +242,7 @@ function endPick() {
   pickBannerEl.classList.add('hidden');
   if (typesPanel) typesPanel.build();
   if (tilesetTabs) tilesetTabs.build();
-  statusEl.textContent = 'Отмена выбора';
+  statusEl.textContent = 'Pick cancelled';
 }
 
 function applyPick(globalID) {
@@ -256,7 +369,7 @@ function paintTerrainCells(cx, cy) {
   if (!activeLayer) return;
   const type = typesModel.get(activeTypeId);
   if (!type || !type.solids.length) {
-    statusEl.textContent = 'Не выбран тип или нет solids';
+    statusEl.textContent = 'No type selected or no solids';
     return;
   }
   const data = map.layers[activeLayer];
@@ -275,10 +388,7 @@ function paintTerrainCells(cx, cy) {
   }
 }
 
-// ═══════════════════════════════════════════════
-// CLASSIC AUTOTILE
-// ═══════════════════════════════════════════════
-
+// ─── Classic autotile (без изменений) ───
 function buildClassicMaskIndex(tsIdx) {
   const cached = classicMaskCache.get(tsIdx);
   if (cached) return cached;
@@ -294,7 +404,6 @@ function buildClassicMaskIndex(tsIdx) {
   classicMaskCache.set(tsIdx, index);
   return index;
 }
-
 function findEmptyValue(tsIdx, targetTerr) {
   const key = tsIdx + ':' + targetTerr;
   if (classicEmptyCache.has(key)) return classicEmptyCache.get(key);
@@ -317,7 +426,6 @@ function findEmptyValue(tsIdx, targetTerr) {
   classicEmptyCache.set(key, best);
   return best;
 }
-
 function cellHasCorner(tx, ty, cornerIdx, tsIdx, targetTerr) {
   const map = mapModel;
   if (tx < 0 || ty < 0 || tx >= map.W || ty >= map.H) return false;
@@ -330,28 +438,19 @@ function cellHasCorner(tx, ty, cornerIdx, tsIdx, targetTerr) {
   if (!t || !t.terrain) return false;
   return t.terrain[cornerIdx] === targetTerr;
 }
-
 function resolveClassicMask(tx, ty, tsIdx, targetTerr, emptyValue) {
-  const tlOK =
-    cellHasCorner(tx-1, ty-1, 3, tsIdx, targetTerr) &&
-    cellHasCorner(tx,   ty-1, 2, tsIdx, targetTerr) &&
-    cellHasCorner(tx-1, ty,   1, tsIdx, targetTerr);
-
-  const trOK =
-    cellHasCorner(tx,   ty-1, 3, tsIdx, targetTerr) &&
-    cellHasCorner(tx+1, ty-1, 2, tsIdx, targetTerr) &&
-    cellHasCorner(tx+1, ty,   0, tsIdx, targetTerr);
-
-  const blOK =
-    cellHasCorner(tx-1, ty,   3, tsIdx, targetTerr) &&
-    cellHasCorner(tx-1, ty+1, 1, tsIdx, targetTerr) &&
-    cellHasCorner(tx,   ty+1, 0, tsIdx, targetTerr);
-
-  const brOK =
-    cellHasCorner(tx+1, ty,   2, tsIdx, targetTerr) &&
-    cellHasCorner(tx+1, ty+1, 0, tsIdx, targetTerr) &&
-    cellHasCorner(tx,   ty+1, 1, tsIdx, targetTerr);
-
+  const tlOK = cellHasCorner(tx-1, ty-1, 3, tsIdx, targetTerr) &&
+               cellHasCorner(tx, ty-1, 2, tsIdx, targetTerr) &&
+               cellHasCorner(tx-1, ty, 1, tsIdx, targetTerr);
+  const trOK = cellHasCorner(tx, ty-1, 3, tsIdx, targetTerr) &&
+               cellHasCorner(tx+1, ty-1, 2, tsIdx, targetTerr) &&
+               cellHasCorner(tx+1, ty, 0, tsIdx, targetTerr);
+  const blOK = cellHasCorner(tx-1, ty, 3, tsIdx, targetTerr) &&
+               cellHasCorner(tx-1, ty+1, 1, tsIdx, targetTerr) &&
+               cellHasCorner(tx, ty+1, 0, tsIdx, targetTerr);
+  const brOK = cellHasCorner(tx+1, ty, 2, tsIdx, targetTerr) &&
+               cellHasCorner(tx+1, ty+1, 0, tsIdx, targetTerr) &&
+               cellHasCorner(tx, ty+1, 1, tsIdx, targetTerr);
   return [
     tlOK ? targetTerr : emptyValue,
     trOK ? targetTerr : emptyValue,
@@ -359,38 +458,30 @@ function resolveClassicMask(tx, ty, tsIdx, targetTerr, emptyValue) {
     brOK ? targetTerr : emptyValue
   ];
 }
-
 function combinations(arr, k) {
   const result = [];
   function rec(start, cur) {
     if (cur.length === k) { result.push(cur.slice()); return; }
     for (let i = start; i < arr.length; i++) {
-      cur.push(arr[i]);
-      rec(i + 1, cur);
-      cur.pop();
+      cur.push(arr[i]); rec(i + 1, cur); cur.pop();
     }
   }
   rec(0, []);
   return result;
 }
-
 function paintClassicCell(tx, ty) {
   if (!activeClassicTerrain) return;
   const map = mapModel;
   if (tx < 0 || ty < 0 || tx >= map.W || ty >= map.H) return;
   if (!activeLayer) return;
-
   const tsIdx = activeClassicTerrain.tsIdx;
   const terrIdx = activeClassicTerrain.terrIdx;
   const ts = map.tilesets[tsIdx];
   if (!ts) return;
-
   const emptyValue = findEmptyValue(tsIdx, terrIdx);
   const mask = resolveClassicMask(tx, ty, tsIdx, terrIdx, emptyValue);
   const index = buildClassicMaskIndex(tsIdx);
-
   let tileID = index.get(mask.join(','));
-
   if (tileID === undefined) {
     const emptyPos = [];
     for (let i = 0; i < 4; i++) if (mask[i] === emptyValue) emptyPos.push(i);
@@ -405,9 +496,7 @@ function paintClassicCell(tx, ty) {
       }
     }
   }
-
   if (tileID === undefined) return;
-
   const idx = ty * map.W + tx;
   const before = map.layers[activeLayer][idx];
   if (before === tileID) return;
@@ -415,7 +504,6 @@ function paintClassicCell(tx, ty) {
   recordChange(activeLayer, idx, before, tileID);
   renderer.invalidateCell(tx, ty);
 }
-
 function paintClassicCells(cx, cy) {
   const map = mapModel;
   if (!map || !activeLayer || !activeClassicTerrain) return;
@@ -423,13 +511,10 @@ function paintClassicCells(cx, cy) {
   const terrIdx = activeClassicTerrain.terrIdx;
   const ts = map.tilesets[tsIdx];
   if (!ts) return;
-
   const solidLocal = ts.terrainTypes[terrIdx] ? ts.terrainTypes[terrIdx].tile : 0;
   const solidTile = solidLocal + ts.firstgid;
-
   const cells = brushCells(cx, cy);
   const data = map.layers[activeLayer];
-
   for (const cell of cells) {
     const tx = cell[0], ty = cell[1];
     if (tx < 0 || ty < 0 || tx >= map.W || ty >= map.H) continue;
@@ -441,28 +526,20 @@ function paintClassicCells(cx, cy) {
     renderer.invalidateCell(tx, ty);
     expandStrokeBound(tx, ty);
   }
-
-  for (const cell of cells) {
-    paintClassicCell(cell[0], cell[1]);
-  }
+  for (const cell of cells) paintClassicCell(cell[0], cell[1]);
 }
-
 function finalizeClassicForStroke() {
   if (!strokeChanges || !activeClassicTerrain) return;
   const m = strokeChanges.get(activeLayer);
   if (!m || !m.size) return;
-
   const tsIdx = activeClassicTerrain.tsIdx;
   const terrIdx = activeClassicTerrain.terrIdx;
   const ts = map.tilesets[tsIdx];
   if (!ts) return;
-
   const solidLocal = ts.terrainTypes[terrIdx] ? ts.terrainTypes[terrIdx].tile : 0;
   const solidTile = solidLocal + ts.firstgid;
-
   const data = map.layers[activeLayer];
   const paintedSet = new Set(m.keys());
-
   for (const idx of paintedSet) {
     const before = data[idx];
     if (before === solidTile) continue;
@@ -472,7 +549,6 @@ function finalizeClassicForStroke() {
     const y = Math.floor(idx / mapModel.W);
     renderer.invalidateCell(x, y);
   }
-
   const lookup = new Set();
   for (const idx of paintedSet) {
     const x = idx % mapModel.W;
@@ -491,13 +567,10 @@ function finalizeClassicForStroke() {
     paintClassicCell(x, y);
   }
 }
-
-// ─── Classic selector ───
 function rebuildClassicSelect() {
   const map = mapModel;
   classicSelectEl.innerHTML = '';
   if (!map) return;
-
   let hasAny = false;
   map.tilesets.forEach((ts, ti) => {
     if (!ts.terrainTypes.length) return;
@@ -516,15 +589,13 @@ function rebuildClassicSelect() {
     });
     classicSelectEl.appendChild(group);
   });
-
   if (!hasAny) {
     const opt = document.createElement('option');
-    opt.textContent = '— нет terraintypes —';
+    opt.textContent = '— no terraintypes —';
     opt.disabled = true;
     classicSelectEl.appendChild(opt);
   }
 }
-
 classicSelectEl.addEventListener('change', () => {
   const v = classicSelectEl.value;
   if (!v) { activeClassicTerrain = null; return; }
@@ -541,7 +612,6 @@ classicSelectEl.addEventListener('change', () => {
     + '  (empty=' + emptyVal + ', masks=' + masksInTs + ')';
 });
 
-// ─── Custom autotile ───
 function finalizeAutotileForStroke() {
   if (!generator || !strokeBound) return;
   const b = strokeBound;
@@ -559,7 +629,6 @@ function finalizeAutotileForStroke() {
   }
 }
 
-// ─── endStroke: одна bundle-запись на все слои ───
 function endStroke() {
   if (!strokeChanges || !strokeChanges.size) {
     strokeChanges = null;
@@ -586,14 +655,14 @@ function endStroke() {
     map.undoStack.push({ type: 'multi', layers });
     if (map.undoStack.length > 50) map.undoStack.shift();
     map.redoStack.length = 0;
-    statusEl.textContent = totalChanged + ' клеток изменено';
+    statusEl.textContent = totalChanged + ' cells changed';
   }
+  invalidateMarkersCache();
   strokeChanges = null;
   strokeBound = null;
   lastPaintKey = null;
 }
 
-// ─── Flood fill ───
 function floodFill(tx, ty, newTile) {
   const map = mapModel;
   if (tx < 0 || ty < 0 || tx >= map.W || ty >= map.H) return;
@@ -626,26 +695,26 @@ function floodFill(tx, ty, newTile) {
   map.undoStack.push({ layer: activeLayer, changes });
   if (map.undoStack.length > 50) map.undoStack.shift();
   map.redoStack.length = 0;
-  statusEl.textContent = 'Заливка: ' + changes.length + ' клеток';
+  invalidateMarkersCache();
+  statusEl.textContent = 'Fill: ' + changes.length + ' cells';
 }
 
-// ─── Flood dominant (types) ───
 function runFloodDominant() {
-  if (!mapModel || !generator) { statusEl.textContent = 'Нет карты'; return; }
-  if (!mapModel.layers.Ground) { statusEl.textContent = 'Нет слоя Ground'; return; }
+  if (!mapModel || !generator) { statusEl.textContent = 'No map'; return; }
+  if (!mapModel.layers.Ground) { statusEl.textContent = 'No Ground layer'; return; }
   const changes = generator.floodDominant(0, 0, mapModel.W - 1, mapModel.H - 1);
-  if (!changes.length) { statusEl.textContent = 'FLOOD: нечего менять'; return; }
+  if (!changes.length) { statusEl.textContent = 'FLOOD: nothing to change'; return; }
   const data = mapModel.layers.Ground;
   for (const c of changes) data[c.idx] = c.after;
   renderer.invalidate();
   mapModel.undoStack.push({ layer: 'Ground', changes });
   if (mapModel.undoStack.length > 50) mapModel.undoStack.shift();
   mapModel.redoStack.length = 0;
+  invalidateMarkersCache();
   renderer.render();
-  statusEl.textContent = 'FLOOD: ' + changes.length + ' клеток перекрашено';
+  statusEl.textContent = 'FLOOD: ' + changes.length + ' cells recolored';
 }
 
-// ─── Rect ───
 function applyRect(x0, y0, x1, y1, tileFn) {
   const map = mapModel;
   if (!activeLayer) return;
@@ -670,10 +739,10 @@ function applyRect(x0, y0, x1, y1, tileFn) {
   map.undoStack.push({ layer: activeLayer, changes });
   if (map.undoStack.length > 50) map.undoStack.shift();
   map.redoStack.length = 0;
-  statusEl.textContent = 'Прямоугольник: ' + changes.length + ' клеток';
+  invalidateMarkersCache();
+  statusEl.textContent = 'Rect: ' + changes.length + ' cells';
 }
 
-// ─── Picker ───
 function pickerAt(tx, ty) {
   const map = mapModel;
   if (tx < 0 || ty < 0 || tx >= map.W || ty >= map.H) return;
@@ -685,14 +754,13 @@ function pickerAt(tx, ty) {
       activeLayer = name;
       addToBrush(id, false);
       if (layersPanel) layersPanel.build();
-      statusEl.textContent = 'Пипетка: ' + name + ' #' + id;
+      statusEl.textContent = 'Picker: ' + name + ' #' + id;
       return;
     }
   }
-  statusEl.textContent = 'Пипетка: пусто';
+  statusEl.textContent = 'Picker: empty';
 }
 
-// ─── Autotile dialog ───
 function runAutotileDialog() {
   if (!mapModel || !generator) return;
   const x0 = parseInt(prompt('x0:', '0'), 10);
@@ -705,22 +773,23 @@ function runAutotileDialog() {
   if (isNaN(y1)) return;
 
   const changes = generator.generateRect(x0, y0, x1, y1);
-  if (!changes.length) { statusEl.textContent = 'Автотайл: без изменений'; return; }
+  if (!changes.length) { statusEl.textContent = 'Autotile: no changes'; return; }
   const data = mapModel.layers.Items0;
-  if (!data) { statusEl.textContent = 'Слой Items0 не найден'; return; }
+  if (!data) { statusEl.textContent = 'No Items0 layer'; return; }
   for (const c of changes) data[c.idx] = c.after;
   renderer.invalidateRange(x0, y0, x1, y1);
   mapModel.undoStack.push({ layer: 'Items0', changes });
   if (mapModel.undoStack.length > 50) mapModel.undoStack.shift();
   mapModel.redoStack.length = 0;
+  invalidateMarkersCache();
   renderer.render();
-  statusEl.textContent = 'Автотайл: ' + changes.length + ' клеток';
+  statusEl.textContent = 'Autotile: ' + changes.length + ' cells';
 }
 
-// ─── Undo / Redo ───
 function doUndo() {
-  if (!mapModel || !mapModel.canUndo()) { statusEl.textContent = 'Нечего отменять'; return; }
+  if (!mapModel || !mapModel.canUndo()) { statusEl.textContent = 'Nothing to undo'; return; }
   const entry = mapModel.undo();
+  invalidateMarkersCache();
   if (entry.type === 'resize') {
     renderer.invalidate();
     renderer.fitView();
@@ -730,11 +799,12 @@ function doUndo() {
     invalidateEntry(entry);
   }
   renderer.render();
-  statusEl.textContent = 'Отмена';
+  statusEl.textContent = 'Undo';
 }
 function doRedo() {
-  if (!mapModel || !mapModel.canRedo()) { statusEl.textContent = 'Нечего повторять'; return; }
+  if (!mapModel || !mapModel.canRedo()) { statusEl.textContent = 'Nothing to redo'; return; }
   const entry = mapModel.redo();
+  invalidateMarkersCache();
   if (entry.type === 'resize') {
     renderer.invalidate();
     renderer.fitView();
@@ -744,7 +814,7 @@ function doRedo() {
     invalidateEntry(entry);
   }
   renderer.render();
-  statusEl.textContent = 'Повтор';
+  statusEl.textContent = 'Redo';
 }
 function invalidateEntry(entry) {
   if (!renderer) return;
@@ -772,13 +842,13 @@ cv.addEventListener('mousedown', (e) => {
     return;
   }
   if (!mapModel) return;
-  if (!activeLayer) { statusEl.textContent = 'Выбери активный слой'; return; }
+  if (!activeLayer) { statusEl.textContent = 'Select active layer'; return; }
 
   const pos = renderer.screenToTile(e.clientX, e.clientY);
   const tx = pos.tx, ty = pos.ty;
 
   if (activeTool === 'brush') {
-    if (!brushGroup.length) { statusEl.textContent = 'Кисть пуста'; return; }
+    if (!brushGroup.length) { statusEl.textContent = 'Brush empty'; return; }
     painting = true; strokeChanges = null;
     paintBrushCells(tx, ty, pickWeightedTile);
     lastPaintKey = tx + ',' + ty;
@@ -789,7 +859,7 @@ cv.addEventListener('mousedown', (e) => {
     lastPaintKey = tx + ',' + ty;
     renderer.render();
   } else if (activeTool === 'classic') {
-    if (!activeClassicTerrain) { statusEl.textContent = 'Classic: выбери terrain в панели BRUSH'; return; }
+    if (!activeClassicTerrain) { statusEl.textContent = 'Classic: select terrain in BRUSH panel'; return; }
     painting = true; strokeChanges = null;
     paintClassicCells(tx, ty);
     lastPaintKey = tx + ',' + ty;
@@ -805,7 +875,7 @@ cv.addEventListener('mousedown', (e) => {
     renderer.rectStart = rectStart; renderer.rectCurrent = rectCurrent;
     renderer.render();
   } else if (activeTool === 'fill') {
-    if (!brushGroup.length) { statusEl.textContent = 'Кисть пуста'; return; }
+    if (!brushGroup.length) { statusEl.textContent = 'Brush empty'; return; }
     floodFill(tx, ty, pickWeightedTile());
     renderer.render();
   } else if (activeTool === 'picker') {
@@ -884,7 +954,7 @@ function updateInfo(tx, ty) {
     infoEl.textContent = '—';
     return;
   }
-  let out = 'Тайл: <b>' + tx + ', ' + ty + '</b>';
+  let out = 'Tile: <b>' + tx + ', ' + ty + '</b>';
   for (const name of mapModel.layerOrder) {
     const id = mapModel.layers[name][ty * mapModel.W + tx];
     if (id) out += ' · ' + name + '=<b>' + id + '</b>';
@@ -892,7 +962,6 @@ function updateInfo(tx, ty) {
   infoEl.innerHTML = out;
 }
 
-// ─── Wheel ───
 wrap.addEventListener('wheel', (e) => {
   if (!mapModel) return;
   e.preventDefault();
@@ -902,7 +971,6 @@ wrap.addEventListener('wheel', (e) => {
   zoomVal.textContent = renderer.view.zoom.toFixed(2);
 }, { passive: false });
 
-// ─── Hotkeys ───
 window.addEventListener('keydown', (e) => {
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
   if (e.key === 'Escape') {
@@ -919,7 +987,6 @@ window.addEventListener('keydown', (e) => {
   if (t) handleToolClick(t);
 });
 
-// ─── Open / Save ───
 document.getElementById('btnOpen').addEventListener('click', () => {
   document.getElementById('fileInput').click();
 });
@@ -927,7 +994,7 @@ document.getElementById('btnOpen').addEventListener('click', () => {
 document.getElementById('fileInput').addEventListener('change', async (e) => {
   const file = e.target.files[0];
   if (!file) return;
-  statusEl.textContent = 'Парсинг...';
+  statusEl.textContent = 'Parsing...';
   try {
     const text = await file.text();
     const parsed = RW.TMX.parse(text);
@@ -938,13 +1005,14 @@ document.getElementById('fileInput').addEventListener('change', async (e) => {
       ' · layers: ' + mapModel.layerOrder.length;
   } catch (err) {
     console.error(err);
-    statusEl.textContent = 'Ошибка: ' + err.message;
+    statusEl.textContent = 'Error: ' + err.message;
   }
   e.target.value = '';
 });
 
 async function initFromParsed(parsed, filename) {
   mapModel = new RW.MapModel(parsed);
+  _markersCache = null;
 
   renderer = new RW.Renderer(cv, () => mapModel);
   renderer.layerVisibility = {};
@@ -952,6 +1020,10 @@ async function initFromParsed(parsed, filename) {
   renderer.onFps = (fps, chunks) => {
     fpsEl.textContent = fps + ' fps · chunks ' + chunks;
   };
+  renderer.getMarkers = () => getMarkersCached();
+  renderer.showMarkers = !!settings.showMarkers;
+  renderer.markerScale = settings.markerScale || 1;
+  renderer.setBg(settings.canvasBg || '#0a0a0a');
 
   activeLayer = mapModel.layerOrder[0] || null;
   brushGroup = [];
@@ -996,7 +1068,8 @@ async function initFromParsed(parsed, filename) {
     getModel: () => typesModel,
     getPickMode: () => pickMode,
     addToBrush: (id, add) => addToBrush(id, add),
-    applyPick: (id) => applyPick(id)
+    applyPick: (id) => applyPick(id),
+    onAddTileset: () => document.getElementById('tilesetInput').click()
   });
 
   typesPanel = new RW.TypesPanel(typesBodyEl, {
@@ -1036,26 +1109,25 @@ async function initFromParsed(parsed, filename) {
 
 document.getElementById('btnSave').addEventListener('click', saveMap);
 function saveMap() {
-  if (!mapModel) { statusEl.textContent = 'Нет карты'; return; }
+  if (!mapModel) { statusEl.textContent = 'No map'; return; }
   try {
     const xml = RW.TMX.save(mapModel, typesModel);
     let filename = (mapNameEl.value || '').trim() || 'map.tmx';
     if (!filename.toLowerCase().endsWith('.tmx')) filename += '.tmx';
     U.download(filename, xml, 'application/xml');
-    statusEl.textContent = 'Сохранено: ' + filename;
+    statusEl.textContent = 'Saved: ' + filename;
     mapModel.rawXml = xml;
   } catch (err) {
     console.error(err);
-    statusEl.textContent = 'Ошибка сохранения: ' + err.message;
+    statusEl.textContent = 'Save error: ' + err.message;
   }
 }
 
-// ─── Resize map ───
 document.getElementById('btnResize').addEventListener('click', () => {
-  if (!mapModel) { statusEl.textContent = 'Нет карты'; return; }
-  const nw = parseInt(prompt('Новая ширина (' + mapModel.W + '):', String(mapModel.W)), 10);
+  if (!mapModel) { statusEl.textContent = 'No map'; return; }
+  const nw = parseInt(prompt('New width (' + mapModel.W + '):', String(mapModel.W)), 10);
   if (isNaN(nw) || nw < 1 || nw > 4096) return;
-  const nh = parseInt(prompt('Новая высота (' + mapModel.H + '):', String(mapModel.H)), 10);
+  const nh = parseInt(prompt('New height (' + mapModel.H + '):', String(mapModel.H)), 10);
   if (isNaN(nh) || nh < 1 || nh > 4096) return;
   const entry = mapModel.resize(nw, nh);
   if (!entry) return;
@@ -1064,20 +1136,28 @@ document.getElementById('btnResize').addEventListener('click', () => {
   zoomVal.textContent = renderer.view.zoom.toFixed(2);
   if (layersPanel) layersPanel.build();
   renderer.render();
-  statusEl.textContent = 'Размер: ' + nw + '×' + nh;
+  statusEl.textContent = 'Size: ' + nw + '×' + nh;
 });
 
-// ─── Add tileset from PNG ───
-document.getElementById('btnAddTileset').addEventListener('click', () => {
-  if (!mapModel) { statusEl.textContent = 'Сначала открой карту'; return; }
-  document.getElementById('tilesetInput').click();
+document.getElementById('btnMerge').addEventListener('click', () => {
+  RW.MergeUI.open({
+    onMerge: async (mergedParsed) => {
+      await RW.TMX.loadImages(mergedParsed);
+      await initFromParsed(mergedParsed, 'merged.tmx');
+      statusEl.textContent = 'Merged: ' + mergedParsed.W + '×' + mergedParsed.H +
+        ' · tilesets: ' + mergedParsed.tilesets.length +
+        ' · layers: ' + mergedParsed.layerOrder.length;
+    }
+  });
 });
+
+document.getElementById('btnExportMap').addEventListener('click', exportMapPNG);
 
 document.getElementById('tilesetInput').addEventListener('change', async (e) => {
   const file = e.target.files[0];
   e.target.value = '';
   if (!file) return;
-  if (!mapModel) return;
+  if (!mapModel) { statusEl.textContent = 'Open a map first'; return; }
   try {
     const buf = await file.arrayBuffer();
     const bytes = new Uint8Array(buf);
@@ -1086,7 +1166,7 @@ document.getElementById('tilesetInput').addEventListener('change', async (e) => 
     const img = new Image();
     await new Promise((resolve, reject) => {
       img.onload = resolve;
-      img.onerror = () => reject(new Error('PNG не читается'));
+      img.onerror = () => reject(new Error('Cannot read PNG'));
       img.src = dataUrl;
     });
 
@@ -1094,12 +1174,12 @@ document.getElementById('tilesetInput').addEventListener('change', async (e) => 
     const cols = Math.floor(img.naturalWidth / tw);
     const rows = Math.floor(img.naturalHeight / th);
     if (cols < 1 || rows < 1) {
-      throw new Error('PNG меньше одной клетки ' + tw + '×' + th);
+      throw new Error('PNG smaller than one tile ' + tw + '×' + th);
     }
     const tilecount = cols * rows;
 
     const defaultName = (file.name || 'tileset').replace(/\.png$/i, '');
-    const name = prompt('Имя tileset:', defaultName);
+    const name = prompt('Tileset name:', defaultName);
     if (!name) return;
 
     let firstgid = 1;
@@ -1123,11 +1203,12 @@ document.getElementById('tilesetInput').addEventListener('change', async (e) => 
       tilesetTabs.activeIdx = mapModel.tilesets.indexOf(ts);
       tilesetTabs.build();
     }
-    statusEl.textContent = 'Tileset добавлен: ' + name +
+    invalidateMarkersCache();
+    statusEl.textContent = 'Tileset added: ' + name +
       ' (' + cols + '×' + rows + ', firstgid=' + firstgid + ')';
   } catch (err) {
     console.error(err);
-    statusEl.textContent = 'Ошибка tileset: ' + err.message;
+    statusEl.textContent = 'Tileset error: ' + err.message;
   }
 });
 
@@ -1135,7 +1216,7 @@ document.getElementById('tilesetInput').addEventListener('change', async (e) => 
 // IMPORT MINI TNS
 // ═══════════════════════════════════════════════
 function startMiniTNSImport() {
-  if (!mapModel) { statusEl.textContent = 'Сначала открой карту'; return; }
+  if (!mapModel) { statusEl.textContent = 'Open a map first'; return; }
   const inp = document.createElement('input');
   inp.type = 'file';
   inp.accept = 'image/png,image/*';
@@ -1159,7 +1240,7 @@ async function importMiniTNS(file) {
   const img = new Image();
   await new Promise((resolve, reject) => {
     img.onload = resolve;
-    img.onerror = () => reject(new Error('PNG не читается'));
+    img.onerror = () => reject(new Error('Cannot read PNG'));
     img.src = dataUrl;
   });
 
@@ -1167,15 +1248,15 @@ async function importMiniTNS(file) {
   const cols = Math.floor(img.naturalWidth / tw);
   const rows = Math.floor(img.naturalHeight / th);
   if (cols !== 3 || rows !== 5) {
-    throw new Error('PNG должен быть ровно 3×5 тайлов (' +
-      (tw*3) + '×' + (th*5) + ' px, получено ' +
+    throw new Error('PNG must be exactly 3×5 tiles (' +
+      (tw*3) + '×' + (th*5) + ' px, got ' +
       img.naturalWidth + '×' + img.naturalHeight +
-      ' = ' + cols + '×' + rows + ' тайлов)');
+      ' = ' + cols + '×' + rows + ' tiles)');
   }
   const tilecount = 15;
 
   const defaultName = (file.name || 'MiniTNS').replace(/\.png$/i, '');
-  const name = prompt('Имя tileset:', defaultName);
+  const name = prompt('Tileset name:', defaultName);
   if (!name) return;
 
   let firstgid = 1;
@@ -1200,7 +1281,7 @@ async function importMiniTNS(file) {
     tilesetTabs.build();
   }
 
-  const typeName = prompt('Имя типа:', defaultName) || defaultName;
+  const typeName = prompt('Type name:', defaultName) || defaultName;
   const t = typesModel.add(typeName, typesModel.types.length);
 
   const g = (local) => firstgid + local;
@@ -1210,7 +1291,6 @@ async function importMiniTNS(file) {
     { tileID: g(11), weight: 1 },
     { tileID: g(14), weight: 1 }
   ];
-
   t.edges.NWo = g(0);
   t.edges.N   = g(1);
   t.edges.NEo = g(2);
@@ -1226,16 +1306,264 @@ async function importMiniTNS(file) {
 
   activeTypeId = t.id;
   if (typesPanel) typesPanel.build();
-  statusEl.textContent = 'MiniTNS: tileset "' + name + '" + тип "' + typeName +
+  invalidateMarkersCache();
+  statusEl.textContent = 'MiniTNS: tileset "' + name + '" + type "' + typeName +
     '" (firstgid=' + firstgid + ')';
 }
 
-window.addEventListener('DOMContentLoaded', () => {
-  if (settings.activeTool) activeTool = settings.activeTool;
-  buildTools();
+// ═══════════════════════════════════════════════
+// MARKERS CACHE
+// ═══════════════════════════════════════════════
+let _markersCache = null;
+
+function getMarkersCached() {
+  if (!mapModel) return { starts: [], respools: [] };
+  if (_markersCache) return _markersCache;
+  _markersCache = RW.Markers.find(mapModel);
+  return _markersCache;
+}
+
+function invalidateMarkersCache() {
+  _markersCache = null;
+}
+
+// ═══════════════════════════════════════════════
+// EXPORT _map.png — 500×500, сохраняет пропорции
+// ═══════════════════════════════════════════════
+function findTsForId(tilesets, id) {
+  let found = null;
+  for (const ts of tilesets) {
+    if (id >= ts.firstgid) found = ts; else break;
+  }
+  return found;
+}
+
+function renderMapToNative(mapModel, markers) {
+  const W = mapModel.W, H = mapModel.H;
+  const tw = mapModel.tw, th = mapModel.th;
+  const nativeW = W * tw, nativeH = H * th;
+
+  const off = document.createElement('canvas');
+  off.width = nativeW;
+  off.height = nativeH;
+  const octx = off.getContext('2d');
+  octx.imageSmoothingEnabled = false;
+
+  for (const lname of mapModel.layerOrder) {
+    const data = mapModel.layers[lname];
+    if (!data) continue;
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        const id = data[y * W + x];
+        if (!id) continue;
+        const ts = findTsForId(mapModel.tilesets, id);
+        if (!ts || !ts.image) continue;
+        const localID = id - ts.firstgid;
+        const col = localID % ts.columns;
+        const row = Math.floor(localID / ts.columns);
+        octx.drawImage(ts.image,
+          col * ts.tileW, row * ts.tileH, ts.tileW, ts.tileH,
+          x * tw, y * th, tw, th);
+      }
+    }
+  }
+
+  if (markers && RW.Markers) {
+    const M = RW.Markers;
+    const scale = settings.markerScale || 1;
+
+    // 500px — эталон, чтобы маркер был читаем в выходном PNG
+    const nativeScale = Math.max(nativeW, nativeH) / 500;
+
+    const dotR  = M.DOT_RADIUS_TILES  * tw * scale;
+    const circR = M.RADIUS_TILES      * tw * scale;
+    const fontPx = circR * 2 * M.FONT_RATIO;
+
+    for (const p of markers.respools) {
+      const cx = p.x * tw + tw / 2;
+      const cy = p.y * th + th / 2;
+      octx.beginPath();
+      octx.arc(cx, cy, dotR, 0, Math.PI * 2);
+      octx.fillStyle = '#ffea30';
+      octx.fill();
+      octx.strokeStyle = '#000';
+      octx.lineWidth = Math.max(1, nativeScale);
+      octx.stroke();
+    }
+
+    for (const s of markers.starts) {
+      const cx = s.x * tw + tw / 2;
+      const cy = s.y * th + th / 2;
+      const color = M.colorFor(s.team);
+
+      octx.beginPath();
+      octx.arc(cx, cy, circR, 0, Math.PI * 2);
+      octx.fillStyle = 'rgba(0,0,0,0.5)';
+      octx.fill();
+      octx.strokeStyle = 'rgba(0,0,0,0.7)';
+      octx.lineWidth = Math.max(1, circR * 0.06);
+      octx.stroke();
+
+      octx.font = 'bold ' + fontPx + 'px "Arial Black", Arial, sans-serif';
+      octx.textAlign = 'center';
+      octx.textBaseline = 'middle';
+      octx.fillStyle = color;
+      octx.shadowColor = 'rgba(0,0,0,0.9)';
+      octx.shadowBlur = fontPx * 0.15;
+      octx.fillText(String(s.team + 1), cx, cy);
+      octx.shadowBlur = 0;
+    }
+  }
+
+  return { off, nativeW, nativeH };
+}
+
+function composePNG(native, nativeW, nativeH, targetSize) {
+  const out = document.createElement('canvas');
+  out.width = targetSize;
+  out.height = targetSize;
+  const o2 = out.getContext('2d');
+  o2.fillStyle = '#000';
+  o2.fillRect(0, 0, targetSize, targetSize);
+
+  const scale = Math.min(targetSize / nativeW, targetSize / nativeH);
+  const dw = Math.max(1, Math.round(nativeW * scale));
+  const dh = Math.max(1, Math.round(nativeH * scale));
+  const dx = Math.floor((targetSize - dw) / 2);
+  const dy = Math.floor((targetSize - dh) / 2);
+
+  o2.imageSmoothingEnabled = true;
+  o2.imageSmoothingQuality = 'high';
+  o2.drawImage(native, 0, 0, nativeW, nativeH, dx, dy, dw, dh);
+  return out;
+}
+
+function exportMapPNG() {
+  if (!mapModel) { statusEl.textContent = 'No map'; return; }
+  try {
+    const markers = settings.showMarkers ? getMarkersCached() : null;
+    const { off, nativeW, nativeH } = renderMapToNative(mapModel, markers);
+    const composed = composePNG(off, nativeW, nativeH, 500);
+
+    composed.toBlob(b => {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(b);
+      const baseName = (mapNameEl.value || 'map').replace(/\.tmx$/i, '') || 'map';
+      a.download = baseName + '_map.png';
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 3000);
+    }, 'image/png');
+
+    statusEl.textContent = 'Export: ' + nativeW + '×' + nativeH + ' → 500×500' +
+      (markers ? ' · markers ' + (markers.starts.length + markers.respools.length) : '');
+  } catch (err) {
+    console.error(err);
+    statusEl.textContent = 'Export error: ' + err.message;
+  }
+}
+
+// ═══════════════════════════════════════════════
+// SETTINGS MODAL
+// ═══════════════════════════════════════════════
+let settingsModalEl = null;
+let settingsSnapshot = null;
+
+function openSettings() {
+  if (!settingsModalEl) {
+    settingsModalEl = document.getElementById('settingsModal');
+    document.getElementById('settingsClose').onclick = closeSettings;
+    document.getElementById('settingsCancel').onclick = closeSettings;
+    document.getElementById('settingsApply').onclick = applySettings;
+    // live-update от label чекбоксов
+    document.getElementById('settingsCanvasBg').addEventListener('input', (e) => {
+      wrap.style.background = e.target.value;
+      if (renderer) renderer.render();
+    });
+    document.getElementById('settingsMarkerScale').addEventListener('input', (e) => {
+      const v = parseFloat(e.target.value);
+      document.getElementById('settingsMarkerScaleVal').textContent = v.toFixed(2) + '×';
+      if (renderer) {
+        renderer.markerScale = v;
+        renderer.render();
+      }
+    });
+  }
+
+  settingsSnapshot = {
+    canvasBg: settings.canvasBg,
+    showMarkers: settings.showMarkers,
+    markerScale: settings.markerScale,
+    lang: settings.lang
+  };
+
+  document.getElementById('settingsLangEn').classList.toggle('active', settings.lang === 'en');
+  document.getElementById('settingsLangRu').classList.toggle('active', settings.lang === 'ru');
+  document.getElementById('settingsCanvasBg').value = settings.canvasBg;
+  document.getElementById('settingsShowMarkers').checked = !!settings.showMarkers;
+  document.getElementById('settingsMarkerScale').value = settings.markerScale || 1;
+  document.getElementById('settingsMarkerScaleVal').textContent =
+    (settings.markerScale || 1).toFixed(2) + '×';
+
+  wrap.style.background = settings.canvasBg;
+
+  settingsModalEl.classList.remove('hidden');
+}
+
+function closeSettings() {
+  // откат live-preview к сохранённому
+  settings.canvasBg = settingsSnapshot.canvasBg;
+  settings.showMarkers = settingsSnapshot.showMarkers;
+  settings.markerScale = settingsSnapshot.markerScale;
+  settings.lang = settingsSnapshot.lang;
+  RW.Storage.saveSettings(settings);
+
+  wrap.style.background = settings.canvasBg;
+  if (renderer) {
+    renderer.setBg(settings.canvasBg);
+    renderer.showMarkers = !!settings.showMarkers;
+    renderer.markerScale = settings.markerScale || 1;
+    renderer.render();
+  }
+  RW.I18N.set(settings.lang);
+  if (settingsModalEl) settingsModalEl.classList.add('hidden');
+}
+
+function applySettings() {
+  settings.canvasBg = document.getElementById('settingsCanvasBg').value || '#0a0a0a';
+  settings.showMarkers = document.getElementById('settingsShowMarkers').checked;
+  settings.markerScale = parseFloat(document.getElementById('settingsMarkerScale').value) || 1;
+  RW.Storage.saveSettings(settings);
+
+  wrap.style.background = settings.canvasBg;
+  if (renderer) {
+    renderer.setBg(settings.canvasBg);
+    renderer.showMarkers = !!settings.showMarkers;
+    renderer.markerScale = settings.markerScale;
+    renderer.render();
+  }
+
+  if (settingsModalEl) settingsModalEl.classList.add('hidden');
+  statusEl.textContent = 'Settings applied';
+}
+
+function pickLang(lang) {
+  settings.lang = lang;
+  RW.I18N.set(lang);
+  document.getElementById('settingsLangEn').classList.toggle('active', lang === 'en');
+  document.getElementById('settingsLangRu').classList.toggle('active', lang === 'ru');
+}
+
+document.getElementById('btnSettings').addEventListener('click', openSettings);
+document.getElementById('settingsLangEn').addEventListener('click', () => pickLang('en'));
+document.getElementById('settingsLangRu').addEventListener('click', () => pickLang('ru'));
+// ─── Docs link ───
+document.getElementById('btnDocs').addEventListener('click', () => {
+  window.open('WebTiledDoc.html', '_blank', 'noopener');
 });
 
-// ─── Bottom section toggles ───
+// ═══════════════════════════════════════════════
+// Bottom section toggles
+// ═══════════════════════════════════════════════
 document.getElementById('btnAtlasesTab').addEventListener('click', () => {
   const btn = document.getElementById('btnAtlasesTab');
   const on = btn.classList.toggle('active');
@@ -1251,8 +1579,19 @@ document.getElementById('btnTypesTab').addEventListener('click', () => {
 });
 
 document.getElementById('btnToggleBottom').addEventListener('click', (e) => {
-  bottomEl.classList.toggle('collapsed');
-  e.target.textContent = bottomEl.classList.contains('collapsed') ? '▲' : '▼';
+  const isCollapsed = bottomEl.classList.contains('collapsed');
+  if (!isCollapsed) {
+    const h = bottomEl.getBoundingClientRect().height;
+    bottomEl.dataset.savedHeight = String(Math.round(h));
+    bottomEl.style.height = '';
+    bottomEl.classList.add('collapsed');
+    e.target.textContent = '▲';
+  } else {
+    bottomEl.classList.remove('collapsed');
+    const saved = parseInt(bottomEl.dataset.savedHeight || '0', 10);
+    bottomEl.style.height = saved > 40 ? saved + 'px' : '340px';
+    e.target.textContent = '▼';
+  }
   setTimeout(() => { if (renderer) renderer.resize(); }, 220);
 });
 
@@ -1261,6 +1600,9 @@ document.getElementById('btnToggleBottom').addEventListener('click', (e) => {
   bottomGrabberEl.addEventListener('mousedown', (e) => {
     e.preventDefault();
     resizing = true;
+    delete bottomEl.dataset.savedHeight;
+    bottomEl.classList.remove('collapsed');
+    document.getElementById('btnToggleBottom').textContent = '▼';
     bottomEl.classList.add('no-transition');
     bottomGrabberEl.classList.add('dragging');
     document.body.style.cursor = 'ns-resize';
@@ -1271,10 +1613,6 @@ document.getElementById('btnToggleBottom').addEventListener('click', (e) => {
     const h = window.innerHeight - e.clientY;
     const clamped = Math.max(60, Math.min(window.innerHeight - 120, h));
     bottomEl.style.height = clamped + 'px';
-    if (bottomEl.classList.contains('collapsed')) {
-      bottomEl.classList.remove('collapsed');
-      document.getElementById('btnToggleBottom').textContent = '▼';
-    }
     if (renderer) renderer.resize();
   });
   window.addEventListener('mouseup', () => {
@@ -1293,15 +1631,13 @@ document.getElementById('btnFit').addEventListener('click', () => {
 document.getElementById('btnReset').addEventListener('click', () => {
   if (renderer) { renderer.resetView(); zoomVal.textContent = renderer.view.zoom.toFixed(2); }
 });
-document.getElementById('btnSettings').addEventListener('click', () => alert('В разработке.'));
 document.getElementById('btnHelp').addEventListener('click', () => alert(
-  'B — Кисть, T — Terrain, C — Classic autotile\n' +
-  'E — Ластик, R — Прямоугольник, F — Заливка, I — Пипетка, P — Панорама\n' +
-  'Ctrl+Z / Ctrl+Y — отмена/повтор, Ctrl+S — сохранить\n' +
-  'Esc — отмена режима выбора тайла\n\n' +
-  'Classic работает на АКТИВНОМ слое.\n' +
-  'MiniTNS: PNG 3×5 тайлов → новый tileset + тип.\n' +
-  'Tileset delete: × рядом с вкладкой в ATLASES.'
+  'B — Brush, T — Terrain, C — Classic autotile\n' +
+  'E — Eraser, R — Rect, F — Fill, I — Picker, P — Pan\n' +
+  'Ctrl+Z / Ctrl+Y — Undo / Redo, Ctrl+S — Save\n' +
+  'Esc — cancel pick mode\n\n' +
+  'Classic autotile works on the ACTIVE layer.\n' +
+  'MiniTNS: PNG 3×5 tiles → new tileset + type.'
 ));
 document.getElementById('btnAddEmpty').addEventListener('click', addEmptyToBrush);
 document.getElementById('btnFlood').addEventListener('click', runFloodDominant);
@@ -1311,8 +1647,18 @@ document.getElementById('btnClearBrush').addEventListener('click', () => {
   if (tilesetTabs) tilesetTabs.refreshSelection();
 });
 mapNameEl.addEventListener('input', () => { /* autosave disabled */ });
-
 document.getElementById('btnPickCancel').addEventListener('click', () => endPick());
 
+// ═══════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════
+window.addEventListener('DOMContentLoaded', () => {
+  if (settings.activeTool) activeTool = settings.activeTool;
+  wrap.style.background = settings.canvasBg || '#0a0a0a';
+  RW.I18N.apply();
+  buildTools();
+});
+
+RW.I18N.apply();
 buildTools();
 })(window.RWEditor = window.RWEditor || {});

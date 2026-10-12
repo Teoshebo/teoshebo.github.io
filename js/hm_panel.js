@@ -8,22 +8,20 @@ const HM = RW.HM = RW.HM || {};
 class HMGeneratorPanel {
   constructor(rootEl, ctx) {
     this.root = rootEl;
-    this.ctx = ctx;      // { getMap, getTypesModel, getGenerator, getRenderer, markDirty }
-    this.level = null;   // { level, w, h, levels, floorIdx }
-    this.importedPNG = null;   // { level, w, h, name }
-    this.rivers = [];    // [{ points: [{x,y,width,tension}], smooth }]
-    this.points = null;  // { starts, respools }
+    this.ctx = ctx;
+    this.level = null;
+    this.importedPNG = null;
+    this.rivers = [];
+    this.points = null;
     this.previewCanvas = null;
   }
 
   build() {
-    const self = this;
     this.root.innerHTML = '';
 
     const wrap = document.createElement('div');
     wrap.className = 'hm-panel';
 
-    // ─── Секция: PROCEDURAL ───
     wrap.appendChild(this.section('PROCEDURAL GENERATION', () => {
       const g = this.grid();
       g.appendChild(this.field('WIDTH', 'hm_w', 'number', 256, { min: 32, max: 2048 }));
@@ -57,12 +55,12 @@ class HMGeneratorPanel {
       }}
     ]));
 
-    // ─── Секция: PNG IMPORT ───
     wrap.appendChild(this.section('PNG IMPORT (base heightmap)', () => {
       const box = document.createElement('div');
       box.style.display = 'flex';
       box.style.gap = '8px';
       box.style.alignItems = 'center';
+      box.style.flexWrap = 'wrap';
 
       const inp = document.createElement('input');
       inp.type = 'file';
@@ -79,7 +77,6 @@ class HMGeneratorPanel {
           document.getElementById('hm_h').value = res.h;
           this.updatePngStatus();
           this.renderPreview();
-          this.ctx.markDirty && this.ctx.markDirty();
         } catch (err) {
           this.status('Ошибка PNG: ' + err.message, 'err');
         }
@@ -89,6 +86,15 @@ class HMGeneratorPanel {
 
       const btnClear = document.createElement('button');
       btnClear.textContent = 'CLEAR';
+      btnClear.className = 'danger';
+      btnClear.style.background = '#3a1a1a';
+      btnClear.style.borderColor = '#833';
+      btnClear.style.color = '#fdd';
+      btnClear.style.padding = '6px 12px';
+      btnClear.style.fontFamily = 'inherit';
+      btnClear.style.fontSize = '10px';
+      btnClear.style.borderRadius = '3px';
+      btnClear.style.cursor = 'pointer';
       btnClear.addEventListener('click', () => {
         this.importedPNG = null;
         this.updatePngStatus();
@@ -106,7 +112,6 @@ class HMGeneratorPanel {
       return box;
     }));
 
-    // ─── Секция: RIVERS ───
     wrap.appendChild(this.section('RIVERS', () => {
       const g = this.grid();
       g.appendChild(this.field('ENABLE', 'hm_rivOn', 'checkbox', true, {}));
@@ -121,7 +126,6 @@ class HMGeneratorPanel {
       }}
     ]));
 
-    // ─── Секция: POINTS ───
     wrap.appendChild(this.section('AUTO POINTS', () => {
       const g = this.grid();
       g.appendChild(this.field('PLAYERS', 'hm_aP', 'number', 2, { min: 1, max: 5 }));
@@ -140,7 +144,6 @@ class HMGeneratorPanel {
       }}
     ]));
 
-    // ─── PREVIEW ───
     wrap.appendChild(this.section('PREVIEW', () => {
       const cv = document.createElement('canvas');
       cv.id = 'hm_preview';
@@ -154,7 +157,6 @@ class HMGeneratorPanel {
       return cv;
     }));
 
-    // ─── APPLY ───
     wrap.appendChild(this.section('APPLY TO MAP', () => {
       const g = this.grid();
       g.appendChild(this.field('TARGET LAYER', 'hm_target', 'text', 'Ground', {}));
@@ -166,7 +168,6 @@ class HMGeneratorPanel {
       { id: 'hm_apply', text: 'APPLY', cls: 'primary', onClick: () => this.doApply() }
     ]));
 
-    // ─── REPORT ───
     const rep = document.createElement('div');
     rep.id = 'hm_report';
     rep.className = 'report';
@@ -176,7 +177,6 @@ class HMGeneratorPanel {
     this.root.appendChild(wrap);
   }
 
-  // ─── helpers для UI ───
   section(title, contentFn) {
     const s = document.createElement('div');
     s.className = 'hm-section';
@@ -253,7 +253,6 @@ class HMGeneratorPanel {
       : 'PNG не загружен';
   }
 
-  // ─── параметры ───
   collectOpts() {
     const num = id => parseFloat(document.getElementById(id).value) || 0;
     const int = id => parseInt(document.getElementById(id).value, 10) || 0;
@@ -273,7 +272,6 @@ class HMGeneratorPanel {
     };
   }
 
-  // ─── генерация ───
   doGenerate() {
     const opts = this.collectOpts();
     if (opts.w < 2 || opts.h < 2) { this.status('W/H слишком малы', 'err'); return; }
@@ -281,12 +279,10 @@ class HMGeneratorPanel {
     let level, w, h, levels, floorIdx;
 
     if (this.importedPNG && this.importedPNG.w === opts.w && this.importedPNG.h === opts.h) {
-      // используем PNG как базу
       levels = opts.levels;
       w = opts.w; h = opts.h;
       level = new Uint8Array(this.importedPNG.level);
       floorIdx = Math.max(0, levels - 1 - opts.flatten);
-      // сжать bottom под flatten
       for (let i = 0; i < level.length; i++)
         if (level[i] >= floorIdx) level[i] = floorIdx;
     } else {
@@ -295,7 +291,6 @@ class HMGeneratorPanel {
       levels = res.levels; floorIdx = res.floorIdx;
     }
 
-    // реки
     if (opts.riversOn && this.rivers.length) {
       HM.carveRivers(level, w, h, floorIdx, this.rivers.map(r => ({
         points: r.points, smooth: opts.riverSmooth
@@ -307,7 +302,6 @@ class HMGeneratorPanel {
     this.status('GENERATE ok · ' + w + '×' + h + ' · уровней ' + levels);
   }
 
-  // ─── авто-река (S-образная) ───
   addAutoRiver() {
     if (!this.level) { this.status('Сначала GENERATE', 'err'); return; }
     const { w, h } = this.level;
@@ -332,7 +326,6 @@ class HMGeneratorPanel {
     this.status('Добавлена река #' + this.rivers.length);
   }
 
-  // ─── точки ───
   doGeneratePoints() {
     if (!this.level) { this.status('Сначала GENERATE', 'err'); return; }
     const num = id => parseFloat(document.getElementById(id).value) || 0;
@@ -353,7 +346,6 @@ class HMGeneratorPanel {
     this.status('POINTS: ' + res.starts.length + ' стартов, ' + res.respools.length + ' respools');
   }
 
-  // ─── превью ───
   renderPreview() {
     const cv = this.previewCanvas;
     if (!cv) return;
@@ -369,7 +361,6 @@ class HMGeneratorPanel {
     const img = HM.levelToImageData(level, w, h, levels);
     cv.getContext('2d').putImageData(img, 0, 0);
 
-    // overlay точек
     const g = cv.getContext('2d');
     if (this.points) {
       for (const s of this.points.starts) {
@@ -387,14 +378,12 @@ class HMGeneratorPanel {
       }
     }
 
-    // масштаб отображения
     const maxSide = 256;
     const scale = Math.min(maxSide / w, maxSide / h, 1);
     cv.style.width = Math.round(w * scale) + 'px';
     cv.style.height = Math.round(h * scale) + 'px';
   }
 
-  // ─── применение к карте ───
   doApply() {
     if (!this.level) { this.status('Сначала GENERATE', 'err'); return; }
     const mapModel = this.ctx.getMap();
@@ -414,7 +403,7 @@ class HMGeneratorPanel {
     });
     if (!res.ok) { this.status('APPLY: ' + res.error, 'err'); return; }
 
-    const n = HM.commitToUndo(mapModel, res);
+    HM.commitToUndo(mapModel, res);
     const r = this.ctx.getRenderer();
     if (r) { r.invalidate(); r.render(); }
     this.status('APPLY ok: ' + res.changesTarget.length + ' клеток в ' +
@@ -424,14 +413,20 @@ class HMGeneratorPanel {
 
 // ═══════════════════════════════════════════════
 // 3D PANEL
+//
+// HEIGHT SOURCE: Generator/PNG — ИЛИ — Ground layer
+// COLOR MODE:    Map texture / palette / grayscale / PNG-file
+// MARKERS:       включается чекбоксом showMarkers в топбаре
 // ═══════════════════════════════════════════════
 class HMView3DPanel {
   constructor(rootEl, ctx) {
     this.root = rootEl;
     this.ctx = ctx;
     this.canvas = null;
-    this.pngRGBA = null;   // для colorMode='png'
+    this.pngRGBA = null;
     this.pngW = 0; this.pngH = 0;
+    this._texCache = new Map();
+    this._lastSourceInfo = '';
   }
 
   build() {
@@ -439,28 +434,25 @@ class HMView3DPanel {
     const wrap = document.createElement('div');
     wrap.className = 'hm-panel';
 
-    // controls
-    wrap.appendChild(this.section('CONTROLS', () => {
+    wrap.appendChild(this.section('SOURCE', () => {
       const g = document.createElement('div');
       g.className = 'hm-grid';
 
-      const l1 = document.createElement('label');
-      l1.className = 'hm-field';
-      l1.innerHTML = '<span>COLOR MODE</span>';
-      const sel = document.createElement('select');
-      sel.id = 'v3_colorMode';
-      for (const [v, txt] of [['palette','Classic'],['gray','Grayscale'],['png','PNG']]) {
-        const o = document.createElement('option');
-        o.value = v; o.textContent = txt;
-        sel.appendChild(o);
-      }
-      sel.value = 'palette';
-      l1.appendChild(sel);
-      g.appendChild(l1);
+      g.appendChild(this.select('HEIGHT SOURCE', 'v3_heightSrc', 'generator', [
+        ['generator', 'Generator / PNG'],
+        ['ground',    'Ground layer']
+      ]));
+
+      g.appendChild(this.select('COLOR MODE', 'v3_colorMode', 'texture', [
+        ['texture', 'Map texture (screenshot)'],
+        ['palette', 'Classic palette'],
+        ['gray',    'Grayscale'],
+        ['png',     'Imported PNG file']
+      ]));
 
       const l2 = document.createElement('label');
       l2.className = 'hm-field';
-      l2.innerHTML = '<span>PNG (для mode=PNG)</span>';
+      l2.innerHTML = '<span>PNG (для color=PNG)</span>';
       const png = document.createElement('input');
       png.type = 'file'; png.id = 'v3_pngFile';
       png.accept = 'image/*';
@@ -472,9 +464,9 @@ class HMView3DPanel {
           if (!map) throw new Error('Нет карты');
           this.pngRGBA = await RW.HM.importPNG_RGBA(f, map.W, map.H);
           this.pngW = map.W; this.pngH = map.H;
-          document.getElementById('v3_status').textContent = 'PNG загружен (' + map.W + '×' + map.H + ')';
+          this.status('PNG загружен (' + map.W + '×' + map.H + ')');
         } catch (err) {
-          document.getElementById('v3_status').textContent = 'Ошибка: ' + err.message;
+          this.status('Ошибка PNG: ' + err.message);
         }
         e.target.value = '';
       });
@@ -533,6 +525,21 @@ class HMView3DPanel {
     if (content) s.appendChild(content);
     return s;
   }
+  select(label, id, value, opts) {
+    const l = document.createElement('label');
+    l.className = 'hm-field';
+    l.innerHTML = '<span>' + label + '</span>';
+    const sel = document.createElement('select');
+    sel.id = id;
+    for (const [v, txt] of opts) {
+      const o = document.createElement('option');
+      o.value = v; o.textContent = txt;
+      sel.appendChild(o);
+    }
+    sel.value = value;
+    l.appendChild(sel);
+    return l;
+  }
   slider(label, id, min, max, step, value) {
     const l = document.createElement('label');
     l.className = 'hm-field';
@@ -557,47 +564,222 @@ class HMView3DPanel {
     }
     return row;
   }
+  status(t) {
+    const s = document.getElementById('v3_status');
+    if (s) s.textContent = t;
+  }
+
+  // ─────────────────────────────────────────────
+  // СКРИНШОТ КАРТЫ: 1 пиксель на тайл.
+  //
+  // Композитинг снизу вверх по всем видимым слоям:
+  //   result = sample * a + result * (1 - a)
+  //
+  // Цвет и альфа тайла — средневзвешенные по альфе пиксели
+  // (это даёт корректный downscale тайла 20×20 → 1×1 с
+  // сохранением полупрозрачности). Decor-тайлы с
+  // крапинками становятся полупрозрачным налётом,
+  // а не сплошной плашкой.
+  // ─────────────────────────────────────────────
+  grabMapTexture() {
+    const map = this.ctx.getMap();
+    const r = this.ctx.getRenderer();
+    if (!map || !r) return null;
+
+    const w = map.W, h = map.H;
+    const data = new Uint8ClampedArray(w * h * 4);
+    const visibleLayers = map.layerOrder.filter(n => r.isLayerVisible(n));
+
+    const tileAvg = (id) => {
+      const cached = this._texCache.get(id);
+      if (cached) return cached;
+      const ts = r.findTileset(id);
+      if (!ts || !ts.image) {
+        const v = { r: 40, g: 40, b: 40, a: 1 };
+        this._texCache.set(id, v);
+        return v;
+      }
+      const localID = id - ts.firstgid;
+      const col = localID % ts.columns;
+      const row = Math.floor(localID / ts.columns);
+      const tw = ts.tileW, th = ts.tileH;
+
+      const oc = document.createElement('canvas');
+      oc.width = tw; oc.height = th;
+      const og = oc.getContext('2d', { willReadFrequently: true });
+      og.drawImage(ts.image,
+        col * tw, row * th, tw, th,
+        0, 0, tw, th);
+      const px = og.getImageData(0, 0, tw, th).data;
+
+      let sr = 0, sg = 0, sb = 0, sa = 0;
+      const n = tw * th;
+      for (let i = 0; i < n; i++) {
+        const a = px[i*4+3];
+        if (a === 0) continue;
+        sr += px[i*4]   * a;
+        sg += px[i*4+1] * a;
+        sb += px[i*4+2] * a;
+        sa += a;
+      }
+      let v;
+      if (sa === 0) {
+        v = { r: 0, g: 0, b: 0, a: 0 };
+      } else {
+        v = {
+          r: sr / sa,
+          g: sg / sa,
+          b: sb / sa,
+          a: sa / (n * 255)
+        };
+      }
+      this._texCache.set(id, v);
+      return v;
+    };
+
+    const BG = { r: 10, g: 10, b: 10 };
+
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const idx = y * w + x;
+      let cr = BG.r, cg = BG.g, cb = BG.b;
+
+      for (let li = 0; li < visibleLayers.length; li++) {
+        const id = map.layers[visibleLayers[li]][idx];
+        if (!id) continue;
+        const t = tileAvg(id);
+        const a = t.a;
+        if (a <= 0) continue;
+        if (a >= 1) {
+          cr = t.r; cg = t.g; cb = t.b;
+          continue;
+        }
+        cr = t.r * a + cr * (1 - a);
+        cg = t.g * a + cg * (1 - a);
+        cb = t.b * a + cb * (1 - a);
+      }
+
+      data[idx*4]   = cr;
+      data[idx*4+1] = cg;
+      data[idx*4+2] = cb;
+      data[idx*4+3] = 255;
+    }
+
+    return data;
+  }
 
   doRender() {
     const mapModel = this.ctx.getMap();
-    if (!mapModel) { this.status('Нет карты'); return; }
-    const ground = mapModel.layers.Ground;
-    if (!ground) { this.status('Нет Ground'); return; }
+    const heightSrc = document.getElementById('v3_heightSrc').value;
+    const colorMode = document.getElementById('v3_colorMode').value;
 
-    const typesModel = this.ctx.getTypesModel();
-    const levels = 10; // примерное, для визуализации. Можно уточнить из typesModel.
+    let w, h, levels, getLevel;
+    let diag = '';
 
-    // Определяем уровни по ID тайлов Ground: мапим priority → level
-    // (0 = самый высокий приоритет = peak, N-1 = самый низкий = floor)
-    const typesByPrio = [...typesModel.types].sort((a, b) => b.priority - a.priority);
-    const idToLevel = new Map();
-    typesByPrio.forEach((t, i) => {
-      for (const s of t.solids) idToLevel.set(s.tileID, i);
-    });
-    const maxLvl = Math.max(1, typesByPrio.length - 1);
+    if (heightSrc === 'generator') {
+      const genLevel = this.ctx.getGeneratorLevel ? this.ctx.getGeneratorLevel() : null;
+      if (!genLevel) {
+        this.status('Генератор пуст — нажми GENERATE во вкладке GENERATOR');
+        return;
+      }
+      w = genLevel.w; h = genLevel.h; levels = genLevel.levels;
+      const lv = genLevel.level;
+      getLevel = (x, y) => {
+        if (x < 0 || y < 0 || x >= w || y >= h) return levels - 1;
+        return lv[y * w + x];
+      };
+      const minMax = this.minMax(lv);
+      diag = 'h=generator ' + w + '×' + h + ' lv=' + levels +
+             ' min=' + minMax[0] + ' max=' + minMax[1];
+    } else {
+      if (!mapModel) { this.status('Нет карты'); return; }
+      const ground = mapModel.layers.Ground;
+      if (!ground) { this.status('Нет слоя Ground'); return; }
 
-    const getLevel = (x, y) => {
-      if (x < 0 || y < 0 || x >= mapModel.W || y >= mapModel.H) return maxLvl;
-      const id = ground[y * mapModel.W + x];
-      if (!id) return maxLvl;
-      const lv = idToLevel.get(id);
-      return (lv == null) ? maxLvl : lv;
-    };
+      const typesModel = this.ctx.getTypesModel();
+      const typesByPrio = [...typesModel.types].sort((a, b) => b.priority - a.priority);
+      const idToLevel = new Map();
+      typesByPrio.forEach((t, i) => {
+        for (const s of t.solids) idToLevel.set(s.tileID, i);
+      });
+      const allIds = new Set();
+      for (let i = 0; i < ground.length; i++) {
+        const id = ground[i];
+        if (id) allIds.add(id);
+      }
+      const sortedIds = Array.from(allIds).sort((a, b) => a - b);
+      const idFallback = new Map();
+      sortedIds.forEach((id, i) => idFallback.set(id, i));
+
+      const useFallback = typesByPrio.length === 0 || idToLevel.size === 0;
+      levels = Math.max(typesByPrio.length, sortedIds.length) || 1;
+      const maxLvl = Math.max(1, levels - 1);
+
+      getLevel = (x, y) => {
+        if (x < 0 || y < 0 || x >= mapModel.W || y >= mapModel.H) return maxLvl;
+        const id = ground[y * mapModel.W + x];
+        if (!id) return maxLvl;
+        const lv = useFallback ? idFallback.get(id) : idToLevel.get(id);
+        if (lv == null) return useFallback ? 0 : maxLvl;
+        return lv;
+      };
+      w = mapModel.W; h = mapModel.H;
+      diag = 'h=ground ' + w + '×' + h + (useFallback ? ' [fallback]' : '');
+    }
 
     const cell = parseFloat(document.getElementById('v3_cell').value) || 3;
     const heightPx = parseFloat(document.getElementById('v3_height').value) || 90;
-    const colorMode = document.getElementById('v3_colorMode').value;
+
+    let texture = null;
+    let pngData = null;
+    if (colorMode === 'texture') {
+      if (mapModel && w === mapModel.W && h === mapModel.H) {
+        texture = this.grabMapTexture();
+        diag += ' | tex=map';
+      } else {
+        diag += ' | tex=none (size mismatch)';
+      }
+    } else if (colorMode === 'png') {
+      if (this.pngRGBA && this.pngW === w && this.pngH === h) {
+        pngData = this.pngRGBA;
+        diag += ' | png';
+      } else {
+        diag += ' | png=none';
+      }
+    }
+
+    // ─── MARKERS ───
+    let markers = null;
+    const showMarkers = document.getElementById('showMarkers');
+    if (showMarkers && showMarkers.checked && RW.Markers) {
+      if (mapModel && w === mapModel.W && h === mapModel.H) {
+        markers = RW.Markers.find(mapModel);
+        diag += ' | markers=' + (markers.starts.length + markers.respools.length);
+      } else {
+        diag += ' | markers=skip (size mismatch)';
+      }
+    }
 
     RW.View3D.render({
       canvas: this.canvas,
-      w: mapModel.W, h: mapModel.H,
-      levels: maxLvl + 1,
+      w, h, levels,
       getLevel,
       colorMode,
-      pngData: this.pngRGBA,
-      cell, heightPx
+      pngData,
+      texture,
+      cell, heightPx,
+      markers
     });
-    this.status('OK · ' + this.canvas.width + '×' + this.canvas.height);
+    this._lastSourceInfo = diag;
+    this.status('OK · ' + this.canvas.width + '×' + this.canvas.height + ' · ' + diag);
+  }
+
+  minMax(arr) {
+    let mn = 255, mx = 0;
+    for (let i = 0; i < arr.length; i++) {
+      if (arr[i] < mn) mn = arr[i];
+      if (arr[i] > mx) mx = arr[i];
+    }
+    return [mn, mx];
   }
 
   doDownload() {
@@ -609,11 +791,6 @@ class HMView3DPanel {
       a.click();
       URL.revokeObjectURL(a.href);
     }, 'image/png');
-  }
-
-  status(t) {
-    const s = document.getElementById('v3_status');
-    if (s) s.textContent = t;
   }
 }
 

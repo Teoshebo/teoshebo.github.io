@@ -2,6 +2,7 @@
 'use strict';
 
 const LAYER_PALETTE = ['#8cf','#fc8','#8f8','#f8c','#c8f','#f88','#ff8','#8ff','#f8f'];
+const PROTECTED_LAYER_NAMES = new Set(['Ground', 'Units', 'Items']);
 
 // ═══════════════════════════════════════════════
 // LAYERS
@@ -10,6 +11,7 @@ class LayersPanel {
   constructor(el, ctx) {
     this.el = el;
     this.ctx = ctx;
+    this._delegated = false;
   }
 
   build() {
@@ -18,6 +20,22 @@ class LayersPanel {
     const active = this.ctx.getActiveLayer();
 
     this.el.innerHTML = '';
+
+    // делегирование dblclick — навешивается один раз, живёт независимо от rebuild
+    if (!this._delegated) {
+      this._delegated = true;
+      this.el.addEventListener('dblclick', (e) => {
+        const nm = e.target.closest('.nm');
+        if (!nm) return;
+        const row = nm.closest('.layer');
+        if (!row) return;
+        const name = row.dataset.layerName;
+        if (!name) return;
+        e.stopPropagation();
+        e.preventDefault();
+        this.startRename(row, name);
+      });
+    }
 
     const header = document.createElement('h3');
     const titleTxt = document.createElement('span');
@@ -42,10 +60,22 @@ class LayersPanel {
     map.layerOrder.forEach((name, idx) => {
       const row = document.createElement('div');
       row.className = 'layer' + (active === name ? ' active' : '');
+      row.dataset.layerName = name;
+
+      // ВАЖНО: без rebuild. Меняем подсветку in-place.
       row.addEventListener('click', (e) => {
         if (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON') return;
+        if (e.target.classList.contains('nm-editing')) return;
+
         this.ctx.setActiveLayer(name);
-        this.build();
+
+        Array.from(this.el.children).forEach(child => {
+          if (child.classList && child.classList.contains('layer')) {
+            child.classList.toggle('active', child.dataset.layerName === name);
+          }
+        });
+        const lbl = this.el.querySelector('#activeLayerLabel');
+        if (lbl) lbl.textContent = name;
         r.render();
       });
 
@@ -67,6 +97,7 @@ class LayersPanel {
       const nm = document.createElement('span');
       nm.className = 'nm';
       nm.textContent = name;
+      nm.title = 'Двойной клик — переименовать';
 
       const upBtn = document.createElement('button');
       upBtn.className = 'layer-mv';
@@ -114,13 +145,108 @@ class LayersPanel {
         e.stopPropagation();
         r.setSolo(r.soloLayer === name ? null : name);
         r.invalidate();
-        this.build();
+        // точечно обновить класс solo у всех
+        Array.from(this.el.children).forEach(child => {
+          if (child.classList && child.classList.contains('layer')) {
+            const s = child.querySelector('.solo');
+            if (s) s.classList.toggle('on', child.dataset.layerName === r.soloLayer);
+          }
+        });
         r.render();
       });
 
       row.append(cb, sw, nm, upBtn, dnBtn, clrBtn, delBtn, solo);
       this.el.appendChild(row);
     });
+  }
+
+  // ─── Инлайн-редактор имени ───
+  startRename(row, oldName) {
+    if (row.querySelector('.nm-editing')) return;
+    const nm = row.querySelector('.nm');
+    if (!nm) return;
+
+    const inp = document.createElement('input');
+    inp.type = 'text';
+    inp.className = 'nm-editing';
+    inp.value = oldName;
+    inp.spellcheck = false;
+
+    nm.replaceWith(inp);
+    inp.focus();
+    inp.select();
+
+    let done = false;
+    const finish = (commit) => {
+      if (done) return;
+      done = true;
+      const newName = commit ? (inp.value || '').trim() : oldName;
+      if (!commit || !newName || newName === oldName) {
+        this.build();
+        return;
+      }
+      this.renameLayer(oldName, newName);
+      this.build();
+    };
+
+    inp.addEventListener('keydown', (e) => {
+      e.stopPropagation();
+      if (e.key === 'Enter') { e.preventDefault(); finish(true); }
+      else if (e.key === 'Escape') { e.preventDefault(); finish(false); }
+    });
+    inp.addEventListener('blur', () => finish(true));
+    inp.addEventListener('click', (e) => e.stopPropagation());
+    inp.addEventListener('mousedown', (e) => e.stopPropagation());
+    inp.addEventListener('dblclick', (e) => e.stopPropagation());
+  }
+
+  renameLayer(oldName, newName) {
+    const map = this.ctx.getMap();
+    const r = this.ctx.getRenderer();
+    if (!map) return false;
+    if (!map.layers[oldName]) return false;
+    if (map.layers[newName] && newName !== oldName) {
+      alert('Слой с именем "' + newName + '" уже существует');
+      return false;
+    }
+    if (PROTECTED_LAYER_NAMES.has(oldName)) {
+      if (!confirm(
+        'Слой "' + oldName + '" — служебный RW. Переименование сломает:\n' +
+        '• генератор (Ground / Items0)\n' +
+        '• правила порядка слоёв\n\n' +
+        'Переименовать всё равно?'
+      )) return false;
+    }
+
+    const idx = map.layerOrder.indexOf(oldName);
+    if (idx < 0) return false;
+
+    map.layers[newName] = map.layers[oldName];
+    delete map.layers[oldName];
+    map.layerOrder[idx] = newName;
+
+    if (map.layerOriginalXml[oldName]) {
+      map.layerOriginalXml[newName] = map.layerOriginalXml[oldName];
+      map.layerOriginalXml[newName].name = newName;
+      delete map.layerOriginalXml[oldName];
+    }
+
+    if (r) {
+      const vis = r.layerVisibility[oldName];
+      delete r.layerVisibility[oldName];
+      r.layerVisibility[newName] = vis !== false;
+      if (r.soloLayer === oldName) r.soloLayer = newName;
+    }
+
+    if (this.ctx.getActiveLayer() === oldName) {
+      this.ctx.setActiveLayer(newName);
+    }
+
+    if (r) { r.invalidate(); r.render(); }
+
+    const st = document.getElementById('status');
+    if (st) st.textContent = 'Слой "' + oldName + '" → "' + newName + '"';
+    return true;
   }
 
   addLayer() {
@@ -367,7 +493,7 @@ class TilesetTabs {
       const del = document.createElement('button');
       del.className = 'ts-del';
       del.textContent = '×';
-      del.title = 'Удалить tileset';
+      del.title = 'Delete tileset';
       del.dataset.tilesetIdx = String(i);
       del.dataset.tilesetName = ts.name;
       del.addEventListener('click', (e) => {
@@ -379,12 +505,22 @@ class TilesetTabs {
       this.tabsListEl.appendChild(del);
     });
 
+    // ─── +Tileset button ───
+    const addBtn = document.createElement('button');
+    addBtn.className = 'ts-tab-add';
+    addBtn.textContent = '+ Tileset';
+    addBtn.title = 'Add tileset from PNG';
+    addBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (this.ctx.onAddTileset) this.ctx.onAddTileset();
+    });
+    this.tabsListEl.appendChild(addBtn);
+
     const ts = map.tilesets[this.activeIdx];
     if (ts) this.bodyEl.appendChild(this.buildBlock(ts));
   }
 
-  // Защитная версия — работает и со старым map.js (без removeTileset /
-  // clearTilesetTiles), и с новым.
   handleTilesetDelete(idx) {
     try {
       const map = this.ctx.getMap();
@@ -413,7 +549,6 @@ class TilesetTabs {
         : 'Удалить tileset "' + ts.name + '"?\n\nОн не используется.';
       if (!confirm(msg)) return;
 
-      // 1. Стереть тайлы tileset'а из всех слоёв
       if (usage > 0) {
         if (typeof map.clearTilesetTiles === 'function') {
           map.clearTilesetTiles(ts.firstgid, ts.tilecount);
@@ -440,19 +575,16 @@ class TilesetTabs {
         }
       }
 
-      // 2. Удалить tileset
       if (typeof map.removeTileset === 'function') {
         map.removeTileset(idx);
       } else {
         map.tilesets.splice(idx, 1);
       }
 
-      // 3. Сбросить индекс активного tileset'а
       if (this.activeIdx >= map.tilesets.length) {
         this.activeIdx = Math.max(0, map.tilesets.length - 1);
       }
 
-      // 4. Перерисовать
       if (r) { r.invalidate(); r.render(); }
       this.build();
 

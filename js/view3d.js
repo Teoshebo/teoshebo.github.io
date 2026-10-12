@@ -36,17 +36,6 @@ const shadeStr = (c, k) =>
             Math.min(255, c[1]*k|0) + ',' +
             Math.min(255, c[2]*k|0) + ')';
 
-// ─────────────────────────────────────────────
-// opts = {
-//   canvas,
-//   w, h, levels,
-//   getLevel(x, y) → 0..levels-1   (0 = peak),
-//   colorMode: 'gray' | 'palette' | 'png',
-//   pngData: Uint8ClampedArray(RGBA w*h),    // для mode='png'
-//   cell: px per cell (default 3),
-//   heightPx: max height (default 90)
-// }
-// ─────────────────────────────────────────────
 V3.render = function(opts) {
   const cv = opts.canvas;
   const w = opts.w, h = opts.h;
@@ -57,6 +46,7 @@ V3.render = function(opts) {
   const heightPx = opts.heightPx || 90;
   const colorMode = opts.colorMode || 'palette';
   const getLevel = opts.getLevel;
+  const markerScale = opts.markerScale || 1;
 
   const COS = Math.cos(Math.PI / 6);
   const SIN = Math.sin(Math.PI / 6);
@@ -95,6 +85,11 @@ V3.render = function(opts) {
       const p = (y * w + x) * 4;
       return [opts.pngData[p], opts.pngData[p+1], opts.pngData[p+2]];
     }
+    if (colorMode === 'texture' && opts.texture &&
+        x >= 0 && y >= 0 && x < w && y < h) {
+      const p = (y * w + x) * 4;
+      return [opts.texture[p], opts.texture[p+1], opts.texture[p+2]];
+    }
     return palette(z / Math.max(1, heightPx));
   };
 
@@ -110,7 +105,6 @@ V3.render = function(opts) {
     ctx.stroke();
   }
 
-  // painter's algorithm: back-to-front по (x+y)
   for (let s = 0; s <= w + h - 2; s++) {
     const x0 = Math.max(0, s - h + 1);
     const x1 = Math.min(w - 1, s);
@@ -130,6 +124,49 @@ V3.render = function(opts) {
              shadeStr(col, 0.50));
       }
       poly([px(x,y,z), px(x+1,y,z), px(x+1,y+1,z), px(x,y+1,z)], rgbStr(col));
+    }
+  }
+
+  // ─── MARKERS ───
+  if (opts.markers && RW.Markers) {
+    const m = opts.markers;
+    const M = RW.Markers;
+
+    const dotR = M.DOT_RADIUS_TILES * cell * markerScale;
+    for (const p of m.respools) {
+      const [sx, sy] = px(p.x + 0.5, p.y + 0.5, zOf(p.x, p.y));
+      ctx.beginPath();
+      ctx.arc(sx, sy, dotR, 0, Math.PI * 2);
+      ctx.fillStyle = '#ffea30';
+      ctx.fill();
+      ctx.strokeStyle = '#000';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
+
+    const circR = M.RADIUS_TILES * cell * markerScale;
+    const fontPx = circR * 2 * M.FONT_RATIO;
+
+    for (const s of m.starts) {
+      const [sx, sy] = px(s.x + 0.5, s.y + 0.5, zOf(s.x, s.y));
+      const color = M.colorFor(s.team);
+
+      ctx.beginPath();
+      ctx.arc(sx, sy, circR, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(0,0,0,0.5)';
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(0,0,0,0.7)';
+      ctx.lineWidth = Math.max(1, circR * 0.06);
+      ctx.stroke();
+
+      ctx.font = 'bold ' + fontPx + 'px "Arial Black", Arial, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = color;
+      ctx.shadowColor = 'rgba(0,0,0,0.9)';
+      ctx.shadowBlur = fontPx * 0.15;
+      ctx.fillText(String(s.team + 1), sx, sy);
+      ctx.shadowBlur = 0;
     }
   }
 };

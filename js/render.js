@@ -21,11 +21,22 @@ class Renderer {
     this.rectCurrent = null;
     this.showGrid = true;
 
+    this.showMarkers = false;
+    this.markerScale = 1;
+    this.getMarkers = null;
+
+    this.bgColor = '#0a0a0a';
+
     this._fps = { frames: 0, last: performance.now() };
     this.onFps = null;
 
     window.addEventListener('resize', () => this.resize());
     this.resize();
+  }
+
+  setBg(color) {
+    this.bgColor = color || '#0a0a0a';
+    this.render();
   }
 
   isLayerVisible(name) {
@@ -105,13 +116,9 @@ class Renderer {
     if (!map) return { tx: 0, ty: 0 };
     const px = (clientX - r.left - this.view.x) / this.view.zoom;
     const py = (clientY - r.top - this.view.y) / this.view.zoom;
-    return {
-      tx: Math.floor(px / map.tw),
-      ty: Math.floor(py / map.th)
-    };
+    return { tx: Math.floor(px / map.tw), ty: Math.floor(py / map.th) };
   }
 
-  // ————————————————————
   findTileset(id) {
     const map = this.getMap();
     let found = null;
@@ -169,7 +176,7 @@ class Renderer {
     const ctx = this.ctx;
 
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.fillStyle = '#0a0a0a';
+    ctx.fillStyle = this.bgColor;
     ctx.fillRect(0, 0, r.width, r.height);
 
     if (!map) { this._tickFps(); return; }
@@ -219,7 +226,12 @@ class Renderer {
       ctx.stroke();
     }
 
-    // подсветка клетки
+    // ─── MARKERS ───
+    if (this.showMarkers && this.getMarkers) {
+      const m = this.getMarkers();
+      if (m) this._drawMarkers(ctx, map, m, tw, th);
+    }
+
     if (this.hoverTile) {
       const { tx, ty } = this.hoverTile;
       if (tx >= 0 && ty >= 0 && tx < map.W && ty < map.H) {
@@ -230,7 +242,6 @@ class Renderer {
       }
     }
 
-    // превью прямоугольника
     if (this.rectStart && this.rectCurrent) {
       const x0 = Math.min(this.rectStart.x, this.rectCurrent.x);
       const y0 = Math.min(this.rectStart.y, this.rectCurrent.y);
@@ -247,6 +258,62 @@ class Renderer {
 
     ctx.restore();
     this._tickFps();
+  }
+
+  // ─── MARKERS ───
+  // Круг: чёрный alpha 50%. Цифра: цвет игрока, Arial Black.
+  // Радиусы в тайлах (см. RW.Markers.RADIUS_TILES), userScale = this.markerScale.
+  _drawMarkers(ctx, map, markers, tw, th) {
+    const scale = this.markerScale || 1;
+    const tile = Math.min(tw, th);
+    const scaleInv = 1 / this.view.zoom;
+    const M = RW.Markers;
+
+    // ─── ResPools: жёлтые точки ───
+    const dotR = M.DOT_RADIUS_TILES * tile * scale;
+    for (const p of markers.respools) {
+      const cx = p.x * tw + tw / 2;
+      const cy = p.y * th + th / 2;
+      ctx.beginPath();
+      ctx.arc(cx, cy, dotR, 0, Math.PI * 2);
+      ctx.fillStyle = '#ffea30';
+      ctx.fill();
+      ctx.strokeStyle = '#000';
+      ctx.lineWidth = 1.5 * scaleInv;
+      ctx.stroke();
+    }
+
+    // ─── Starts: чёрный полупрозрачный круг + цифра ───
+    const circR = M.RADIUS_TILES * tile * scale;
+    const fontPx = circR * 2 * M.FONT_RATIO;
+
+    for (const s of markers.starts) {
+      const cx = s.x * tw + tw / 2;
+      const cy = s.y * th + th / 2;
+      const color = M.colorFor(s.team);
+
+      // чёрный круг alpha 50%
+      ctx.beginPath();
+      ctx.arc(cx, cy, circR, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(0,0,0,0.5)';
+      ctx.fill();
+
+      // обводка тонкая, тоже полупрозрачная
+      ctx.strokeStyle = 'rgba(0,0,0,0.7)';
+      ctx.lineWidth = Math.max(1, circR * 0.06);
+      ctx.stroke();
+
+      // цифра
+      ctx.font = 'bold ' + fontPx + 'px "Arial Black", Arial, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = color;
+      // небольшая чёрная тень для контраста на любом фоне
+      ctx.shadowColor = 'rgba(0,0,0,0.9)';
+      ctx.shadowBlur = fontPx * 0.15;
+      ctx.fillText(String(s.team + 1), cx, cy);
+      ctx.shadowBlur = 0;
+    }
   }
 
   _tickFps() {
