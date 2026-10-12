@@ -318,7 +318,6 @@ function findEmptyValue(tsIdx, targetTerr) {
   return best;
 }
 
-// terrain в tileset = [TL, TR, BL, BR]. cornerIdx: 0=TL, 1=TR, 2=BL, 3=BR.
 function cellHasCorner(tx, ty, cornerIdx, tsIdx, targetTerr) {
   const map = mapModel;
   if (tx < 0 || ty < 0 || tx >= map.W || ty >= map.H) return false;
@@ -998,7 +997,8 @@ async function initFromParsed(parsed, filename) {
     startPick: (mode) => startPick(mode),
     endPick: () => endPick(),
     findTileset: (id) => renderer.findTileset(id),
-    onChanged: () => { typesPanel.build(); }
+    onChanged: () => { typesPanel.build(); },
+    onImportMiniTNS: () => startMiniTNSImport()
   });
 
   layersPanel.build();
@@ -1121,6 +1121,122 @@ document.getElementById('tilesetInput').addEventListener('change', async (e) => 
   }
 });
 
+// ═══════════════════════════════════════════════
+// IMPORT MINI TNS (Type N Solid)
+// PNG 3×5 тайлов:
+//   1 2 3     NWo N   NEo
+//   4 5 6     W   ·   E
+//   7 8 9     SWo S   SEo
+//   A B 5     NWi NEi ·
+//   C D 5     SWi SEi ·
+// 5 = solid, три штуки с равным весом.
+// ═══════════════════════════════════════════════
+function startMiniTNSImport() {
+  if (!mapModel) { statusEl.textContent = 'Сначала открой карту'; return; }
+  const inp = document.createElement('input');
+  inp.type = 'file';
+  inp.accept = 'image/png,image/*';
+  inp.onchange = async () => {
+    const file = inp.files && inp.files[0];
+    if (!file) return;
+    try {
+      await importMiniTNS(file);
+    } catch (err) {
+      console.error(err);
+      statusEl.textContent = 'MiniTNS: ' + err.message;
+    }
+  };
+  inp.click();
+}
+
+async function importMiniTNS(file) {
+  // 1. Read PNG
+  const buf = await file.arrayBuffer();
+  const bytes = new Uint8Array(buf);
+  const b64 = U.bytesToB64(bytes);
+  const dataUrl = 'data:image/png;base64,' + b64;
+  const img = new Image();
+  await new Promise((resolve, reject) => {
+    img.onload = resolve;
+    img.onerror = () => reject(new Error('PNG не читается'));
+    img.src = dataUrl;
+  });
+
+  const tw = mapModel.tw, th = mapModel.th;
+  const cols = Math.floor(img.naturalWidth / tw);
+  const rows = Math.floor(img.naturalHeight / th);
+  if (cols !== 3 || rows !== 5) {
+    throw new Error('PNG должен быть ровно 3×5 тайлов (' +
+      (tw*3) + '×' + (th*5) + ' px, получено ' +
+      img.naturalWidth + '×' + img.naturalHeight +
+      ' = ' + cols + '×' + rows + ' тайлов)');
+  }
+  const tilecount = 15;
+
+  // 2. Prompt name + add tileset
+  const defaultName = (file.name || 'MiniTNS').replace(/\.png$/i, '');
+  const name = prompt('Имя tileset:', defaultName);
+  if (!name) return;
+
+  let firstgid = 1;
+  for (const ts of mapModel.tilesets) {
+    const end = ts.firstgid + ts.tilecount;
+    if (end > firstgid) firstgid = end;
+  }
+
+  const ts = {
+    firstgid, name, columns: cols, tilecount,
+    tileW: tw, tileH: th,
+    image: img, imageDataUrl: dataUrl, embeddedPngB64: b64,
+    imageSource: null, imageW: img.naturalWidth, imageH: img.naturalHeight,
+    terrainTypes: [], tiles: {},
+    xmlStr: null, _dirty: true
+  };
+  mapModel.tilesets.push(ts);
+  mapModel.tilesets.sort((a, b) => a.firstgid - b.firstgid);
+
+  if (tilesetTabs) {
+    tilesetTabs.activeIdx = mapModel.tilesets.indexOf(ts);
+    tilesetTabs.build();
+  }
+
+  // 3. Create new type
+  const typeName = prompt('Имя типа:', defaultName) || defaultName;
+  const t = typesModel.add(typeName, typesModel.types.length);
+
+  const g = (local) => firstgid + local;
+
+  // Local indices (row * 3 + col):
+  //   0  1  2
+  //   3  4  5
+  //   6  7  8
+  //   9 10 11
+  //  12 13 14
+  t.solids = [
+    { tileID: g(4),  weight: 1 },
+    { tileID: g(11), weight: 1 },
+    { tileID: g(14), weight: 1 }
+  ];
+
+  t.edges.NWo = g(0);
+  t.edges.N   = g(1);
+  t.edges.NEo = g(2);
+  t.edges.W   = g(3);
+  t.edges.E   = g(5);
+  t.edges.SWo = g(6);
+  t.edges.S   = g(7);
+  t.edges.SEo = g(8);
+  t.edges.NWi = g(9);
+  t.edges.NEi = g(10);
+  t.edges.SWi = g(12);
+  t.edges.SEi = g(13);
+
+  activeTypeId = t.id;
+  if (typesPanel) typesPanel.build();
+  statusEl.textContent = 'MiniTNS: tileset "' + name + '" + тип "' + typeName +
+    '" (firstgid=' + firstgid + ')';
+}
+
 window.addEventListener('DOMContentLoaded', () => {
   if (settings.activeTool) activeTool = settings.activeTool;
   buildTools();
@@ -1190,7 +1306,8 @@ document.getElementById('btnHelp').addEventListener('click', () => alert(
   'E — Ластик, R — Прямоугольник, F — Заливка, I — Пипетка, P — Панорама\n' +
   'Ctrl+Z / Ctrl+Y — отмена/повтор, Ctrl+S — сохранить\n' +
   'Esc — отмена режима выбора тайла\n\n' +
-  'Classic работает на АКТИВНОМ слое.'
+  'Classic работает на АКТИВНОМ слое.\n' +
+  'MiniTNS: PNG 3×5 тайлов → новый tileset + новый тип.'
 ));
 document.getElementById('btnAddEmpty').addEventListener('click', addEmptyToBrush);
 document.getElementById('btnFlood').addEventListener('click', runFloodDominant);
