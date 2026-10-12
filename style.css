@@ -186,6 +186,15 @@ canvas#cv.crosshair{cursor:crosshair}
 .ts-canvas{display:block;image-rendering:pixelated;cursor:crosshair}
 .ts-info{padding:4px 8px;font-size:11px;color:#fc8;margin-top:4px;min-height:1.4em}
 .ts-info b{color:#fd4}
+#tsTabsList button.ts-tab-btn{background:transparent;color:#888;border:0;padding:8px 10px 8px 14px;
+  cursor:pointer;font-family:inherit;font-size:10px;letter-spacing:2px;
+  white-space:nowrap;border-bottom:2px solid transparent}
+#tsTabsList button.ts-tab-btn.active{color:#fd4;border-bottom-color:#fd4;background:#161616}
+#tsTabsList button.ts-tab-btn:hover:not(.active){color:#ccc}
+#tsTabsList button.ts-del{background:transparent;color:#444;border:0;
+  padding:8px 6px;font-size:13px;cursor:pointer;font-family:inherit;line-height:1;
+  border-bottom:2px solid transparent;margin-right:2px}
+#tsTabsList button.ts-del:hover{color:#f44;background:#2a1010}
 
 /* SPLIT LAYOUT для terrain editor */
 .ts-split{display:flex;gap:12px;align-items:flex-start}
