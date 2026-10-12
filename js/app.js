@@ -1012,6 +1012,16 @@ async function initFromParsed(parsed, filename) {
 
   renderer.fitView();
   zoomVal.textContent = renderer.view.zoom.toFixed(2);
+
+  if (RW.HMApp) {
+    RW.HMApp.onMapReady({
+      getMap: () => mapModel,
+      getTypesModel: () => typesModel,
+      getGenerator: () => generator,
+      getRenderer: () => renderer,
+      markDirty: () => {}
+    });
+  }
 }
 
 document.getElementById('btnSave').addEventListener('click', saveMap);
