@@ -354,6 +354,7 @@ class TilesetTabs {
 
     map.tilesets.forEach((ts, i) => {
       const btn = document.createElement('button');
+      btn.className = 'ts-tab-btn';
       btn.textContent = ts.name.length > 20 ? ts.name.slice(0, 18) + '…' : ts.name;
       btn.title = ts.name + ' (firstgid=' + ts.firstgid + ')';
       btn.addEventListener('click', () => {
@@ -362,10 +363,64 @@ class TilesetTabs {
       });
       if (i === this.activeIdx) btn.classList.add('active');
       this.tabsListEl.appendChild(btn);
+
+      const del = document.createElement('button');
+      del.className = 'ts-del';
+      del.textContent = '×';
+      del.title = 'Удалить tileset';
+      del.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.handleTilesetDelete(i);
+      });
+      this.tabsListEl.appendChild(del);
     });
 
     const ts = map.tilesets[this.activeIdx];
     if (ts) this.bodyEl.appendChild(this.buildBlock(ts));
+  }
+
+  handleTilesetDelete(idx) {
+    const map = this.ctx.getMap();
+    const r = this.ctx.getRenderer();
+    if (!map) return;
+    const ts = map.tilesets[idx];
+    if (!ts) return;
+
+    const maxId = ts.firstgid + ts.tilecount;
+    let usage = 0;
+    for (const lname of map.layerOrder) {
+      const data = map.layers[lname];
+      if (!data) continue;
+      for (let i = 0; i < data.length; i++) {
+        const id = data[i];
+        if (id >= ts.firstgid && id < maxId) usage++;
+      }
+    }
+
+    const msg = usage > 0
+      ? 'Удалить tileset "' + ts.name + '"?\n\n' +
+        'Используется в карте: ' + usage + ' тайлов.\n' +
+        'Все они будут стёрты (одна undo-транзакция).'
+      : 'Удалить tileset "' + ts.name + '"?\n\nОн не используется.';
+    if (!confirm(msg)) return;
+
+    if (usage > 0) {
+      map.clearTilesetTiles(ts.firstgid, ts.tilecount);
+      if (r) r.invalidate();
+    }
+
+    map.removeTileset(idx);
+
+    if (this.activeIdx >= map.tilesets.length) {
+      this.activeIdx = Math.max(0, map.tilesets.length - 1);
+    }
+
+    this.build();
+    if (r) r.render();
+
+    const st = document.getElementById('status');
+    if (st) st.textContent = 'Удалён tileset "' + ts.name + '"' +
+      (usage ? ' (+' + usage + ' тайлов стёрто)' : '');
   }
 
   buildBlock(ts) {
