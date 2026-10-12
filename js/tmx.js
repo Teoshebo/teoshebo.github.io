@@ -235,10 +235,6 @@ function serializeTilesetToDom(doc, ts) {
 
 // ─────────────────────────────────────────────
 // SAVE
-//
-// Изменения против старой версии:
-//  - Слои пересобираются из map.layerOrder, а не из существующего XML.
-//  - Новые tileset'ы (без XML-элемента) добавляются перед первым <layer>.
 // ─────────────────────────────────────────────
 function save(map, typesModel) {
   const doc = new DOMParser().parseFromString(map.rawXml, 'application/xml');
@@ -248,29 +244,28 @@ function save(map, typesModel) {
   mapEl.setAttribute('width', map.W);
   mapEl.setAttribute('height', map.H);
 
-  // 1. Tileset'ы — обновить или добавить
-  const existingTsEls = Array.from(mapEl.querySelectorAll(':scope > tileset'));
-  const newTilesets = [];
+  // 1. Tileset'ы — полная пересборка из map.tilesets.
+  //    Удалённые (не в map.tilesets) просто не попадут в результат.
+  //    Для нетронутых — используется сохранённый xmlStr.
+  //    Для изменённых/новых — serializeTilesetToDom.
+  const anchor = mapEl.querySelector(':scope > layer');
+  for (const el of Array.from(mapEl.querySelectorAll(':scope > tileset'))) el.remove();
+
   for (const ts of map.tilesets) {
-    if (!ts._dirty) continue;
-    const oldEl = existingTsEls.find(el =>
-      parseInt(el.getAttribute('firstgid'), 10) === ts.firstgid);
-    const newEl = serializeTilesetToDom(doc, ts);
-    if (oldEl) {
-      mapEl.replaceChild(newEl, oldEl);
-      const i = existingTsEls.indexOf(oldEl);
-      if (i >= 0) existingTsEls[i] = newEl;
+    let newEl;
+    if (ts._dirty || !ts.xmlStr) {
+      newEl = serializeTilesetToDom(doc, ts);
+      ts._dirty = false;
     } else {
-      newTilesets.push(newEl);
+      try {
+        const tmp = new DOMParser().parseFromString(ts.xmlStr, 'application/xml');
+        newEl = doc.importNode(tmp.documentElement, true);
+      } catch (e) {
+        newEl = serializeTilesetToDom(doc, ts);
+      }
     }
-    ts._dirty = false;
-  }
-  if (newTilesets.length) {
-    const firstLayer = mapEl.querySelector(':scope > layer');
-    for (const newEl of newTilesets) {
-      if (firstLayer) mapEl.insertBefore(newEl, firstLayer);
-      else mapEl.appendChild(newEl);
-    }
+    if (anchor) mapEl.insertBefore(newEl, anchor);
+    else mapEl.appendChild(newEl);
   }
 
   // 2. Слои — удалить все, добавить заново в порядке layerOrder
