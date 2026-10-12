@@ -388,7 +388,9 @@ class TilesetTabs {
   handleTilesetDelete(idx) {
     try {
       const map = this.ctx.getMap();
-      const r = this.ctx.getRenderer();
+      const r = (typeof this.ctx.getRenderer === 'function')
+        ? this.ctx.getRenderer()
+        : null;
       if (!map) { alert('Карта не открыта'); return; }
       const ts = map.tilesets[idx];
       if (!ts) { alert('Tileset не найден (idx=' + idx + ')'); return; }
@@ -416,7 +418,6 @@ class TilesetTabs {
         if (typeof map.clearTilesetTiles === 'function') {
           map.clearTilesetTiles(ts.firstgid, ts.tilecount);
         } else {
-          // fallback для старого map.js
           const layers = [];
           for (const lname of map.layerOrder) {
             const data = map.layers[lname];
