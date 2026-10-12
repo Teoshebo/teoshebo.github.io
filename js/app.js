@@ -991,6 +991,7 @@ async function initFromParsed(parsed, filename) {
 
   tilesetTabs = new RW.TilesetTabs(tsTabsListEl, tsBodyEl, bottomEl, {
     getMap: () => mapModel,
+    getRenderer: () => renderer,
     getBrush: () => brushGroup,
     getModel: () => typesModel,
     getPickMode: () => pickMode,
