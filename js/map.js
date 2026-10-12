@@ -31,16 +31,15 @@ class MapModel {
     return this.layers[layer][idx];
   }
 
+  // ─── Слои ───
+
   addLayer(name, insertBefore) {
     if (this.layers[name]) return null;
     const data = new Uint32Array(this.W * this.H);
     this.layers[name] = data;
     this.layerOriginalXml[name] = {
-      name: name,
-      width: this.W,
-      height: this.H,
-      opacity: null,
-      visible: null
+      name: name, width: this.W, height: this.H,
+      opacity: null, visible: null
     };
     if (insertBefore) {
       const idx = this.layerOrder.indexOf(insertBefore);
@@ -60,13 +59,50 @@ class MapModel {
     if (i >= 0) this.layerOrder.splice(i, 1);
   }
 
-  // Обнуление всех данных слоя. Слой остаётся в layerOrder.
   clearLayer(name) {
     const data = this.layers[name];
     if (!data) return false;
     data.fill(0);
     return true;
   }
+
+  // ─── Tileset ───
+
+  removeTileset(idx) {
+    if (idx < 0 || idx >= this.tilesets.length) return null;
+    const ts = this.tilesets[idx];
+    this.tilesets.splice(idx, 1);
+    return ts;
+  }
+
+  // Стирает все тайлы из заданного tileset'а во всех слоях.
+  // Одна undo-транзакция. Возвращает массив {layer, changes}.
+  clearTilesetTiles(firstgid, tilecount) {
+    const maxId = firstgid + tilecount;
+    const layers = [];
+    for (const layerName of this.layerOrder) {
+      const data = this.layers[layerName];
+      if (!data) continue;
+      const changes = [];
+      for (let i = 0; i < data.length; i++) {
+        const id = data[i];
+        if (id >= firstgid && id < maxId) {
+          changes.push({ idx: i, before: id, after: 0 });
+          data[i] = 0;
+        }
+      }
+      if (changes.length) layers.push({ layer: layerName, changes });
+    }
+    if (!layers.length) return [];
+    const entry = { type: 'multi', layers };
+    this.undoStack.push(entry);
+    if (this.undoStack.length > MAX_UNDO) this.undoStack.shift();
+    this.redoStack.length = 0;
+    if (this.onChange) this.onChange(entry);
+    return layers;
+  }
+
+  // ─── Resize ───
 
   resize(newW, newH) {
     newW = Math.max(1, Math.floor(newW));
@@ -107,8 +143,7 @@ class MapModel {
       type: 'resize',
       oldW, oldH, newW, newH,
       oldLayers, newLayers,
-      oldLayerOriginalXml,
-      newLayerOriginalXml
+      oldLayerOriginalXml, newLayerOriginalXml
     };
     this.undoStack.push(entry);
     if (this.undoStack.length > MAX_UNDO) this.undoStack.shift();
@@ -116,6 +151,8 @@ class MapModel {
     if (this.onChange) this.onChange(entry);
     return entry;
   }
+
+  // ─── Пакетные изменения ───
 
   applyBatch(layer, changes) {
     const data = this.layers[layer];
@@ -143,6 +180,12 @@ class MapModel {
     return entry;
   }
 
+  // ─── Undo / Redo ───
+  // Поддерживает 3 формата entries:
+  //   {type:'resize', ...}       — ресайз карты
+  //   {type:'multi', layers:[]}  — multi-layer stroke / tileset clear
+  //   {layer, changes}           — legacy single-layer (floodFill, rect, autotile dialog)
+
   undo() {
     if (!this.undoStack.length) return null;
     const entry = this.undoStack.pop();
@@ -151,6 +194,12 @@ class MapModel {
       this.H = entry.oldH;
       for (const name in entry.oldLayers) this.layers[name] = entry.oldLayers[name];
       this.layerOriginalXml = JSON.parse(JSON.stringify(entry.oldLayerOriginalXml));
+    } else if (entry.type === 'multi') {
+      for (const le of entry.layers) {
+        const data = this.layers[le.layer];
+        if (!data) continue;
+        for (const c of le.changes) data[c.idx] = c.before;
+      }
     } else {
       const data = this.layers[entry.layer];
       if (data) for (const c of entry.changes) data[c.idx] = c.before;
@@ -168,6 +217,12 @@ class MapModel {
       this.H = entry.newH;
       for (const name in entry.newLayers) this.layers[name] = entry.newLayers[name];
       this.layerOriginalXml = JSON.parse(JSON.stringify(entry.newLayerOriginalXml));
+    } else if (entry.type === 'multi') {
+      for (const le of entry.layers) {
+        const data = this.layers[le.layer];
+        if (!data) continue;
+        for (const c of le.changes) data[c.idx] = c.after;
+      }
     } else {
       const data = this.layers[entry.layer];
       if (data) for (const c of entry.changes) data[c.idx] = c.after;
