@@ -145,13 +145,24 @@ class TypesPanel {
     });
     listStrip.appendChild(btnAdd);
 
+    // ── Import MiniTNS ──
+    const btnMini = document.createElement('button');
+    btnMini.className = 'types-add-btn';
+    btnMini.textContent = '📦 Import MiniTNS';
+    btnMini.title = 'Импорт PNG 3×5 тайлов: добавить tileset + создать тип (12 edges + 3 solids)';
+    btnMini.addEventListener('click', () => {
+      if (this.ctx.onImportMiniTNS) this.ctx.onImportMiniTNS();
+      else alert('onImportMiniTNS не подключён');
+    });
+    listStrip.appendChild(btnMini);
+
     topbar.appendChild(listStrip);
     this.root.appendChild(topbar);
 
     if (!model.types.length) {
       const empty = document.createElement('div');
       empty.className = 'empty-msg';
-      empty.textContent = 'Нет типов. Нажми "+ тип".';
+      empty.textContent = 'Нет типов. Нажми "+ тип" или "📦 Import MiniTNS".';
       this.root.appendChild(empty);
       return;
     }
@@ -162,9 +173,6 @@ class TypesPanel {
     }
   }
 
-  // Обновление карточек в strip БЕЗ полного rebuild.
-  // Используется при изменении полей (name, priority, color) —
-  // чтобы не терять фокус в input'ах.
   updateStrip() {
     const model = this.ctx.getModel();
     const strip = this.root.querySelector('.types-strip');
@@ -194,7 +202,6 @@ class TypesPanel {
     const iName = document.createElement('input');
     iName.type = 'text';
     iName.value = t.name;
-    // ВАЖНО: не звать onChanged — иначе rebuild и потеря фокуса.
     iName.addEventListener('input', () => {
       t.name = iName.value;
       this.updateStrip();
@@ -306,7 +313,6 @@ class TypesPanel {
         wInput.min = '0';
         wInput.value = s.weight;
         wInput.title = 'Вес';
-        // Не звать onChanged — иначе rebuild и потеря фокуса.
         wInput.addEventListener('input', () => {
           const v = parseFloat(wInput.value);
           s.weight = isNaN(v) ? 0 : Math.max(0, v);
@@ -326,7 +332,6 @@ class TypesPanel {
       });
     }
     col.appendChild(list);
-
     return col;
   }
 
@@ -358,7 +363,6 @@ class TypesPanel {
       grid.appendChild(this.buildEdgeCell(t, role, pickMode));
     }
     col.appendChild(grid);
-
     return col;
   }
 
@@ -390,7 +394,6 @@ class TypesPanel {
       grid.appendChild(this.buildEdgeCell(t, role, pickMode));
     }
     col.appendChild(grid);
-
     return col;
   }
 
