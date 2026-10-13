@@ -2,6 +2,13 @@
 'use strict';
 const U = RW.Utils;
 
+function on(id, event, handler) {
+  const e = document.getElementById(id);
+  if (e) e.addEventListener(event, handler);
+  return e;
+}
+function el(id) { return document.getElementById(id); }
+
 let mapModel = null;
 let renderer = null;
 let layersPanel = null;
@@ -17,6 +24,8 @@ let activeLayer = null;
 let brushGroup = [];
 let brushSettings = { size: 0, shape: 'square' };
 
+// Хранит { tsFirstgid: number, terrName: string } — стабильные ключи,
+// не зависят от порядка tileset'ов и terraintypes.
 let activeClassicTerrain = null;
 let classicMaskCache = new Map();
 let classicEmptyCache = new Map();
@@ -34,29 +43,34 @@ let settings = RW.Storage.loadSettings();
 if (settings.showMarkers == null) settings.showMarkers = false;
 if (settings.markerScale == null) settings.markerScale = 1;
 if (settings.canvasBg == null) settings.canvasBg = '#0a0a0a';
+if (settings.atlasBg == null) settings.atlasBg = '#0a0a0a';
 if (settings.lang == null) settings.lang = 'en';
 RW.Storage.saveSettings(settings);
 
-const cv = document.getElementById('cv');
-const wrap = document.getElementById('wrap');
-const statusEl = document.getElementById('status');
-const infoEl = document.getElementById('info');
-const fpsEl = document.getElementById('fps');
-const zoomVal = document.getElementById('zoomVal');
-const layersEl = document.getElementById('layers');
-const brushListEl = document.getElementById('brushList');
-const brushTotalEl = document.getElementById('brushTotal');
-const brushSettingsEl = document.getElementById('brushSettings');
-const classicSelectEl = document.getElementById('classicSelect');
-const tsTabsListEl = document.getElementById('tsTabsList');
-const tsBodyEl = document.getElementById('tsBody');
-const typesBodyEl = document.getElementById('typesBody');
-const bottomEl = document.getElementById('bottom');
-const bottomGrabberEl = document.getElementById('bottomGrabber');
-const toolsEl = document.getElementById('tools');
-const mapNameEl = document.getElementById('mapName');
-const pickBannerEl = document.getElementById('pickBanner');
-const pickBannerTextEl = document.getElementById('pickBannerText');
+function applyAtlasBg(v) {
+  document.documentElement.style.setProperty('--atlas-bg', v || '#0a0a0a');
+}
+
+const cv = el('cv');
+const wrap = el('wrap');
+const statusEl = el('status');
+const infoEl = el('info');
+const fpsEl = el('fps');
+const zoomVal = el('zoomVal');
+const layersEl = el('layers');
+const brushListEl = el('brushList');
+const brushTotalEl = el('brushTotal');
+const brushSettingsEl = el('brushSettings');
+const classicSelectEl = el('classicSelect');
+const tsTabsListEl = el('tsTabsList');
+const tsBodyEl = el('tsBody');
+const typesBodyEl = el('typesBody');
+const bottomEl = el('bottom');
+const bottomGrabberEl = el('bottomGrabber');
+const toolsEl = el('tools');
+const mapNameEl = el('mapName');
+const pickBannerEl = el('pickBanner');
+const pickBannerTextEl = el('pickBannerText');
 
 // ═══════════════════════════════════════════════
 // I18N
@@ -64,26 +78,13 @@ const pickBannerTextEl = document.getElementById('pickBannerText');
 const I18N = {
   en: {
     'title': 'WebTiled',
-    'btn.open': '📂 Open',
-    'btn.save': '💾 Save',
-    'btn.resize': '⤢ Size',
-    'btn.merge': '⌘ Merge',
-    'btn.exportMap': '📷 _map',
+    'btn.open': 'Open',
+    'btn.save': 'Save',
+    'btn.resize': 'Size',
+    'btn.merge': 'Merge',
+    'btn.exportMap': '_map',
     'btn.fit': 'Fit',
     'btn.reset': '1:1',
-    'btn.settings': 'Settings',
-    'btn.help': 'Help',
-    'tool.pan': 'PAN',
-    'tool.brush': 'BRUSH',
-    'tool.terrain': 'TERRAIN',
-    'tool.classic': 'CLS',
-    'tool.eraser': 'ERASE',
-    'tool.rect': 'RECT',
-    'tool.fill': 'FILL',
-    'tool.picker': 'PICK',
-    'tool.autotile': 'AUTO',
-    'tool.undo': 'UNDO',
-    'tool.redo': 'REDO',
     'status.idle': 'Load .tmx file',
     'tab.atlases': 'ATLASES',
     'tab.types': 'TYPES',
@@ -92,7 +93,8 @@ const I18N = {
     'settings.title': 'SETTINGS',
     'settings.language': 'LANGUAGE',
     'settings.appearance': 'APPEARANCE',
-    'settings.canvasBg': 'Canvas background',
+    'settings.canvasBg': 'Editor background',
+    'settings.atlasBg': 'Atlas / tiles background',
     'settings.markers': 'MARKERS',
     'settings.showMarkers': 'Show markers',
     'settings.markerSize': 'Marker size',
@@ -102,26 +104,13 @@ const I18N = {
   },
   ru: {
     'title': 'WebTiled',
-    'btn.open': '📂 Открыть',
-    'btn.save': '💾 Сохранить',
-    'btn.resize': '⤢ Размер',
-    'btn.merge': '⌘ Склейка',
-    'btn.exportMap': '📷 _map',
+    'btn.open': 'Открыть',
+    'btn.save': 'Сохранить',
+    'btn.resize': 'Размер',
+    'btn.merge': 'Склейка',
+    'btn.exportMap': '_map',
     'btn.fit': 'Fit',
     'btn.reset': '1:1',
-    'btn.settings': 'Настройки',
-    'btn.help': 'Помощь',
-    'tool.pan': 'PAN',
-    'tool.brush': 'КИСТЬ',
-    'tool.terrain': 'ЛАНДШАФТ',
-    'tool.classic': 'CLS',
-    'tool.eraser': 'ЛАСТИК',
-    'tool.rect': 'ПРЯМОУГ',
-    'tool.fill': 'ЗАЛИВКА',
-    'tool.picker': 'ПИПЕТКА',
-    'tool.autotile': 'АВТО',
-    'tool.undo': 'ОТМЕНА',
-    'tool.redo': 'ПОВТОР',
     'status.idle': 'Загрузи .tmx файл',
     'tab.atlases': 'АТЛАСЫ',
     'tab.types': 'ТИПЫ',
@@ -130,7 +119,8 @@ const I18N = {
     'settings.title': 'НАСТРОЙКИ',
     'settings.language': 'ЯЗЫК',
     'settings.appearance': 'ВНЕШНИЙ ВИД',
-    'settings.canvasBg': 'Фон канваса',
+    'settings.canvasBg': 'Фон редактора',
+    'settings.atlasBg': 'Фон атласов',
     'settings.markers': 'МАРКЕРЫ',
     'settings.showMarkers': 'Показывать маркеры',
     'settings.markerSize': 'Размер маркеров',
@@ -145,16 +135,15 @@ let currentLang = settings.lang || 'en';
 RW.I18N = {
   get lang() { return currentLang; },
   t(key) {
-    const dict = I18N[currentLang] || I18N.en;
-    return dict[key] != null ? dict[key] : (I18N.en[key] != null ? I18N.en[key] : key);
+    const d = I18N[currentLang] || I18N.en;
+    return d[key] != null ? d[key] : (I18N.en[key] != null ? I18N.en[key] : key);
   },
   apply() {
-    document.querySelectorAll('[data-i18n]').forEach(el => {
-      const key = el.dataset.i18n;
-      el.textContent = this.t(key);
+    document.querySelectorAll('[data-i18n]').forEach(e => {
+      e.textContent = this.t(e.dataset.i18n);
     });
-    const titleEl = document.querySelector('title');
-    if (titleEl) titleEl.textContent = this.t('title');
+    const t = document.querySelector('title');
+    if (t) t.textContent = this.t('title');
   },
   set(lang) {
     if (!I18N[lang]) return;
@@ -165,25 +154,86 @@ RW.I18N = {
   }
 };
 
-// ─── Tools ───
+// ═══════════════════════════════════════════════
+// CLASSIC AUTOTILE — стабильный якорь
+// ═══════════════════════════════════════════════
+
+// Находит tileset + terrainType по { tsFirstgid, terrName }.
+// Возвращает { ts, tsIdx, terrIdx, terrType } или null.
+function resolveClassicAnchor() {
+  if (!activeClassicTerrain || !mapModel) return null;
+  const a = activeClassicTerrain;
+  const tsIdx = mapModel.tilesets.findIndex(t => t.firstgid === a.tsFirstgid);
+  if (tsIdx < 0) return null;
+  const ts = mapModel.tilesets[tsIdx];
+  const terrIdx = ts.terrainTypes.findIndex(tt => tt.name === a.terrName);
+  if (terrIdx < 0) return null;
+  return { ts, tsIdx, terrIdx, terrType: ts.terrainTypes[terrIdx] };
+}
+
+// ═══════════════════════════════════════════════
+// TOOLS
+// ═══════════════════════════════════════════════
 const TOOLS = [
-  { id: 'pan', ic: '✋', i18n: 'tool.pan', title: 'Pan (P)' },
+  { id: 'pan',     hk: 'KeyM', label: 'MOVE',    hkPos: 0, icon: 'asset/icon/move.png',    emoji: '✋', title: 'Move (M)' },
   { sep: true },
-  { id: 'brush', ic: '🖌', i18n: 'tool.brush', title: 'Brush (B)' },
-  { id: 'terrain', ic: '🌍', i18n: 'tool.terrain', title: 'Terrain (T)' },
-  { id: 'classic', ic: '▦', i18n: 'tool.classic', title: 'Classic autotile (C)' },
-  { id: 'eraser', ic: '🧽', i18n: 'tool.eraser', title: 'Eraser (E)' },
-  { id: 'rect', ic: '▭', i18n: 'tool.rect', title: 'Rect (R)' },
-  { id: 'fill', ic: '🪣', i18n: 'tool.fill', title: 'Fill (F)' },
-  { id: 'picker', ic: '💧', i18n: 'tool.picker', title: 'Picker (I)' },
+  { id: 'brush',   hk: 'KeyB', label: 'BRUSH',   hkPos: 0, icon: 'asset/icon/brush.png',   emoji: '🖌', title: 'Brush (B)' },
+  { id: 'terrain', hk: 'KeyY', label: 'TYPE',    hkPos: 1, icon: 'asset/icon/type.png',    emoji: '🌍', title: 'Type / Solid (Y)' },
+  { id: 'classic', hk: 'KeyT', label: 'TERRAIN', hkPos: 0, icon: 'asset/icon/terrain.png', emoji: '▦',  title: 'Terrain (T)' },
+  { id: 'eraser',  hk: 'KeyE', label: 'ERASE',   hkPos: 0, icon: 'asset/icon/erase.png',   emoji: '🧽', title: 'Erase (E)' },
+  { id: 'rect',    hk: 'KeyR', label: 'RECT',    hkPos: 0, icon: 'asset/icon/rect.png',    emoji: '▭',  title: 'Rect (R)' },
+  { id: 'fill',    hk: 'KeyF', label: 'FILL',    hkPos: 0, icon: 'asset/icon/fill.png',    emoji: '🪣', title: 'Fill (F)' },
+  { id: 'picker',  hk: 'KeyK', label: 'PICK',    hkPos: 3, icon: 'asset/icon/picker.png',  emoji: '💧', title: 'Picker (K)' },
   { sep: true },
-  { id: 'autotile', ic: '⚙', i18n: 'tool.autotile', title: 'Autotile area' },
-  { sep: true },
-  { id: 'undo', ic: '↶', i18n: 'tool.undo', title: 'Undo (Ctrl+Z)' },
-  { id: 'redo', ic: '↷', i18n: 'tool.redo', title: 'Redo (Ctrl+Y)' }
+  { id: 'autotile', label: 'AUTO', hkPos: -1, icon: 'asset/icon/auto.png', emoji: '⚙', title: 'Autotile area' }
 ];
 
+function makeIconEl(t) {
+  if (t.icon) {
+    const img = document.createElement('img');
+    img.className = 'tool-ic';
+    img.src = t.icon;
+    img.alt = '';
+    img.onerror = () => {
+      const span = document.createElement('span');
+      span.className = 'ic';
+      span.textContent = t.emoji || '?';
+      img.replaceWith(span);
+    };
+    return img;
+  }
+  const span = document.createElement('span');
+  span.className = 'ic';
+  span.textContent = t.emoji || '?';
+  return span;
+}
+
+function makeLabelEl(t) {
+  const lbl = document.createElement('span');
+  lbl.className = 'lbl';
+  const label = t.label || '';
+  const pos = (t.hkPos != null) ? t.hkPos : -1;
+
+  if (pos < 0 || pos >= label.length) {
+    lbl.textContent = label;
+    return lbl;
+  }
+
+  const before = label.slice(0, pos);
+  const ch = label.charAt(pos);
+  const after = label.slice(pos + 1);
+
+  if (before) lbl.appendChild(document.createTextNode(before));
+  const b = document.createElement('b');
+  b.className = 'hk';
+  b.textContent = ch;
+  lbl.appendChild(b);
+  if (after) lbl.appendChild(document.createTextNode(after));
+  return lbl;
+}
+
 function buildTools() {
+  if (!toolsEl) return;
   toolsEl.innerHTML = '';
   for (const t of TOOLS) {
     if (t.sep) {
@@ -192,27 +242,25 @@ function buildTools() {
       toolsEl.appendChild(sep);
       continue;
     }
-    const el = document.createElement('div');
-    el.className = 'tool' + (t.id === activeTool ? ' active' : '');
-    el.dataset.tool = t.id;
-    el.title = t.title || '';
-    el.innerHTML = '<span class="ic">' + t.ic + '</span>' +
-      '<span data-i18n="' + t.i18n + '">' + RW.I18N.t(t.i18n) + '</span>';
-    el.addEventListener('click', () => handleToolClick(t.id));
-    toolsEl.appendChild(el);
+    const e = document.createElement('div');
+    e.className = 'tool' + (t.id === activeTool ? ' active' : '');
+    e.dataset.tool = t.id;
+    e.title = t.title || '';
+    e.appendChild(makeIconEl(t));
+    e.appendChild(makeLabelEl(t));
+    e.addEventListener('click', () => handleToolClick(t.id));
+    toolsEl.appendChild(e);
   }
 }
 
 function handleToolClick(id) {
   if (pickMode) endPick();
-  if (id === 'undo') { doUndo(); return; }
-  if (id === 'redo') { doRedo(); return; }
   if (id === 'autotile') { runAutotileDialog(); return; }
   activeTool = id;
-  document.querySelectorAll('#tools .tool').forEach(el => {
-    el.classList.toggle('active', el.dataset.tool === id);
+  document.querySelectorAll('#tools .tool').forEach(e => {
+    e.classList.toggle('active', e.dataset.tool === id);
   });
-  cv.classList.toggle('crosshair', id !== 'pan');
+  if (cv) cv.classList.toggle('crosshair', id !== 'pan');
   settings.activeTool = id;
   RW.Storage.saveSettings(settings);
   if (renderer) renderer.render();
@@ -220,31 +268,29 @@ function handleToolClick(id) {
 
 // ─── Pick mode ───
 function ensureAtlasesVisible() {
-  document.getElementById('btnAtlasesTab').classList.add('active');
-  bottomEl.classList.remove('atlases-hidden');
+  const b = el('btnAtlasesTab');
+  if (b) b.classList.add('active');
+  if (bottomEl) bottomEl.classList.remove('atlases-hidden');
 }
-
 function startPick(mode) {
   pickMode = mode;
   ensureAtlasesVisible();
   let label;
   if (mode.kind === 'edge') label = 'Pick tile for ' + mode.role;
   else if (mode.kind === 'solid') label = 'Pick solid tile';
-  pickBannerTextEl.textContent = label + ' · click tile · click again to clear';
-  pickBannerEl.classList.remove('hidden');
+  if (pickBannerTextEl) pickBannerTextEl.textContent = label + ' · click tile · click again to clear';
+  if (pickBannerEl) pickBannerEl.classList.remove('hidden');
   if (typesPanel) typesPanel.build();
   if (tilesetTabs) tilesetTabs.build();
-  statusEl.textContent = label;
+  if (statusEl) statusEl.textContent = label;
 }
-
 function endPick() {
   pickMode = null;
-  pickBannerEl.classList.add('hidden');
+  if (pickBannerEl) pickBannerEl.classList.add('hidden');
   if (typesPanel) typesPanel.build();
   if (tilesetTabs) tilesetTabs.build();
-  statusEl.textContent = 'Pick cancelled';
+  if (statusEl) statusEl.textContent = 'Pick cancelled';
 }
-
 function applyPick(globalID) {
   if (!pickMode) return;
   const t = typesModel.get(pickMode.typeId);
@@ -259,7 +305,7 @@ function applyPick(globalID) {
   }
   if (typesPanel) typesPanel.build();
   if (tilesetTabs) tilesetTabs.build();
-  statusEl.textContent = 'OK · #' + globalID;
+  if (statusEl) statusEl.textContent = 'OK · #' + globalID;
 }
 
 // ─── Brush helpers ───
@@ -274,7 +320,6 @@ function addToBrush(tileID, add) {
   if (brushPanel) brushPanel.build();
   if (tilesetTabs) tilesetTabs.refreshSelection();
 }
-
 function addEmptyToBrush() {
   const ex = brushGroup.find(b => b.tileID === 0);
   if (ex) ex.weight = 1;
@@ -282,31 +327,22 @@ function addEmptyToBrush() {
   if (brushPanel) brushPanel.build();
   if (tilesetTabs) tilesetTabs.refreshSelection();
 }
-
 function pickWeightedTile() {
   if (!brushGroup.length) return 0;
   const total = brushGroup.reduce((s, b) => s + b.weight, 0);
   if (total <= 0) return brushGroup[0].tileID;
   let r = Math.random() * total;
-  for (const b of brushGroup) {
-    r -= b.weight;
-    if (r <= 0) return b.tileID;
-  }
+  for (const b of brushGroup) { r -= b.weight; if (r <= 0) return b.tileID; }
   return brushGroup[brushGroup.length - 1].tileID;
 }
-
 function pickWeightedSolid(type) {
   if (!type || !type.solids || !type.solids.length) return 0;
   const total = type.solids.reduce((s, x) => s + (x.weight || 0), 0);
   if (total <= 0) return type.solids[0].tileID;
   let r = Math.random() * total;
-  for (const s of type.solids) {
-    r -= (s.weight || 0);
-    if (r <= 0) return s.tileID;
-  }
+  for (const s of type.solids) { r -= (s.weight || 0); if (r <= 0) return s.tileID; }
   return type.solids[type.solids.length - 1].tileID;
 }
-
 function brushCells(cx, cy) {
   const size = brushSettings.size || 0;
   const shape = brushSettings.shape;
@@ -326,7 +362,6 @@ function brushCells(cx, cy) {
 
 // ─── Painting ───
 function ensureStrokeChanges() { if (!strokeChanges) strokeChanges = new Map(); }
-
 function recordChange(layer, idx, before, after) {
   ensureStrokeChanges();
   if (!strokeChanges.has(layer)) strokeChanges.set(layer, new Map());
@@ -334,7 +369,6 @@ function recordChange(layer, idx, before, after) {
   if (!m.has(idx)) m.set(idx, { before, after });
   else m.get(idx).after = after;
 }
-
 function expandStrokeBound(tx, ty) {
   if (!strokeBound) strokeBound = { x0: tx, y0: ty, x1: tx, y1: ty };
   else {
@@ -344,38 +378,36 @@ function expandStrokeBound(tx, ty) {
     if (ty > strokeBound.y1) strokeBound.y1 = ty;
   }
 }
-
 function paintBrushCells(cx, cy, tileFn) {
   const map = mapModel;
   if (!activeLayer) return;
   const data = map.layers[activeLayer];
   const cells = brushCells(cx, cy);
-  for (const cell of cells) {
-    const tx = cell[0], ty = cell[1];
+  for (const c of cells) {
+    const tx = c[0], ty = c[1];
     if (tx < 0 || ty < 0 || tx >= map.W || ty >= map.H) continue;
     const idx = ty * map.W + tx;
-    const tileValue = tileFn();
+    const v = tileFn();
     const before = data[idx];
-    if (before === tileValue) continue;
-    data[idx] = tileValue;
-    recordChange(activeLayer, idx, before, tileValue);
+    if (before === v) continue;
+    data[idx] = v;
+    recordChange(activeLayer, idx, before, v);
     renderer.invalidateCell(tx, ty);
     expandStrokeBound(tx, ty);
   }
 }
-
 function paintTerrainCells(cx, cy) {
   const map = mapModel;
   if (!activeLayer) return;
   const type = typesModel.get(activeTypeId);
   if (!type || !type.solids.length) {
-    statusEl.textContent = 'No type selected or no solids';
+    if (statusEl) statusEl.textContent = 'No type selected or no solids';
     return;
   }
   const data = map.layers[activeLayer];
   const cells = brushCells(cx, cy);
-  for (const cell of cells) {
-    const tx = cell[0], ty = cell[1];
+  for (const c of cells) {
+    const tx = c[0], ty = c[1];
     if (tx < 0 || ty < 0 || tx >= map.W || ty >= map.H) continue;
     const idx = ty * map.W + tx;
     const before = data[idx];
@@ -388,45 +420,44 @@ function paintTerrainCells(cx, cy) {
   }
 }
 
-// ─── Classic autotile (без изменений) ───
+// ═══════════════════════════════════════════════
+// CLASSIC AUTOTILE — paint
+// ═══════════════════════════════════════════════
 function buildClassicMaskIndex(tsIdx) {
-  const cached = classicMaskCache.get(tsIdx);
-  if (cached) return cached;
+  const c = classicMaskCache.get(tsIdx);
+  if (c) return c;
   const ts = mapModel.tilesets[tsIdx];
-  const index = new Map();
+  const idx = new Map();
   for (const idStr in ts.tiles) {
     const id = parseInt(idStr, 10);
     const t = ts.tiles[id];
     if (!t.terrain) continue;
-    const key = t.terrain.join(',');
-    if (!index.has(key)) index.set(key, id + ts.firstgid);
+    const k = t.terrain.join(',');
+    if (!idx.has(k)) idx.set(k, id + ts.firstgid);
   }
-  classicMaskCache.set(tsIdx, index);
-  return index;
+  classicMaskCache.set(tsIdx, idx);
+  return idx;
 }
 function findEmptyValue(tsIdx, targetTerr) {
-  const key = tsIdx + ':' + targetTerr;
-  if (classicEmptyCache.has(key)) return classicEmptyCache.get(key);
+  const k = tsIdx + ':' + targetTerr;
+  if (classicEmptyCache.has(k)) return classicEmptyCache.get(k);
   const ts = mapModel.tilesets[tsIdx];
   const counts = new Map();
   for (const idStr in ts.tiles) {
     const t = ts.tiles[idStr];
     if (!t.terrain) continue;
-    const hasTarget = t.terrain.some(v => v === targetTerr);
-    if (!hasTarget) continue;
+    if (!t.terrain.some(v => v === targetTerr)) continue;
     for (const v of t.terrain) {
       if (v === targetTerr) continue;
       counts.set(v, (counts.get(v) || 0) + 1);
     }
   }
   let best = -1, bestCount = 0;
-  for (const kv of counts) {
-    if (kv[1] > bestCount) { best = kv[0]; bestCount = kv[1]; }
-  }
-  classicEmptyCache.set(key, best);
+  for (const kv of counts) if (kv[1] > bestCount) { best = kv[0]; bestCount = kv[1]; }
+  classicEmptyCache.set(k, best);
   return best;
 }
-function cellHasCorner(tx, ty, cornerIdx, tsIdx, targetTerr) {
+function cellHasCorner(tx, ty, ci, tsIdx, targetTerr) {
   const map = mapModel;
   if (tx < 0 || ty < 0 || tx >= map.W || ty >= map.H) return false;
   const id = map.layers[activeLayer][ty * map.W + tx];
@@ -436,7 +467,7 @@ function cellHasCorner(tx, ty, cornerIdx, tsIdx, targetTerr) {
   if (!nts || nts !== ts) return false;
   const t = nts.tiles[id - nts.firstgid];
   if (!t || !t.terrain) return false;
-  return t.terrain[cornerIdx] === targetTerr;
+  return t.terrain[ci] === targetTerr;
 }
 function resolveClassicMask(tx, ty, tsIdx, targetTerr, emptyValue) {
   const tlOK = cellHasCorner(tx-1, ty-1, 3, tsIdx, targetTerr) &&
@@ -459,159 +490,170 @@ function resolveClassicMask(tx, ty, tsIdx, targetTerr, emptyValue) {
   ];
 }
 function combinations(arr, k) {
-  const result = [];
-  function rec(start, cur) {
-    if (cur.length === k) { result.push(cur.slice()); return; }
-    for (let i = start; i < arr.length; i++) {
-      cur.push(arr[i]); rec(i + 1, cur); cur.pop();
-    }
+  const r = [];
+  function rec(s, cur) {
+    if (cur.length === k) { r.push(cur.slice()); return; }
+    for (let i = s; i < arr.length; i++) { cur.push(arr[i]); rec(i+1, cur); cur.pop(); }
   }
   rec(0, []);
-  return result;
+  return r;
 }
-function paintClassicCell(tx, ty) {
-  if (!activeClassicTerrain) return;
+function paintClassicCell(tx, ty, anchor) {
+  if (!anchor) return;
   const map = mapModel;
   if (tx < 0 || ty < 0 || tx >= map.W || ty >= map.H) return;
   if (!activeLayer) return;
-  const tsIdx = activeClassicTerrain.tsIdx;
-  const terrIdx = activeClassicTerrain.terrIdx;
-  const ts = map.tilesets[tsIdx];
-  if (!ts) return;
-  const emptyValue = findEmptyValue(tsIdx, terrIdx);
-  const mask = resolveClassicMask(tx, ty, tsIdx, terrIdx, emptyValue);
-  const index = buildClassicMaskIndex(tsIdx);
-  let tileID = index.get(mask.join(','));
+  const tsIdx = anchor.tsIdx;
+  const terrIdx = anchor.terrIdx;
+  const ts = anchor.ts;
+  const ev = findEmptyValue(tsIdx, terrIdx);
+  const mask = resolveClassicMask(tx, ty, tsIdx, terrIdx, ev);
+  const idx = buildClassicMaskIndex(tsIdx);
+  let tileID = idx.get(mask.join(','));
   if (tileID === undefined) {
-    const emptyPos = [];
-    for (let i = 0; i < 4; i++) if (mask[i] === emptyValue) emptyPos.push(i);
+    const empty = [];
+    for (let i = 0; i < 4; i++) if (mask[i] === ev) empty.push(i);
     outer:
-    for (let numFill = emptyPos.length; numFill >= 1; numFill--) {
-      const combos = combinations(emptyPos, numFill);
+    for (let n = empty.length; n >= 1; n--) {
+      const combos = combinations(empty, n);
       for (const combo of combos) {
         const test = mask.slice();
         for (const i of combo) test[i] = terrIdx;
-        tileID = index.get(test.join(','));
+        tileID = idx.get(test.join(','));
         if (tileID !== undefined) break outer;
       }
     }
   }
   if (tileID === undefined) return;
-  const idx = ty * map.W + tx;
-  const before = map.layers[activeLayer][idx];
+  const i = ty * map.W + tx;
+  const before = map.layers[activeLayer][i];
   if (before === tileID) return;
-  map.layers[activeLayer][idx] = tileID;
-  recordChange(activeLayer, idx, before, tileID);
+  map.layers[activeLayer][i] = tileID;
+  recordChange(activeLayer, i, before, tileID);
   renderer.invalidateCell(tx, ty);
 }
 function paintClassicCells(cx, cy) {
   const map = mapModel;
-  if (!map || !activeLayer || !activeClassicTerrain) return;
-  const tsIdx = activeClassicTerrain.tsIdx;
-  const terrIdx = activeClassicTerrain.terrIdx;
-  const ts = map.tilesets[tsIdx];
-  if (!ts) return;
-  const solidLocal = ts.terrainTypes[terrIdx] ? ts.terrainTypes[terrIdx].tile : 0;
-  const solidTile = solidLocal + ts.firstgid;
+  if (!map || !activeLayer) return;
+  const anchor = resolveClassicAnchor();
+  if (!anchor) {
+    if (statusEl) statusEl.textContent = 'Classic: anchor not resolved';
+    return;
+  }
+  const solidTile = anchor.terrType.tile + anchor.ts.firstgid;
   const cells = brushCells(cx, cy);
   const data = map.layers[activeLayer];
-  for (const cell of cells) {
-    const tx = cell[0], ty = cell[1];
+  for (const c of cells) {
+    const tx = c[0], ty = c[1];
     if (tx < 0 || ty < 0 || tx >= map.W || ty >= map.H) continue;
-    const idx = ty * map.W + tx;
-    const before = data[idx];
+    const i = ty * map.W + tx;
+    const before = data[i];
     if (before === solidTile) continue;
-    data[idx] = solidTile;
-    recordChange(activeLayer, idx, before, solidTile);
+    data[i] = solidTile;
+    recordChange(activeLayer, i, before, solidTile);
     renderer.invalidateCell(tx, ty);
     expandStrokeBound(tx, ty);
   }
-  for (const cell of cells) paintClassicCell(cell[0], cell[1]);
+  for (const c of cells) paintClassicCell(c[0], c[1], anchor);
 }
 function finalizeClassicForStroke() {
-  if (!strokeChanges || !activeClassicTerrain) return;
+  if (!strokeChanges) return;
   const m = strokeChanges.get(activeLayer);
   if (!m || !m.size) return;
-  const tsIdx = activeClassicTerrain.tsIdx;
-  const terrIdx = activeClassicTerrain.terrIdx;
-  const ts = map.tilesets[tsIdx];
-  if (!ts) return;
-  const solidLocal = ts.terrainTypes[terrIdx] ? ts.terrainTypes[terrIdx].tile : 0;
-  const solidTile = solidLocal + ts.firstgid;
+  const anchor = resolveClassicAnchor();
+  if (!anchor) return;
+  const solidTile = anchor.terrType.tile + anchor.ts.firstgid;
   const data = map.layers[activeLayer];
-  const paintedSet = new Set(m.keys());
-  for (const idx of paintedSet) {
-    const before = data[idx];
+  const painted = new Set(m.keys());
+  for (const i of painted) {
+    const before = data[i];
     if (before === solidTile) continue;
-    data[idx] = solidTile;
-    recordChange(activeLayer, idx, before, solidTile);
-    const x = idx % mapModel.W;
-    const y = Math.floor(idx / mapModel.W);
+    data[i] = solidTile;
+    recordChange(activeLayer, i, before, solidTile);
+    const x = i % mapModel.W, y = Math.floor(i / mapModel.W);
     renderer.invalidateCell(x, y);
   }
   const lookup = new Set();
-  for (const idx of paintedSet) {
-    const x = idx % mapModel.W;
-    const y = Math.floor(idx / mapModel.W);
-    for (let dy = -1; dy <= 1; dy++) {
+  for (const i of painted) {
+    const x = i % mapModel.W, y = Math.floor(i / mapModel.W);
+    for (let dy = -1; dy <= 1; dy++)
       for (let dx = -1; dx <= 1; dx++) {
         const nx = x + dx, ny = y + dy;
         if (nx < 0 || ny < 0 || nx >= mapModel.W || ny >= mapModel.H) continue;
         lookup.add(ny * mapModel.W + nx);
       }
-    }
   }
-  for (const idx of lookup) {
-    const x = idx % mapModel.W;
-    const y = Math.floor(idx / mapModel.W);
-    paintClassicCell(x, y);
+  for (const i of lookup) {
+    const x = i % mapModel.W, y = Math.floor(i / mapModel.W);
+    paintClassicCell(x, y, anchor);
   }
 }
+
+// ─── Classic select ───
+// value формата "firstgid:terrainName" — оба ключа стабильны.
 function rebuildClassicSelect() {
   const map = mapModel;
+  if (!classicSelectEl) return;
   classicSelectEl.innerHTML = '';
   if (!map) return;
   let hasAny = false;
-  map.tilesets.forEach((ts, ti) => {
-    if (!ts.terrainTypes.length) return;
-    const group = document.createElement('optgroup');
-    group.label = ts.name;
-    ts.terrainTypes.forEach((tt, terri) => {
+
+  map.tilesets.forEach(ts => {
+    if (!ts.terrainTypes || !ts.terrainTypes.length) return;
+    const g = document.createElement('optgroup');
+    g.label = ts.name + ' (firstgid ' + ts.firstgid + ')';
+    ts.terrainTypes.forEach(tt => {
       hasAny = true;
-      const opt = document.createElement('option');
-      opt.value = ti + ':' + terri;
-      opt.textContent = tt.name + '  · tile ' + tt.tile;
-      if (activeClassicTerrain && activeClassicTerrain.tsIdx === ti
-          && activeClassicTerrain.terrIdx === terri) {
-        opt.selected = true;
+      const o = document.createElement('option');
+      o.value = ts.firstgid + ':' + tt.name;
+      o.textContent = tt.name + ' · local ' + tt.tile + ' · global ' + (tt.tile + ts.firstgid);
+      if (activeClassicTerrain &&
+          activeClassicTerrain.tsFirstgid === ts.firstgid &&
+          activeClassicTerrain.terrName === tt.name) {
+        o.selected = true;
       }
-      group.appendChild(opt);
+      g.appendChild(o);
     });
-    classicSelectEl.appendChild(group);
+    classicSelectEl.appendChild(g);
   });
+
   if (!hasAny) {
-    const opt = document.createElement('option');
-    opt.textContent = '— no terraintypes —';
-    opt.disabled = true;
-    classicSelectEl.appendChild(opt);
+    const o = document.createElement('option');
+    o.textContent = '— no terraintypes —';
+    o.disabled = true;
+    classicSelectEl.appendChild(o);
+  }
+
+  // если активный anchor больше не разрешается — сбросить
+  if (activeClassicTerrain && !resolveClassicAnchor()) {
+    activeClassicTerrain = null;
   }
 }
-classicSelectEl.addEventListener('change', () => {
+
+if (classicSelectEl) classicSelectEl.addEventListener('change', () => {
   const v = classicSelectEl.value;
   if (!v) { activeClassicTerrain = null; return; }
-  const parts = v.split(':');
-  activeClassicTerrain = {
-    tsIdx: parseInt(parts[0], 10),
-    terrIdx: parseInt(parts[1], 10)
-  };
-  const ts = mapModel.tilesets[activeClassicTerrain.tsIdx];
-  const tt = ts.terrainTypes[activeClassicTerrain.terrIdx];
-  const emptyVal = findEmptyValue(activeClassicTerrain.tsIdx, activeClassicTerrain.terrIdx);
-  const masksInTs = buildClassicMaskIndex(activeClassicTerrain.tsIdx).size;
-  statusEl.textContent = 'Classic: ' + ts.name + ' · ' + tt.name
-    + '  (empty=' + emptyVal + ', masks=' + masksInTs + ')';
+  const eq = v.indexOf(':');
+  const firstgid = parseInt(v.slice(0, eq), 10);
+  const terrName = v.slice(eq + 1);
+  activeClassicTerrain = { tsFirstgid: firstgid, terrName };
+
+  const anchor = resolveClassicAnchor();
+  if (!anchor) {
+    if (statusEl) statusEl.textContent = 'Classic: anchor not resolved';
+    return;
+  }
+  const ev = findEmptyValue(anchor.tsIdx, anchor.terrIdx);
+  const mc = buildClassicMaskIndex(anchor.tsIdx).size;
+  if (statusEl) statusEl.textContent = 'Classic: ' + anchor.ts.name +
+    ' (firstgid ' + anchor.ts.firstgid + ')' +
+    ' · ' + anchor.terrType.name +
+    ' (local ' + anchor.terrType.tile +
+    ' → global ' + (anchor.terrType.tile + anchor.ts.firstgid) + ')' +
+    '  (empty=' + ev + ', masks=' + mc + ')';
 });
 
+// ─── Custom autotile (TNS) ───
 function finalizeAutotileForStroke() {
   if (!generator || !strokeBound) return;
   const b = strokeBound;
@@ -622,8 +664,7 @@ function finalizeAutotileForStroke() {
   if (!data) return;
   for (const c of changes) {
     data[c.idx] = c.after;
-    const x = c.idx % mapModel.W;
-    const y = Math.floor(c.idx / mapModel.W);
+    const x = c.idx % mapModel.W, y = Math.floor(c.idx / mapModel.W);
     renderer.invalidateCell(x, y);
     recordChange('Items0', c.idx, c.before, c.after);
   }
@@ -631,36 +672,31 @@ function finalizeAutotileForStroke() {
 
 function endStroke() {
   if (!strokeChanges || !strokeChanges.size) {
-    strokeChanges = null;
-    strokeBound = null;
+    strokeChanges = null; strokeBound = null;
     return;
   }
   const map = mapModel;
   const layers = [];
-  let totalChanged = 0;
+  let total = 0;
   for (const kv of strokeChanges) {
-    const layer = kv[0];
-    const m = kv[1];
+    const layer = kv[0], m = kv[1];
     const real = [];
     for (const kv2 of m) {
-      const idx = kv2[0];
-      const c = kv2[1];
-      if (c.before !== c.after) real.push({ idx, before: c.before, after: c.after });
+      const i = kv2[0], c = kv2[1];
+      if (c.before !== c.after) real.push({ idx: i, before: c.before, after: c.after });
     }
     if (!real.length) continue;
     layers.push({ layer, changes: real });
-    totalChanged += real.length;
+    total += real.length;
   }
   if (layers.length) {
     map.undoStack.push({ type: 'multi', layers });
     if (map.undoStack.length > 50) map.undoStack.shift();
     map.redoStack.length = 0;
-    statusEl.textContent = totalChanged + ' cells changed';
+    if (statusEl) statusEl.textContent = total + ' cells changed';
   }
   invalidateMarkersCache();
-  strokeChanges = null;
-  strokeBound = null;
-  lastPaintKey = null;
+  strokeChanges = null; strokeBound = null; lastPaintKey = null;
 }
 
 function floodFill(tx, ty, newTile) {
@@ -677,10 +713,10 @@ function floodFill(tx, ty, newTile) {
     const p = stack.pop();
     const x = p[0], y = p[1];
     if (x < 0 || y < 0 || x >= map.W || y >= map.H) continue;
-    const idx = y * map.W + x;
-    if (seen.has(idx) || data[idx] !== target) continue;
-    seen.add(idx);
-    changes.push({ idx, before: target, after: newTile });
+    const i = y * map.W + x;
+    if (seen.has(i) || data[i] !== target) continue;
+    seen.add(i);
+    changes.push({ idx: i, before: target, after: newTile });
     stack.push([x+1,y],[x-1,y],[x,y+1],[x,y-1]);
   }
   if (!changes.length) return;
@@ -696,14 +732,14 @@ function floodFill(tx, ty, newTile) {
   if (map.undoStack.length > 50) map.undoStack.shift();
   map.redoStack.length = 0;
   invalidateMarkersCache();
-  statusEl.textContent = 'Fill: ' + changes.length + ' cells';
+  if (statusEl) statusEl.textContent = 'Fill: ' + changes.length + ' cells';
 }
 
 function runFloodDominant() {
-  if (!mapModel || !generator) { statusEl.textContent = 'No map'; return; }
-  if (!mapModel.layers.Ground) { statusEl.textContent = 'No Ground layer'; return; }
+  if (!mapModel || !generator) { if (statusEl) statusEl.textContent = 'No map'; return; }
+  if (!mapModel.layers.Ground) { if (statusEl) statusEl.textContent = 'No Ground layer'; return; }
   const changes = generator.floodDominant(0, 0, mapModel.W - 1, mapModel.H - 1);
-  if (!changes.length) { statusEl.textContent = 'FLOOD: nothing to change'; return; }
+  if (!changes.length) { if (statusEl) statusEl.textContent = 'FLOOD: nothing to change'; return; }
   const data = mapModel.layers.Ground;
   for (const c of changes) data[c.idx] = c.after;
   renderer.invalidate();
@@ -712,7 +748,7 @@ function runFloodDominant() {
   mapModel.redoStack.length = 0;
   invalidateMarkersCache();
   renderer.render();
-  statusEl.textContent = 'FLOOD: ' + changes.length + ' cells recolored';
+  if (statusEl) statusEl.textContent = 'FLOOD: ' + changes.length + ' cells';
 }
 
 function applyRect(x0, y0, x1, y1, tileFn) {
@@ -726,12 +762,12 @@ function applyRect(x0, y0, x1, y1, tileFn) {
   const changes = [];
   for (let y = minY; y <= maxY; y++) {
     for (let x = minX; x <= maxX; x++) {
-      const idx = y * map.W + x;
-      const before = data[idx];
-      const tileValue = tileFn();
-      if (before === tileValue) continue;
-      data[idx] = tileValue;
-      changes.push({ idx, before, after: tileValue });
+      const i = y * map.W + x;
+      const before = data[i];
+      const v = tileFn();
+      if (before === v) continue;
+      data[i] = v;
+      changes.push({ idx: i, before, after: v });
     }
   }
   if (!changes.length) return;
@@ -740,7 +776,7 @@ function applyRect(x0, y0, x1, y1, tileFn) {
   if (map.undoStack.length > 50) map.undoStack.shift();
   map.redoStack.length = 0;
   invalidateMarkersCache();
-  statusEl.textContent = 'Rect: ' + changes.length + ' cells';
+  if (statusEl) statusEl.textContent = 'Rect: ' + changes.length + ' cells';
 }
 
 function pickerAt(tx, ty) {
@@ -754,11 +790,11 @@ function pickerAt(tx, ty) {
       activeLayer = name;
       addToBrush(id, false);
       if (layersPanel) layersPanel.build();
-      statusEl.textContent = 'Picker: ' + name + ' #' + id;
+      if (statusEl) statusEl.textContent = 'Picker: ' + name + ' #' + id;
       return;
     }
   }
-  statusEl.textContent = 'Picker: empty';
+  if (statusEl) statusEl.textContent = 'Picker: empty';
 }
 
 function runAutotileDialog() {
@@ -771,11 +807,10 @@ function runAutotileDialog() {
   if (isNaN(x1)) return;
   const y1 = parseInt(prompt('y1:', String(mapModel.H - 1)), 10);
   if (isNaN(y1)) return;
-
   const changes = generator.generateRect(x0, y0, x1, y1);
-  if (!changes.length) { statusEl.textContent = 'Autotile: no changes'; return; }
+  if (!changes.length) { if (statusEl) statusEl.textContent = 'Autotile: no changes'; return; }
   const data = mapModel.layers.Items0;
-  if (!data) { statusEl.textContent = 'No Items0 layer'; return; }
+  if (!data) { if (statusEl) statusEl.textContent = 'No Items0 layer'; return; }
   for (const c of changes) data[c.idx] = c.after;
   renderer.invalidateRange(x0, y0, x1, y1);
   mapModel.undoStack.push({ layer: 'Items0', changes });
@@ -783,58 +818,78 @@ function runAutotileDialog() {
   mapModel.redoStack.length = 0;
   invalidateMarkersCache();
   renderer.render();
-  statusEl.textContent = 'Autotile: ' + changes.length + ' cells';
+  if (statusEl) statusEl.textContent = 'Autotile: ' + changes.length + ' cells';
 }
 
 function doUndo() {
-  if (!mapModel || !mapModel.canUndo()) { statusEl.textContent = 'Nothing to undo'; return; }
+  if (!mapModel || !mapModel.canUndo()) { if (statusEl) statusEl.textContent = 'Nothing to undo'; return; }
   const entry = mapModel.undo();
   invalidateMarkersCache();
   if (entry.type === 'resize') {
     renderer.invalidate();
     renderer.fitView();
-    zoomVal.textContent = renderer.view.zoom.toFixed(2);
+    if (zoomVal) zoomVal.textContent = renderer.view.zoom.toFixed(2);
     if (layersPanel) layersPanel.build();
-  } else {
-    invalidateEntry(entry);
-  }
+  } else invalidateEntry(entry);
   renderer.render();
-  statusEl.textContent = 'Undo';
+  if (statusEl) statusEl.textContent = 'Undo';
 }
 function doRedo() {
-  if (!mapModel || !mapModel.canRedo()) { statusEl.textContent = 'Nothing to redo'; return; }
+  if (!mapModel || !mapModel.canRedo()) { if (statusEl) statusEl.textContent = 'Nothing to redo'; return; }
   const entry = mapModel.redo();
   invalidateMarkersCache();
   if (entry.type === 'resize') {
     renderer.invalidate();
     renderer.fitView();
-    zoomVal.textContent = renderer.view.zoom.toFixed(2);
+    if (zoomVal) zoomVal.textContent = renderer.view.zoom.toFixed(2);
     if (layersPanel) layersPanel.build();
-  } else {
-    invalidateEntry(entry);
-  }
+  } else invalidateEntry(entry);
   renderer.render();
-  statusEl.textContent = 'Redo';
+  if (statusEl) statusEl.textContent = 'Redo';
 }
 function invalidateEntry(entry) {
   if (!renderer) return;
   if (entry.type === 'resize') return;
-  let list;
-  if (entry.type === 'multi') list = entry.layers;
-  else list = [{ layer: entry.layer, changes: entry.changes }];
+  const list = entry.type === 'multi'
+    ? entry.layers
+    : [{ layer: entry.layer, changes: entry.changes }];
   for (const le of list) {
     if (!le.changes) continue;
     for (const c of le.changes) {
-      const x = c.idx % mapModel.W;
-      const y = Math.floor(c.idx / mapModel.W);
-      const key = Math.floor(x / 32) + ',' + Math.floor(y / 32);
-      renderer.chunkCache.delete(key);
+      const x = c.idx % mapModel.W, y = Math.floor(c.idx / mapModel.W);
+      renderer.chunkCache.delete(Math.floor(x/32) + ',' + Math.floor(y/32));
     }
   }
 }
 
+// ─── WASD pan ───
+const panKeys = new Set();
+let panRaf = null;
+function startPanKey(code) {
+  panKeys.add(code);
+  if (!panRaf) panRaf = requestAnimationFrame(panTick);
+}
+function stopPanKey(code) { panKeys.delete(code); }
+function panTick() {
+  panRaf = null;
+  if (!renderer || !panKeys.size) return;
+  const speed = 12 / renderer.view.zoom;
+  let dx = 0, dy = 0;
+  if (panKeys.has('KeyW')) dy -= 1;
+  if (panKeys.has('KeyS')) dy += 1;
+  if (panKeys.has('KeyA')) dx -= 1;
+  if (panKeys.has('KeyD')) dx += 1;
+  if (dx || dy) {
+    renderer.view.x -= dx * speed;
+    renderer.view.y -= dy * speed;
+    renderer.render();
+  }
+  if (panKeys.size) panRaf = requestAnimationFrame(panTick);
+}
+
 // ─── Mouse ───
-cv.addEventListener('mousedown', (e) => {
+if (cv) cv.addEventListener('mousedown', (e) => {
+  if (!renderer) return;
   if (e.button !== 0 && e.button !== 1) return;
   if (activeTool === 'pan' || e.button === 1) {
     drag.active = true; drag.x = e.clientX; drag.y = e.clientY;
@@ -842,13 +897,12 @@ cv.addEventListener('mousedown', (e) => {
     return;
   }
   if (!mapModel) return;
-  if (!activeLayer) { statusEl.textContent = 'Select active layer'; return; }
-
+  if (!activeLayer) { if (statusEl) statusEl.textContent = 'Select active layer'; return; }
   const pos = renderer.screenToTile(e.clientX, e.clientY);
   const tx = pos.tx, ty = pos.ty;
 
   if (activeTool === 'brush') {
-    if (!brushGroup.length) { statusEl.textContent = 'Brush empty'; return; }
+    if (!brushGroup.length) { if (statusEl) statusEl.textContent = 'Brush empty'; return; }
     painting = true; strokeChanges = null;
     paintBrushCells(tx, ty, pickWeightedTile);
     lastPaintKey = tx + ',' + ty;
@@ -859,7 +913,7 @@ cv.addEventListener('mousedown', (e) => {
     lastPaintKey = tx + ',' + ty;
     renderer.render();
   } else if (activeTool === 'classic') {
-    if (!activeClassicTerrain) { statusEl.textContent = 'Classic: select terrain in BRUSH panel'; return; }
+    if (!resolveClassicAnchor()) { if (statusEl) statusEl.textContent = 'Classic: select terrain in BRUSH panel'; return; }
     painting = true; strokeChanges = null;
     paintClassicCells(tx, ty);
     lastPaintKey = tx + ',' + ty;
@@ -875,7 +929,7 @@ cv.addEventListener('mousedown', (e) => {
     renderer.rectStart = rectStart; renderer.rectCurrent = rectCurrent;
     renderer.render();
   } else if (activeTool === 'fill') {
-    if (!brushGroup.length) { statusEl.textContent = 'Brush empty'; return; }
+    if (!brushGroup.length) { if (statusEl) statusEl.textContent = 'Brush empty'; return; }
     floodFill(tx, ty, pickWeightedTile());
     renderer.render();
   } else if (activeTool === 'picker') {
@@ -885,18 +939,17 @@ cv.addEventListener('mousedown', (e) => {
 });
 
 window.addEventListener('mousemove', (e) => {
+  if (!renderer) return;
   if (drag.active) {
-    const dx = e.clientX - drag.x;
-    const dy = e.clientY - drag.y;
+    const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
     drag.x = e.clientX; drag.y = e.clientY;
     renderer.view.x += dx; renderer.view.y += dy;
     renderer.render();
     return;
   }
-  if (!mapModel) { infoEl.textContent = '—'; return; }
+  if (!mapModel) { if (infoEl) infoEl.textContent = '—'; return; }
   const pos = renderer.screenToTile(e.clientX, e.clientY);
   renderer.hoverTile = { tx: pos.tx, ty: pos.ty };
-
   const leftHeld = (e.buttons & 1) !== 0;
   if (painting && leftHeld) {
     const key = pos.tx + ',' + pos.ty;
@@ -919,15 +972,15 @@ window.addEventListener('mousemove', (e) => {
     if (activeTool === 'terrain') finalizeAutotileForStroke();
     if (activeTool === 'classic') finalizeClassicForStroke();
     endStroke();
-    renderer.rectStart = null;
-    renderer.rectCurrent = null;
+    renderer.rectStart = null; renderer.rectCurrent = null;
   }
   renderer.render();
   updateInfo(pos.tx, pos.ty);
 });
 
 window.addEventListener('mouseup', () => {
-  if (drag.active) { drag.active = false; cv.classList.remove('drag'); return; }
+  if (!renderer) return;
+  if (drag.active) { drag.active = false; if (cv) cv.classList.remove('drag'); return; }
   if (painting) {
     if (activeTool === 'rect' && rectStart && rectCurrent && brushGroup.length) {
       applyRect(rectStart.x, rectStart.y, rectCurrent.x, rectCurrent.y, pickWeightedTile);
@@ -936,76 +989,92 @@ window.addEventListener('mouseup', () => {
       if (activeTool === 'classic') finalizeClassicForStroke();
       endStroke();
     }
-    painting = false;
-    rectStart = null; rectCurrent = null;
+    painting = false; rectStart = null; rectCurrent = null;
     renderer.rectStart = null; renderer.rectCurrent = null;
     renderer.render();
   }
 });
 
-cv.addEventListener('mouseleave', () => {
+if (cv) cv.addEventListener('mouseleave', () => {
+  if (!renderer) return;
   renderer.hoverTile = null;
   renderer.render();
 });
 
 function updateInfo(tx, ty) {
+  if (!infoEl) return;
   if (!mapModel) { infoEl.textContent = '—'; return; }
-  if (tx < 0 || ty < 0 || tx >= mapModel.W || ty >= mapModel.H) {
-    infoEl.textContent = '—';
-    return;
-  }
+  if (tx < 0 || ty < 0 || tx >= mapModel.W || ty >= mapModel.H) { infoEl.textContent = '—'; return; }
   let out = 'Tile: <b>' + tx + ', ' + ty + '</b>';
-  for (const name of mapModel.layerOrder) {
-    const id = mapModel.layers[name][ty * mapModel.W + tx];
-    if (id) out += ' · ' + name + '=<b>' + id + '</b>';
+  for (const n of mapModel.layerOrder) {
+    const id = mapModel.layers[n][ty * mapModel.W + tx];
+    if (id) out += ' · ' + n + '=<b>' + id + '</b>';
   }
   infoEl.innerHTML = out;
 }
 
-wrap.addEventListener('wheel', (e) => {
-  if (!mapModel) return;
+if (wrap) wrap.addEventListener('wheel', (e) => {
+  if (!mapModel || !renderer) return;
   e.preventDefault();
   const r = wrap.getBoundingClientRect();
-  const factor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
-  renderer.zoomAt(e.clientX - r.left, e.clientY - r.top, factor);
-  zoomVal.textContent = renderer.view.zoom.toFixed(2);
+  const f = e.deltaY < 0 ? 1.15 : 1 / 1.15;
+  renderer.zoomAt(e.clientX - r.left, e.clientY - r.top, f);
+  if (zoomVal) zoomVal.textContent = renderer.view.zoom.toFixed(2);
 }, { passive: false });
 
+// ─── Hotkeys ───
 window.addEventListener('keydown', (e) => {
-  if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
-  if (e.key === 'Escape') {
-    if (pickMode) { endPick(); return; }
-  }
+  const tag = e.target && e.target.tagName;
+  if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
+
+  if (e.key === 'Escape') { if (pickMode) { endPick(); return; } }
+
   if (e.ctrlKey || e.metaKey) {
-    if (e.key === 'z' || e.key === 'Z') { e.preventDefault(); doUndo(); return; }
-    if (e.key === 'y' || e.key === 'Y') { e.preventDefault(); doRedo(); return; }
-    if (e.key === 's' || e.key === 'S') { e.preventDefault(); saveMap(); return; }
+    if (e.code === 'KeyZ') { e.preventDefault(); doUndo(); return; }
+    if (e.code === 'KeyY') { e.preventDefault(); doRedo(); return; }
+    if (e.code === 'KeyS') { e.preventDefault(); saveMap(); return; }
+    return;
   }
-  const hk = { b:'brush', e:'eraser', r:'rect', f:'fill', i:'picker', p:'pan',
-               t:'terrain', c:'classic' };
-  const t = hk[e.key.toLowerCase()];
-  if (t) handleToolClick(t);
-});
 
-document.getElementById('btnOpen').addEventListener('click', () => {
-  document.getElementById('fileInput').click();
-});
+  if (e.code === 'KeyW' || e.code === 'KeyA' || e.code === 'KeyS' || e.code === 'KeyD') {
+    if (!panKeys.has(e.code)) startPanKey(e.code);
+    return;
+  }
 
-document.getElementById('fileInput').addEventListener('change', async (e) => {
+  const map = {
+    KeyM: 'pan', KeyB: 'brush', KeyY: 'terrain', KeyT: 'classic',
+    KeyE: 'eraser', KeyR: 'rect', KeyF: 'fill', KeyK: 'picker'
+  };
+  const tool = map[e.code];
+  if (tool) { e.preventDefault(); handleToolClick(tool); }
+});
+window.addEventListener('keyup', (e) => {
+  if (e.code === 'KeyW' || e.code === 'KeyA' || e.code === 'KeyS' || e.code === 'KeyD') {
+    stopPanKey(e.code);
+  }
+});
+window.addEventListener('blur', () => { panKeys.clear(); });
+
+on('btnUndo', 'click', doUndo);
+on('btnRedo', 'click', doRedo);
+
+on('btnOpen', 'click', () => { const f = el('fileInput'); if (f) f.click(); });
+
+on('fileInput', 'change', async (e) => {
   const file = e.target.files[0];
   if (!file) return;
-  statusEl.textContent = 'Parsing...';
+  if (statusEl) statusEl.textContent = 'Parsing...';
   try {
     const text = await file.text();
     const parsed = RW.TMX.parse(text);
     await RW.TMX.loadImages(parsed);
     await initFromParsed(parsed, file.name);
-    statusEl.textContent = 'OK ' + mapModel.W + '×' + mapModel.H +
+    if (statusEl) statusEl.textContent = 'OK ' + mapModel.W + '×' + mapModel.H +
       ' · tilesets: ' + mapModel.tilesets.length +
       ' · layers: ' + mapModel.layerOrder.length;
   } catch (err) {
     console.error(err);
-    statusEl.textContent = 'Error: ' + err.message;
+    if (statusEl) statusEl.textContent = 'Error: ' + err.message;
   }
   e.target.value = '';
 });
@@ -1018,7 +1087,7 @@ async function initFromParsed(parsed, filename) {
   renderer.layerVisibility = {};
   for (const n of mapModel.layerOrder) renderer.layerVisibility[n] = true;
   renderer.onFps = (fps, chunks) => {
-    fpsEl.textContent = fps + ' fps · chunks ' + chunks;
+    if (fpsEl) fpsEl.textContent = fps + ' fps · chunks ' + chunks;
   };
   renderer.getMarkers = () => getMarkersCached();
   renderer.showMarkers = !!settings.showMarkers;
@@ -1028,7 +1097,7 @@ async function initFromParsed(parsed, filename) {
   activeLayer = mapModel.layerOrder[0] || null;
   brushGroup = [];
   pickMode = null;
-  pickBannerEl.classList.add('hidden');
+  if (pickBannerEl) pickBannerEl.classList.add('hidden');
 
   classicMaskCache.clear();
   classicEmptyCache.clear();
@@ -1058,7 +1127,7 @@ async function initFromParsed(parsed, filename) {
     getRenderer: () => renderer,
     getBrushSettings: () => brushSettings,
     onBrushChanged: () => { if (tilesetTabs) tilesetTabs.refreshSelection(); },
-    onBrushSettingsChanged: () => { /* */ }
+    onBrushSettingsChanged: () => {}
   });
 
   tilesetTabs = new RW.TilesetTabs(tsTabsListEl, tsBodyEl, bottomEl, {
@@ -1069,7 +1138,7 @@ async function initFromParsed(parsed, filename) {
     getPickMode: () => pickMode,
     addToBrush: (id, add) => addToBrush(id, add),
     applyPick: (id) => applyPick(id),
-    onAddTileset: () => document.getElementById('tilesetInput').click()
+    onAddTileset: () => { const t = el('tilesetInput'); if (t) t.click(); }
   });
 
   typesPanel = new RW.TypesPanel(typesBodyEl, {
@@ -1092,10 +1161,10 @@ async function initFromParsed(parsed, filename) {
   buildTools();
   rebuildClassicSelect();
 
-  mapNameEl.value = filename || parsed._restoredFilename || 'map.tmx';
+  if (mapNameEl) mapNameEl.value = filename || parsed._restoredFilename || 'map.tmx';
 
   renderer.fitView();
-  zoomVal.textContent = renderer.view.zoom.toFixed(2);
+  if (zoomVal) zoomVal.textContent = renderer.view.zoom.toFixed(2);
 
   if (RW.HMApp) {
     RW.HMApp.onMapReady({
@@ -1108,24 +1177,24 @@ async function initFromParsed(parsed, filename) {
   }
 }
 
-document.getElementById('btnSave').addEventListener('click', saveMap);
+on('btnSave', 'click', saveMap);
 function saveMap() {
-  if (!mapModel) { statusEl.textContent = 'No map'; return; }
+  if (!mapModel) { if (statusEl) statusEl.textContent = 'No map'; return; }
   try {
     const xml = RW.TMX.save(mapModel, typesModel);
-    let filename = (mapNameEl.value || '').trim() || 'map.tmx';
+    let filename = (mapNameEl && mapNameEl.value || '').trim() || 'map.tmx';
     if (!filename.toLowerCase().endsWith('.tmx')) filename += '.tmx';
     U.download(filename, xml, 'application/xml');
-    statusEl.textContent = 'Saved: ' + filename;
+    if (statusEl) statusEl.textContent = 'Saved: ' + filename;
     mapModel.rawXml = xml;
   } catch (err) {
     console.error(err);
-    statusEl.textContent = 'Save error: ' + err.message;
+    if (statusEl) statusEl.textContent = 'Save error: ' + err.message;
   }
 }
 
-document.getElementById('btnResize').addEventListener('click', () => {
-  if (!mapModel) { statusEl.textContent = 'No map'; return; }
+on('btnResize', 'click', () => {
+  if (!mapModel) { if (statusEl) statusEl.textContent = 'No map'; return; }
   const nw = parseInt(prompt('New width (' + mapModel.W + '):', String(mapModel.W)), 10);
   if (isNaN(nw) || nw < 1 || nw > 4096) return;
   const nh = parseInt(prompt('New height (' + mapModel.H + '):', String(mapModel.H)), 10);
@@ -1134,100 +1203,91 @@ document.getElementById('btnResize').addEventListener('click', () => {
   if (!entry) return;
   renderer.invalidate();
   renderer.fitView();
-  zoomVal.textContent = renderer.view.zoom.toFixed(2);
+  if (zoomVal) zoomVal.textContent = renderer.view.zoom.toFixed(2);
   if (layersPanel) layersPanel.build();
   renderer.render();
-  statusEl.textContent = 'Size: ' + nw + '×' + nh;
+  if (statusEl) statusEl.textContent = 'Size: ' + nw + '×' + nh;
 });
 
-document.getElementById('btnMerge').addEventListener('click', () => {
+on('btnMerge', 'click', () => {
+  if (!RW.MergeUI) return;
   RW.MergeUI.open({
-    onMerge: async (mergedParsed) => {
-      await RW.TMX.loadImages(mergedParsed);
-      await initFromParsed(mergedParsed, 'merged.tmx');
-      statusEl.textContent = 'Merged: ' + mergedParsed.W + '×' + mergedParsed.H +
-        ' · tilesets: ' + mergedParsed.tilesets.length +
-        ' · layers: ' + mergedParsed.layerOrder.length;
+    onMerge: async (merged) => {
+      await RW.TMX.loadImages(merged);
+      await initFromParsed(merged, 'merged.tmx');
+      if (statusEl) statusEl.textContent = 'Merged: ' + merged.W + '×' + merged.H +
+        ' · tilesets: ' + merged.tilesets.length +
+        ' · layers: ' + merged.layerOrder.length;
     }
   });
 });
 
-document.getElementById('btnExportMap').addEventListener('click', exportMapPNG);
+on('btnExportMap', 'click', exportMapPNG);
 
-document.getElementById('tilesetInput').addEventListener('change', async (e) => {
+on('tilesetInput', 'change', async (e) => {
   const file = e.target.files[0];
   e.target.value = '';
   if (!file) return;
-  if (!mapModel) { statusEl.textContent = 'Open a map first'; return; }
+  if (!mapModel) { if (statusEl) statusEl.textContent = 'Open a map first'; return; }
   try {
     const buf = await file.arrayBuffer();
     const bytes = new Uint8Array(buf);
     const b64 = U.bytesToB64(bytes);
     const dataUrl = 'data:image/png;base64,' + b64;
     const img = new Image();
-    await new Promise((resolve, reject) => {
-      img.onload = resolve;
-      img.onerror = () => reject(new Error('Cannot read PNG'));
+    await new Promise((res, rej) => {
+      img.onload = res; img.onerror = () => rej(new Error('Cannot read PNG'));
       img.src = dataUrl;
     });
-
     const tw = mapModel.tw, th = mapModel.th;
     const cols = Math.floor(img.naturalWidth / tw);
     const rows = Math.floor(img.naturalHeight / th);
-    if (cols < 1 || rows < 1) {
-      throw new Error('PNG smaller than one tile ' + tw + '×' + th);
-    }
+    if (cols < 1 || rows < 1) throw new Error('PNG smaller than one tile ' + tw + '×' + th);
     const tilecount = cols * rows;
-
-    const defaultName = (file.name || 'tileset').replace(/\.png$/i, '');
-    const name = prompt('Tileset name:', defaultName);
+    const defName = (file.name || 'tileset').replace(/\.png$/i, '');
+    const name = prompt('Tileset name:', defName);
     if (!name) return;
-
     let firstgid = 1;
     for (const ts of mapModel.tilesets) {
       const end = ts.firstgid + ts.tilecount;
       if (end > firstgid) firstgid = end;
     }
-
     const ts = {
       firstgid, name, columns: cols, tilecount,
       tileW: tw, tileH: th,
       image: img, imageDataUrl: dataUrl, embeddedPngB64: b64,
       imageSource: null, imageW: img.naturalWidth, imageH: img.naturalHeight,
-      terrainTypes: [], tiles: {},
-      xmlStr: null, _dirty: true
+      terrainTypes: [], tiles: {}, xmlStr: null, _dirty: true
     };
     mapModel.tilesets.push(ts);
     mapModel.tilesets.sort((a, b) => a.firstgid - b.firstgid);
-
     if (tilesetTabs) {
       tilesetTabs.activeIdx = mapModel.tilesets.indexOf(ts);
       tilesetTabs.build();
     }
+    rebuildClassicSelect();
     invalidateMarkersCache();
-    statusEl.textContent = 'Tileset added: ' + name +
+    if (statusEl) statusEl.textContent = 'Tileset added: ' + name +
       ' (' + cols + '×' + rows + ', firstgid=' + firstgid + ')';
   } catch (err) {
     console.error(err);
-    statusEl.textContent = 'Tileset error: ' + err.message;
+    if (statusEl) statusEl.textContent = 'Tileset error: ' + err.message;
   }
 });
 
-// ═══════════════════════════════════════════════
-// IMPORT MINI TNS
-// ═══════════════════════════════════════════════
+// ─── MiniTNS import (local file) ───
 function startMiniTNSImport() {
-  if (!mapModel) { statusEl.textContent = 'Open a map first'; return; }
+  if (!mapModel) { if (statusEl) statusEl.textContent = 'Open a map first'; return; }
   const inp = document.createElement('input');
   inp.type = 'file';
   inp.accept = 'image/png,image/*';
   inp.onchange = async () => {
-    const file = inp.files && inp.files[0];
-    if (!file) return;
-    try { await importMiniTNS(file); }
+    const f = inp.files && inp.files[0];
+    if (!f) return;
+    try { await importMiniTNS(f); }
     catch (err) {
       console.error(err);
-      statusEl.textContent = 'MiniTNS: ' + err.message;
+      if (statusEl) statusEl.textContent = 'MiniTNS: ' + err.message;
     }
   };
   inp.click();
@@ -1239,286 +1299,237 @@ async function importMiniTNS(file) {
   const b64 = U.bytesToB64(bytes);
   const dataUrl = 'data:image/png;base64,' + b64;
   const img = new Image();
-  await new Promise((resolve, reject) => {
-    img.onload = resolve;
-    img.onerror = () => reject(new Error('Cannot read PNG'));
+  await new Promise((res, rej) => {
+    img.onload = res; img.onerror = () => rej(new Error('Cannot read PNG'));
     img.src = dataUrl;
   });
-
   const tw = mapModel.tw, th = mapModel.th;
   const cols = Math.floor(img.naturalWidth / tw);
   const rows = Math.floor(img.naturalHeight / th);
-  if (cols !== 3 || rows !== 5) {
-    throw new Error('PNG must be exactly 3×5 tiles (' +
-      (tw*3) + '×' + (th*5) + ' px, got ' +
-      img.naturalWidth + '×' + img.naturalHeight +
-      ' = ' + cols + '×' + rows + ' tiles)');
-  }
+  if (cols !== 3 || rows !== 5) throw new Error('PNG must be 3×5 tiles');
   const tilecount = 15;
-
-  const defaultName = (file.name || 'MiniTNS').replace(/\.png$/i, '');
-  const name = prompt('Tileset name:', defaultName);
+  const defName = (file.name || 'MiniTNS').replace(/\.png$/i, '');
+  const name = prompt('Tileset name:', defName);
   if (!name) return;
-
   let firstgid = 1;
   for (const ts of mapModel.tilesets) {
     const end = ts.firstgid + ts.tilecount;
     if (end > firstgid) firstgid = end;
   }
-
   const ts = {
     firstgid, name, columns: cols, tilecount,
     tileW: tw, tileH: th,
     image: img, imageDataUrl: dataUrl, embeddedPngB64: b64,
     imageSource: null, imageW: img.naturalWidth, imageH: img.naturalHeight,
-    terrainTypes: [], tiles: {},
-    xmlStr: null, _dirty: true
+    terrainTypes: [], tiles: {}, xmlStr: null, _dirty: true
   };
   mapModel.tilesets.push(ts);
   mapModel.tilesets.sort((a, b) => a.firstgid - b.firstgid);
-
   if (tilesetTabs) {
     tilesetTabs.activeIdx = mapModel.tilesets.indexOf(ts);
     tilesetTabs.build();
   }
-
-  const typeName = prompt('Type name:', defaultName) || defaultName;
+  rebuildClassicSelect();
+  const typeName = prompt('Type name:', defName) || defName;
   const t = typesModel.add(typeName, typesModel.types.length);
-
   const g = (local) => firstgid + local;
 
-  t.solids = [
-    { tileID: g(4),  weight: 1 },
-    { tileID: g(11), weight: 1 },
-    { tileID: g(14), weight: 1 }
-  ];
-  t.edges.NWo = g(0);
-  t.edges.N   = g(1);
-  t.edges.NEo = g(2);
-  t.edges.W   = g(3);
-  t.edges.E   = g(5);
-  t.edges.SWo = g(6);
-  t.edges.S   = g(7);
-  t.edges.SEo = g(8);
-  t.edges.NWi = g(9);
-  t.edges.NEi = g(10);
-  t.edges.SWi = g(12);
-  t.edges.SEi = g(13);
+  const isTileEmpty = RW.MiniTNSLib && RW.MiniTNSLib.isTileEmpty
+    ? RW.MiniTNSLib.isTileEmpty
+    : function(img, tw, th, col, row) {
+        const c = document.createElement('canvas');
+        c.width = tw; c.height = th;
+        const ctx = c.getContext('2d', { willReadFrequently: true });
+        ctx.clearRect(0, 0, tw, th);
+        ctx.drawImage(img, col*tw, row*th, tw, th, 0, 0, tw, th);
+        const d = ctx.getImageData(0, 0, tw, th).data;
+        for (let i = 3; i < d.length; i += 4) if (d[i] !== 0) return false;
+        return true;
+      };
 
+  const solidLocals = [4];
+  if (!isTileEmpty(img, tw, th, 2, 3)) solidLocals.push(11);
+  if (!isTileEmpty(img, tw, th, 2, 4)) solidLocals.push(14);
+
+  t.solids = [];
+  for (const local of solidLocals) {
+    t.solids.push({ tileID: g(local), weight: 1 });
+  }
+
+  t.edges.NWo = g(0); t.edges.N = g(1); t.edges.NEo = g(2);
+  t.edges.W = g(3); t.edges.E = g(5);
+  t.edges.SWo = g(6); t.edges.S = g(7); t.edges.SEo = g(8);
+  t.edges.NWi = g(9); t.edges.NEi = g(10);
+  t.edges.SWi = g(12); t.edges.SEi = g(13);
   activeTypeId = t.id;
   if (typesPanel) typesPanel.build();
   invalidateMarkersCache();
-  statusEl.textContent = 'MiniTNS: tileset "' + name + '" + type "' + typeName +
-    '" (firstgid=' + firstgid + ')';
+  if (statusEl) statusEl.textContent = 'MiniTNS: tileset "' + name + '" + type "' + typeName + '"';
 }
 
-// ═══════════════════════════════════════════════
-// MARKERS CACHE
-// ═══════════════════════════════════════════════
+// ─── Markers cache ───
 let _markersCache = null;
-
 function getMarkersCached() {
   if (!mapModel) return { starts: [], respools: [] };
   if (_markersCache) return _markersCache;
   _markersCache = RW.Markers.find(mapModel);
   return _markersCache;
 }
+function invalidateMarkersCache() { _markersCache = null; }
 
-function invalidateMarkersCache() {
-  _markersCache = null;
-}
-
-// ═══════════════════════════════════════════════
-// EXPORT _map.png — 500×500, сохраняет пропорции
-// ═══════════════════════════════════════════════
+// ─── Export _map ───
 function findTsForId(tilesets, id) {
-  let found = null;
-  for (const ts of tilesets) {
-    if (id >= ts.firstgid) found = ts; else break;
-  }
-  return found;
+  let f = null;
+  for (const ts of tilesets) { if (id >= ts.firstgid) f = ts; else break; }
+  return f;
 }
-
 function renderMapToNative(mapModel, markers) {
   const W = mapModel.W, H = mapModel.H;
   const tw = mapModel.tw, th = mapModel.th;
-  const nativeW = W * tw, nativeH = H * th;
-
+  const nW = W * tw, nH = H * th;
   const off = document.createElement('canvas');
-  off.width = nativeW;
-  off.height = nativeH;
-  const octx = off.getContext('2d');
-  octx.imageSmoothingEnabled = false;
-
-  for (const lname of mapModel.layerOrder) {
-    const data = mapModel.layers[lname];
+  off.width = nW; off.height = nH;
+  const o = off.getContext('2d');
+  o.imageSmoothingEnabled = false;
+  for (const ln of mapModel.layerOrder) {
+    const data = mapModel.layers[ln];
     if (!data) continue;
-    for (let y = 0; y < H; y++) {
-      for (let x = 0; x < W; x++) {
-        const id = data[y * W + x];
-        if (!id) continue;
-        const ts = findTsForId(mapModel.tilesets, id);
-        if (!ts || !ts.image) continue;
-        const localID = id - ts.firstgid;
-        const col = localID % ts.columns;
-        const row = Math.floor(localID / ts.columns);
-        octx.drawImage(ts.image,
-          col * ts.tileW, row * ts.tileH, ts.tileW, ts.tileH,
-          x * tw, y * th, tw, th);
-      }
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const id = data[y * W + x];
+      if (!id) continue;
+      const ts = findTsForId(mapModel.tilesets, id);
+      if (!ts || !ts.image) continue;
+      const l = id - ts.firstgid;
+      o.drawImage(ts.image,
+        (l % ts.columns) * ts.tileW, Math.floor(l / ts.columns) * ts.tileH,
+        ts.tileW, ts.tileH, x * tw, y * th, tw, th);
     }
   }
-
   if (markers && RW.Markers) {
     const M = RW.Markers;
     const scale = settings.markerScale || 1;
-
-    // 500px — эталон, чтобы маркер был читаем в выходном PNG
-    const nativeScale = Math.max(nativeW, nativeH) / 500;
-
-    const dotR  = M.DOT_RADIUS_TILES  * tw * scale;
-    const circR = M.RADIUS_TILES      * tw * scale;
+    const nScale = Math.max(nW, nH) / 500;
+    const dotR = M.DOT_RADIUS_TILES * tw * scale;
+    const circR = M.RADIUS_TILES * tw * scale;
     const fontPx = circR * 2 * M.FONT_RATIO;
-
     for (const p of markers.respools) {
-      const cx = p.x * tw + tw / 2;
-      const cy = p.y * th + th / 2;
-      octx.beginPath();
-      octx.arc(cx, cy, dotR, 0, Math.PI * 2);
-      octx.fillStyle = '#ffea30';
-      octx.fill();
-      octx.strokeStyle = '#000';
-      octx.lineWidth = Math.max(1, nativeScale);
-      octx.stroke();
+      const cx = p.x * tw + tw/2, cy = p.y * th + th/2;
+      o.beginPath(); o.arc(cx, cy, dotR, 0, Math.PI*2);
+      o.fillStyle = '#ffea30'; o.fill();
+      o.strokeStyle = '#000'; o.lineWidth = Math.max(1, nScale); o.stroke();
     }
-
     for (const s of markers.starts) {
-      const cx = s.x * tw + tw / 2;
-      const cy = s.y * th + th / 2;
+      const cx = s.x * tw + tw/2, cy = s.y * th + th/2;
       const color = M.colorFor(s.team);
-
-      octx.beginPath();
-      octx.arc(cx, cy, circR, 0, Math.PI * 2);
-      octx.fillStyle = 'rgba(0,0,0,0.5)';
-      octx.fill();
-      octx.strokeStyle = 'rgba(0,0,0,0.7)';
-      octx.lineWidth = Math.max(1, circR * 0.06);
-      octx.stroke();
-
-      octx.font = 'bold ' + fontPx + 'px "Arial Black", Arial, sans-serif';
-      octx.textAlign = 'center';
-      octx.textBaseline = 'middle';
-      octx.fillStyle = color;
-      octx.shadowColor = 'rgba(0,0,0,0.9)';
-      octx.shadowBlur = fontPx * 0.15;
-      octx.fillText(String(s.team + 1), cx, cy);
-      octx.shadowBlur = 0;
+      o.beginPath(); o.arc(cx, cy, circR, 0, Math.PI*2);
+      o.fillStyle = 'rgba(0,0,0,0.5)'; o.fill();
+      o.strokeStyle = 'rgba(0,0,0,0.7)';
+      o.lineWidth = Math.max(1, circR * 0.06); o.stroke();
+      o.font = 'bold ' + fontPx + 'px "Arial Black", Arial, sans-serif';
+      o.textAlign = 'center'; o.textBaseline = 'middle';
+      o.fillStyle = color;
+      o.shadowColor = 'rgba(0,0,0,0.9)';
+      o.shadowBlur = fontPx * 0.15;
+      o.fillText(String(s.team + 1), cx, cy);
+      o.shadowBlur = 0;
     }
   }
-
-  return { off, nativeW, nativeH };
+  return { off, nativeW: nW, nativeH: nH };
 }
-
-function composePNG(native, nativeW, nativeH, targetSize) {
+function composePNG(native, nW, nH, target) {
   const out = document.createElement('canvas');
-  out.width = targetSize;
-  out.height = targetSize;
-  const o2 = out.getContext('2d');
-  o2.fillStyle = '#000';
-  o2.fillRect(0, 0, targetSize, targetSize);
-
-  const scale = Math.min(targetSize / nativeW, targetSize / nativeH);
-  const dw = Math.max(1, Math.round(nativeW * scale));
-  const dh = Math.max(1, Math.round(nativeH * scale));
-  const dx = Math.floor((targetSize - dw) / 2);
-  const dy = Math.floor((targetSize - dh) / 2);
-
-  o2.imageSmoothingEnabled = true;
-  o2.imageSmoothingQuality = 'high';
-  o2.drawImage(native, 0, 0, nativeW, nativeH, dx, dy, dw, dh);
+  out.width = target; out.height = target;
+  const o = out.getContext('2d');
+  o.fillStyle = '#000'; o.fillRect(0, 0, target, target);
+  const s = Math.min(target / nW, target / nH);
+  const dw = Math.max(1, Math.round(nW * s));
+  const dh = Math.max(1, Math.round(nH * s));
+  const dx = Math.floor((target - dw) / 2);
+  const dy = Math.floor((target - dh) / 2);
+  o.imageSmoothingEnabled = true; o.imageSmoothingQuality = 'high';
+  o.drawImage(native, 0, 0, nW, nH, dx, dy, dw, dh);
   return out;
 }
-
 function exportMapPNG() {
-  if (!mapModel) { statusEl.textContent = 'No map'; return; }
+  if (!mapModel) { if (statusEl) statusEl.textContent = 'No map'; return; }
   try {
     const markers = settings.showMarkers ? getMarkersCached() : null;
     const { off, nativeW, nativeH } = renderMapToNative(mapModel, markers);
     const composed = composePNG(off, nativeW, nativeH, 500);
-
     composed.toBlob(b => {
       const a = document.createElement('a');
       a.href = URL.createObjectURL(b);
-      const baseName = (mapNameEl.value || 'map').replace(/\.tmx$/i, '') || 'map';
-      a.download = baseName + '_map.png';
-      a.click();
+      const base = (mapNameEl && mapNameEl.value || 'map').replace(/\.tmx$/i, '') || 'map';
+      a.download = base + '_map.png'; a.click();
       setTimeout(() => URL.revokeObjectURL(a.href), 3000);
     }, 'image/png');
-
-    statusEl.textContent = 'Export: ' + nativeW + '×' + nativeH + ' → 500×500' +
-      (markers ? ' · markers ' + (markers.starts.length + markers.respools.length) : '');
+    if (statusEl) statusEl.textContent = 'Export: ' + nativeW + '×' + nativeH + ' → 500×500';
   } catch (err) {
     console.error(err);
-    statusEl.textContent = 'Export error: ' + err.message;
+    if (statusEl) statusEl.textContent = 'Export error: ' + err.message;
   }
 }
 
-// ═══════════════════════════════════════════════
-// SETTINGS MODAL
-// ═══════════════════════════════════════════════
+// ─── Settings modal ───
 let settingsModalEl = null;
 let settingsSnapshot = null;
 
 function openSettings() {
-  if (!settingsModalEl) {
-    settingsModalEl = document.getElementById('settingsModal');
-    document.getElementById('settingsClose').onclick = closeSettings;
-    document.getElementById('settingsCancel').onclick = closeSettings;
-    document.getElementById('settingsApply').onclick = applySettings;
-    // live-update от label чекбоксов
-    document.getElementById('settingsCanvasBg').addEventListener('input', (e) => {
-      wrap.style.background = e.target.value;
+  settingsModalEl = el('settingsModal');
+  if (!settingsModalEl) { if (statusEl) statusEl.textContent = 'Settings modal not found in HTML'; return; }
+
+  if (!settingsModalEl._bound) {
+    settingsModalEl._bound = true;
+    on('settingsClose', 'click', closeSettings);
+    on('settingsCancel', 'click', closeSettings);
+    on('settingsApply', 'click', applySettings);
+    on('settingsCanvasBg', 'input', (e) => {
+      if (wrap) wrap.style.background = e.target.value;
       if (renderer) renderer.render();
     });
-    document.getElementById('settingsMarkerScale').addEventListener('input', (e) => {
+    on('settingsAtlasBg', 'input', (e) => {
+      applyAtlasBg(e.target.value);
+    });
+    on('settingsMarkerScale', 'input', (e) => {
       const v = parseFloat(e.target.value);
-      document.getElementById('settingsMarkerScaleVal').textContent = v.toFixed(2) + '×';
-      if (renderer) {
-        renderer.markerScale = v;
-        renderer.render();
-      }
+      const valEl = el('settingsMarkerScaleVal');
+      if (valEl) valEl.textContent = v.toFixed(2) + '×';
+      if (renderer) { renderer.markerScale = v; renderer.render(); }
     });
   }
 
   settingsSnapshot = {
     canvasBg: settings.canvasBg,
+    atlasBg: settings.atlasBg,
     showMarkers: settings.showMarkers,
     markerScale: settings.markerScale,
     lang: settings.lang
   };
 
-  document.getElementById('settingsLangEn').classList.toggle('active', settings.lang === 'en');
-  document.getElementById('settingsLangRu').classList.toggle('active', settings.lang === 'ru');
-  document.getElementById('settingsCanvasBg').value = settings.canvasBg;
-  document.getElementById('settingsShowMarkers').checked = !!settings.showMarkers;
-  document.getElementById('settingsMarkerScale').value = settings.markerScale || 1;
-  document.getElementById('settingsMarkerScaleVal').textContent =
-    (settings.markerScale || 1).toFixed(2) + '×';
+  const lEn = el('settingsLangEn'), lRu = el('settingsLangRu');
+  if (lEn) lEn.classList.toggle('active', settings.lang === 'en');
+  if (lRu) lRu.classList.toggle('active', settings.lang === 'ru');
+  const bgEl = el('settingsCanvasBg'); if (bgEl) bgEl.value = settings.canvasBg;
+  const abEl = el('settingsAtlasBg'); if (abEl) abEl.value = settings.atlasBg;
+  const smEl = el('settingsShowMarkers'); if (smEl) smEl.checked = !!settings.showMarkers;
+  const msEl = el('settingsMarkerScale'); if (msEl) msEl.value = settings.markerScale || 1;
+  const mvEl = el('settingsMarkerScaleVal'); if (mvEl) mvEl.textContent = (settings.markerScale || 1).toFixed(2) + '×';
 
-  wrap.style.background = settings.canvasBg;
-
+  if (wrap) wrap.style.background = settings.canvasBg;
   settingsModalEl.classList.remove('hidden');
 }
 
 function closeSettings() {
-  // откат live-preview к сохранённому
-  settings.canvasBg = settingsSnapshot.canvasBg;
-  settings.showMarkers = settingsSnapshot.showMarkers;
-  settings.markerScale = settingsSnapshot.markerScale;
-  settings.lang = settingsSnapshot.lang;
-  RW.Storage.saveSettings(settings);
-
-  wrap.style.background = settings.canvasBg;
+  if (settingsSnapshot) {
+    settings.canvasBg = settingsSnapshot.canvasBg;
+    settings.atlasBg = settingsSnapshot.atlasBg;
+    settings.showMarkers = settingsSnapshot.showMarkers;
+    settings.markerScale = settingsSnapshot.markerScale;
+    settings.lang = settingsSnapshot.lang;
+    RW.Storage.saveSettings(settings);
+  }
+  if (wrap) wrap.style.background = settings.canvasBg;
+  applyAtlasBg(settings.atlasBg);
   if (renderer) {
     renderer.setBg(settings.canvasBg);
     renderer.showMarkers = !!settings.showMarkers;
@@ -1530,56 +1541,55 @@ function closeSettings() {
 }
 
 function applySettings() {
-  settings.canvasBg = document.getElementById('settingsCanvasBg').value || '#0a0a0a';
-  settings.showMarkers = document.getElementById('settingsShowMarkers').checked;
-  settings.markerScale = parseFloat(document.getElementById('settingsMarkerScale').value) || 1;
+  const bgEl = el('settingsCanvasBg');
+  const abEl = el('settingsAtlasBg');
+  const smEl = el('settingsShowMarkers');
+  const msEl = el('settingsMarkerScale');
+  if (bgEl) settings.canvasBg = bgEl.value || '#0a0a0a';
+  if (abEl) settings.atlasBg = abEl.value || '#0a0a0a';
+  if (smEl) settings.showMarkers = smEl.checked;
+  if (msEl) settings.markerScale = parseFloat(msEl.value) || 1;
   RW.Storage.saveSettings(settings);
-
-  wrap.style.background = settings.canvasBg;
+  if (wrap) wrap.style.background = settings.canvasBg;
+  applyAtlasBg(settings.atlasBg);
   if (renderer) {
     renderer.setBg(settings.canvasBg);
     renderer.showMarkers = !!settings.showMarkers;
     renderer.markerScale = settings.markerScale;
     renderer.render();
   }
-
   if (settingsModalEl) settingsModalEl.classList.add('hidden');
-  statusEl.textContent = 'Settings applied';
+  if (statusEl) statusEl.textContent = 'Settings applied';
 }
 
 function pickLang(lang) {
   settings.lang = lang;
   RW.I18N.set(lang);
-  document.getElementById('settingsLangEn').classList.toggle('active', lang === 'en');
-  document.getElementById('settingsLangRu').classList.toggle('active', lang === 'ru');
+  const lEn = el('settingsLangEn'), lRu = el('settingsLangRu');
+  if (lEn) lEn.classList.toggle('active', lang === 'en');
+  if (lRu) lRu.classList.toggle('active', lang === 'ru');
 }
 
-document.getElementById('btnSettings').addEventListener('click', openSettings);
-document.getElementById('settingsLangEn').addEventListener('click', () => pickLang('en'));
-document.getElementById('settingsLangRu').addEventListener('click', () => pickLang('ru'));
-// ─── Docs link ───
-document.getElementById('btnDocs').addEventListener('click', () => {
-  window.open('WebTiledDoc.html', '_blank', 'noopener');
-});
+on('btnSettings', 'click', openSettings);
+on('settingsLangEn', 'click', () => pickLang('en'));
+on('settingsLangRu', 'click', () => pickLang('ru'));
+on('btnDocs', 'click', () => window.open('WebTiledDoc.html', '_blank', 'noopener'));
 
-// ═══════════════════════════════════════════════
-// Bottom section toggles
-// ═══════════════════════════════════════════════
-document.getElementById('btnAtlasesTab').addEventListener('click', () => {
-  const btn = document.getElementById('btnAtlasesTab');
-  const on = btn.classList.toggle('active');
-  bottomEl.classList.toggle('atlases-hidden', !on);
-  if (on && tilesetTabs) tilesetTabs.build();
+// ─── Bottom section toggles ───
+on('btnAtlasesTab', 'click', () => {
+  const b = el('btnAtlasesTab'); if (!b) return;
+  const a = b.classList.toggle('active');
+  if (bottomEl) bottomEl.classList.toggle('atlases-hidden', !a);
+  if (a && tilesetTabs) tilesetTabs.build();
 });
-
-document.getElementById('btnTypesTab').addEventListener('click', () => {
-  const btn = document.getElementById('btnTypesTab');
-  const on = btn.classList.toggle('active');
-  bottomEl.classList.toggle('types-hidden', !on);
-  if (on && typesPanel) typesPanel.build();
+on('btnTypesTab', 'click', () => {
+  const b = el('btnTypesTab'); if (!b) return;
+  const a = b.classList.toggle('active');
+  if (bottomEl) bottomEl.classList.toggle('types-hidden', !a);
+  if (a && typesPanel) typesPanel.build();
 });
-
-document.getElementById('btnToggleBottom').addEventListener('click', (e) => {
+on('btnToggleBottom', 'click', (e) => {
+  if (!bottomEl) return;
   const isCollapsed = bottomEl.classList.contains('collapsed');
   if (!isCollapsed) {
     const h = bottomEl.getBoundingClientRect().height;
@@ -1597,13 +1607,14 @@ document.getElementById('btnToggleBottom').addEventListener('click', (e) => {
 });
 
 (function setupBottomResize() {
+  if (!bottomGrabberEl || !bottomEl) return;
   let resizing = false;
   bottomGrabberEl.addEventListener('mousedown', (e) => {
     e.preventDefault();
     resizing = true;
     delete bottomEl.dataset.savedHeight;
     bottomEl.classList.remove('collapsed');
-    document.getElementById('btnToggleBottom').textContent = '▼';
+    const tb = el('btnToggleBottom'); if (tb) tb.textContent = '▼';
     bottomEl.classList.add('no-transition');
     bottomGrabberEl.classList.add('dragging');
     document.body.style.cursor = 'ns-resize';
@@ -1612,8 +1623,8 @@ document.getElementById('btnToggleBottom').addEventListener('click', (e) => {
   window.addEventListener('mousemove', (e) => {
     if (!resizing) return;
     const h = window.innerHeight - e.clientY;
-    const clamped = Math.max(60, Math.min(window.innerHeight - 120, h));
-    bottomEl.style.height = clamped + 'px';
+    const c = Math.max(60, Math.min(window.innerHeight - 120, h));
+    bottomEl.style.height = c + 'px';
     if (renderer) renderer.resize();
   });
   window.addEventListener('mouseup', () => {
@@ -1626,44 +1637,39 @@ document.getElementById('btnToggleBottom').addEventListener('click', (e) => {
   });
 })();
 
-document.getElementById('btnFit').addEventListener('click', () => {
-  if (renderer) { renderer.fitView(); zoomVal.textContent = renderer.view.zoom.toFixed(2); }
+on('btnFit', 'click', () => {
+  if (renderer) { renderer.fitView(); if (zoomVal) zoomVal.textContent = renderer.view.zoom.toFixed(2); }
 });
-document.getElementById('btnReset').addEventListener('click', () => {
-  if (renderer) { renderer.resetView(); zoomVal.textContent = renderer.view.zoom.toFixed(2); }
+on('btnReset', 'click', () => {
+  if (renderer) { renderer.resetView(); if (zoomVal) zoomVal.textContent = renderer.view.zoom.toFixed(2); }
 });
-document.getElementById('btnHelp').addEventListener('click', () => alert(
-  'B — Brush, T — Terrain, C — Classic autotile\n' +
-  'E — Eraser, R — Rect, F — Fill, I — Picker, P — Pan\n' +
+on('btnHelp', 'click', () => alert(
+  'M — Move, B — Brush, Y — Type/Solid, T — Terrain (CLS)\n' +
+  'E — Erase, R — Rect, F — Fill, K — Picker\n' +
+  'WASD — pan · Middle-mouse — pan (editor & atlas)\n' +
   'Ctrl+Z / Ctrl+Y — Undo / Redo, Ctrl+S — Save\n' +
-  'Esc — cancel pick mode\n\n' +
-  'Classic autotile works on the ACTIVE layer.\n' +
-  'MiniTNS: PNG 3×5 tiles → new tileset + type.'
+  'Esc — cancel pick mode'
 ));
-document.getElementById('btnAddEmpty').addEventListener('click', addEmptyToBrush);
-document.getElementById('btnFlood').addEventListener('click', runFloodDominant);
-document.getElementById('btnClearBrush').addEventListener('click', () => {
+on('btnAddEmpty', 'click', addEmptyToBrush);
+on('btnFlood', 'click', runFloodDominant);
+on('btnClearBrush', 'click', () => {
   brushGroup = [];
   if (brushPanel) brushPanel.build();
   if (tilesetTabs) tilesetTabs.refreshSelection();
 });
-mapNameEl.addEventListener('input', () => { /* autosave disabled */ });
-document.getElementById('btnPickCancel').addEventListener('click', () => endPick());
+if (mapNameEl) mapNameEl.addEventListener('input', () => {});
+on('btnPickCancel', 'click', () => endPick());
 
-// ═══════════════════════════════════════════════
-// MiniTNS Library
-// ═══════════════════════════════════════════════
+// ─── MiniTNS Library ───
 function openMiniTNSLibrary() {
-  if (!mapModel) { statusEl.textContent = 'Сначала открой карту'; return; }
-  if (!RW.MiniTNSLib) { statusEl.textContent = 'MiniTNSLib не загружен'; return; }
-
+  if (!mapModel) { if (statusEl) statusEl.textContent = 'Open a map first'; return; }
+  if (!RW.MiniTNSLib) { if (statusEl) statusEl.textContent = 'MiniTNSLib not loaded'; return; }
   RW.MiniTNSLib.open(async (entry) => {
     RW.MiniTNSLib.close();
-    try {
-      await addMiniTNSFromEntry(entry);
-    } catch (err) {
+    try { await addMiniTNSFromEntry(entry); }
+    catch (err) {
       console.error(err);
-      statusEl.textContent = 'MiniTNS: ' + err.message;
+      if (statusEl) statusEl.textContent = 'MiniTNS: ' + err.message;
     }
   });
 }
@@ -1673,22 +1679,13 @@ async function addMiniTNSFromEntry(entry) {
   const img = entry.img;
   const cols = Math.floor(img.naturalWidth / tw);
   const rows = Math.floor(img.naturalHeight / th);
-  if (cols !== 3 || rows !== 5) {
-    throw new Error('PNG не 3×5 тайлов (' +
-      (tw*3) + '×' + (th*5) + ' px, получил ' +
-      img.naturalWidth + '×' + img.naturalHeight +
-      ' = ' + cols + '×' + rows + ')');
-  }
+  if (cols !== 3 || rows !== 5) throw new Error('PNG not 3×5 tiles');
   const tilecount = 15;
-
-  // firstgid
   let firstgid = 1;
   for (const ts of mapModel.tilesets) {
     const end = ts.firstgid + ts.tilecount;
     if (end > firstgid) firstgid = end;
   }
-
-  // имя tileset (без дублей)
   const baseName = entry.name;
   let name = baseName;
   if (mapModel.tilesets.find(t => t.name === name)) {
@@ -1696,59 +1693,84 @@ async function addMiniTNSFromEntry(entry) {
     while (mapModel.tilesets.find(t => t.name === baseName + '_' + i)) i++;
     name = baseName + '_' + i;
   }
-
   const ts = {
     firstgid, name, columns: cols, tilecount,
     tileW: tw, tileH: th,
     image: img, imageDataUrl: entry.dataUrl, embeddedPngB64: entry.b64,
     imageSource: null, imageW: img.naturalWidth, imageH: img.naturalHeight,
-    terrainTypes: [], tiles: {},
-    xmlStr: null, _dirty: true
+    terrainTypes: [], tiles: {}, xmlStr: null, _dirty: true
   };
   mapModel.tilesets.push(ts);
   mapModel.tilesets.sort((a, b) => a.firstgid - b.firstgid);
-
   if (tilesetTabs) {
     tilesetTabs.activeIdx = mapModel.tilesets.indexOf(ts);
     tilesetTabs.build();
   }
-
-  // имя типа (без дублей)
+  rebuildClassicSelect();
   let typeName = entry.name;
   if (typesModel.types.find(t => t.name === typeName)) {
     let i = 2;
     while (typesModel.types.find(t => t.name === typeName + '_' + i)) i++;
     typeName = typeName + '_' + i;
   }
-
   const t = typesModel.add(typeName, entry.priority);
   const g = (local) => firstgid + local;
 
-  t.solids = [
-    { tileID: g(4),  weight: 1 },
-    { tileID: g(11), weight: 1 },
-    { tileID: g(14), weight: 1 }
-  ];
-  t.edges.NWo = g(0);
-  t.edges.N   = g(1);
-  t.edges.NEo = g(2);
-  t.edges.W   = g(3);
-  t.edges.E   = g(5);
-  t.edges.SWo = g(6);
-  t.edges.S   = g(7);
-  t.edges.SEo = g(8);
-  t.edges.NWi = g(9);
-  t.edges.NEi = g(10);
-  t.edges.SWi = g(12);
-  t.edges.SEi = g(13);
+  const isTileEmpty = RW.MiniTNSLib && RW.MiniTNSLib.isTileEmpty
+    ? RW.MiniTNSLib.isTileEmpty
+    : function(img, tw, th, col, row) {
+        const c = document.createElement('canvas');
+        c.width = tw; c.height = th;
+        const ctx = c.getContext('2d', { willReadFrequently: true });
+        ctx.clearRect(0, 0, tw, th);
+        ctx.drawImage(img, col*tw, row*th, tw, th, 0, 0, tw, th);
+        const d = ctx.getImageData(0, 0, tw, th).data;
+        for (let i = 3; i < d.length; i += 4) if (d[i] !== 0) return false;
+        return true;
+      };
+
+  const solidLocals = [4];
+  if (!isTileEmpty(img, tw, th, 2, 3)) solidLocals.push(11);
+  if (!isTileEmpty(img, tw, th, 2, 4)) solidLocals.push(14);
+
+  const entryProps = entry.properties || {};
+  const hasProps = Object.keys(entryProps).length > 0;
+
+  t.solids = [];
+  for (const local of solidLocals) {
+    if (hasProps) {
+      if (!ts.tiles[local]) ts.tiles[local] = { terrain: null, props: {} };
+      for (const k in entryProps) {
+        ts.tiles[local].props[k] = entryProps[k];
+      }
+    }
+    t.solids.push({ tileID: g(local), weight: 1 });
+  }
+
+  t.edges.NWo = g(0); t.edges.N = g(1); t.edges.NEo = g(2);
+  t.edges.W = g(3); t.edges.E = g(5);
+  t.edges.SWo = g(6); t.edges.S = g(7); t.edges.SEo = g(8);
+  t.edges.NWi = g(9); t.edges.NEi = g(10);
+  t.edges.SWi = g(12); t.edges.SEi = g(13);
 
   activeTypeId = t.id;
   if (typesPanel) typesPanel.build();
   invalidateMarkersCache();
+  if (statusEl) statusEl.textContent = 'MiniTNS "' + entry.name + '" added (P' + entry.priority + ')';
+}
 
-  statusEl.textContent = 'MiniTNS "' + entry.name +
-    '": tileset + тип "' + typeName +
-    '" (P' + entry.priority + ', firstgid=' + firstgid + ')';
+// ─── Topbar icons fallback ───
+function setupTopbarIcons() {
+  document.querySelectorAll('#topbar img.btn-ic').forEach(img => {
+    img.addEventListener('error', () => {
+      const emo = img.dataset.emoji || '';
+      if (!emo) { img.remove(); return; }
+      const s = document.createElement('span');
+      s.className = 'btn-emoji';
+      s.textContent = emo;
+      img.replaceWith(s);
+    }, { once: true });
+  });
 }
 
 // ═══════════════════════════════════════════════
@@ -1756,11 +1778,15 @@ async function addMiniTNSFromEntry(entry) {
 // ═══════════════════════════════════════════════
 window.addEventListener('DOMContentLoaded', () => {
   if (settings.activeTool) activeTool = settings.activeTool;
-  wrap.style.background = settings.canvasBg || '#0a0a0a';
+  if (wrap) wrap.style.background = settings.canvasBg || '#0a0a0a';
+  applyAtlasBg(settings.atlasBg);
   RW.I18N.apply();
   buildTools();
+  setupTopbarIcons();
 });
 
 RW.I18N.apply();
 buildTools();
+applyAtlasBg(settings.atlasBg);
+setupTopbarIcons();
 })(window.RWEditor = window.RWEditor || {});

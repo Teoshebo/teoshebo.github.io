@@ -1,29 +1,98 @@
 (function(RW){
 'use strict';
 
-const DEFAULT_PATH = 'asset/miniTNS/';
+const CANDIDATE_PATHS = [
+  'asset/miniTNS/',
+  'https://teoshebo.github.io/asset/miniTNS/'
+];
 const INI_NAME = 'minitns.ini';
-const LS_KEY = 'rweditor.minitns.path';
+
+// Разрешённые properties для solid-тайлов MiniTNS.
+// Всё остальное из ini игнорируется.
+const ALLOWED_PROPS = new Set([
+  'water',
+  'water-bridge',
+  'large-cliff',
+  'large-rock',
+  'lava'
+]);
 
 let modalEl = null;
 let gridEl = null;
 let statusEl = null;
-let pathInputEl = null;
+let searchInputEl = null;
+let sortBtnEl = null;
+let tagsBarEl = null;
 let onPickCb = null;
 let entries = [];
 let loaded = false;
 let loading = false;
-let currentPath = localStorage.getItem(LS_KEY) || DEFAULT_PATH;
+let activePath = CANDIDATE_PATHS[0];
 
+let searchQuery = '';
+let sortAsc = true;
+let activeTags = new Set();
+
+// ─── Парсер ini ───
+// Формат: name priority [tags] [properties]
+//   tags       — "rock,stone"
+//   properties — "water,team=0,unit=commandCenter"
+// Сокращение: name 5 X — если X содержит '=', это props, иначе теги.
+// В properties попадают ТОЛЬКО ключи из ALLOWED_PROPS.
 function parseIni(text) {
   const out = [];
   for (const raw of text.split(/\r?\n/)) {
     const line = raw.replace(/#.*$/, '').trim();
     if (!line) continue;
     const parts = line.split(/\s+/);
+    if (!parts.length) continue;
     const name = parts[0];
     const prio = parseInt(parts[1], 10);
-    out.push({ name, priority: isNaN(prio) ? 0 : prio });
+
+    let tagsTok = '';
+    let propsTok = '';
+
+    if (parts.length >= 4) {
+      tagsTok = parts[2] || '';
+      propsTok = parts.slice(3).join(' ');
+    } else if (parts.length === 3) {
+      if (parts[2].indexOf('=') >= 0) {
+        propsTok = parts[2];
+      } else {
+        tagsTok = parts[2];
+      }
+    }
+
+    const tags = tagsTok
+      ? tagsTok.split(',').map(s => s.trim()).filter(Boolean)
+      : [];
+
+    const properties = {};
+    if (propsTok) {
+      for (const tok of propsTok.split(',')) {
+        const t = tok.trim();
+        if (!t) continue;
+        const eq = t.indexOf('=');
+        let k, v;
+        if (eq >= 0) {
+          k = t.slice(0, eq).trim();
+          v = t.slice(eq + 1).trim();
+        } else {
+          k = t;
+          v = '';
+        }
+        if (!k) continue;
+        if (!ALLOWED_PROPS.has(k)) continue;
+        properties[k] = v;
+      }
+    }
+
+    out.push({
+      name,
+      priority: isNaN(prio) ? 0 : prio,
+      tags,
+      properties
+    });
   }
   return out;
 }
@@ -40,42 +109,56 @@ function joinPath(base, name) {
   return base + name;
 }
 
-async function testPath(base) {
-  const url = joinPath(base, INI_NAME);
-  try {
-    const res = await fetch(url, { cache: 'no-cache' });
-    if (!res.ok) {
-      return { ok: false, url, msg: 'HTTP ' + res.status + ' ' + res.statusText };
-    }
-    const text = await res.text();
-    const list = parseIni(text);
-    if (!list.length) {
-      return { ok: false, url, msg: 'ini пустой (нет строк вида "Name Priority")' };
-    }
-    return { ok: true, url, count: list.length, sample: list.slice(0, 3).map(e => e.name).join(', ') };
-  } catch (err) {
-    return { ok: false, url, msg: err.message || 'network error' };
+// Проверка пустого тайла PNG: все пиксели alpha=0
+function isTileEmpty(img, tw, th, col, row) {
+  const cv = document.createElement('canvas');
+  cv.width = tw; cv.height = th;
+  const ctx = cv.getContext('2d', { willReadFrequently: true });
+  ctx.clearRect(0, 0, tw, th);
+  ctx.drawImage(img, col*tw, row*th, tw, th, 0, 0, tw, th);
+  const data = ctx.getImageData(0, 0, tw, th).data;
+  for (let i = 3; i < data.length; i += 4) {
+    if (data[i] !== 0) return false;
   }
+  return true;
+}
+
+async function resolvePath() {
+  for (const base of CANDIDATE_PATHS) {
+    const url = joinPath(base, INI_NAME);
+    try {
+      const res = await fetch(url, { cache: 'no-cache' });
+      if (!res.ok) continue;
+      const text = await res.text();
+      const list = parseIni(text);
+      if (!list.length) continue;
+      return { base, url, list };
+    } catch (err) {
+      // пробуем следующий
+    }
+  }
+  return null;
 }
 
 async function loadLibrary() {
   if (loading) return;
   loading = true;
   try {
-    const url = joinPath(currentPath, INI_NAME);
-    setStatus('Loading: ' + url, 'warn');
+    setStatus('Поиск minitns.ini...', 'warn');
 
-    const iniRes = await fetch(url, { cache: 'no-cache' });
-    if (!iniRes.ok) throw new Error('ini → HTTP ' + iniRes.status + ' (' + url + ')');
-
-    const list = parseIni(await iniRes.text());
-    if (!list.length) throw new Error('ini пустой: ' + url);
+    const resolved = await resolvePath();
+    if (!resolved) {
+      throw new Error('minitns.ini не найден ни по одному пути: ' +
+        CANDIDATE_PATHS.join(' · '));
+    }
+    activePath = resolved.base;
+    setStatus('Источник: ' + activePath + ' — загрузка PNG...', 'warn');
 
     entries = [];
     let skipped = 0;
-    for (const e of list) {
+    for (const e of resolved.list) {
       try {
-        const pngUrl = joinPath(currentPath, e.name + '.png');
+        const pngUrl = joinPath(activePath, e.name + '.png');
         const b64 = await fetchB64(pngUrl);
         const dataUrl = 'data:image/png;base64,' + b64;
         const img = await new Promise((resolve, reject) => {
@@ -84,7 +167,16 @@ async function loadLibrary() {
           i.onerror = () => reject(new Error('img decode'));
           i.src = dataUrl;
         });
-        entries.push({ name: e.name, priority: e.priority, img, dataUrl, b64 });
+        entries.push({
+          name: e.name,
+          priority: e.priority,
+          tags: e.tags,
+          properties: e.properties,
+          img,
+          dataUrl,
+          b64,
+          _solidCanvas: null
+        });
       } catch (err) {
         skipped++;
         console.warn('MiniTNS skip:', e.name, err);
@@ -92,17 +184,56 @@ async function loadLibrary() {
     }
 
     loaded = true;
-    localStorage.setItem(LS_KEY, currentPath);
 
     if (!entries.length) {
-      setStatus('Найдено 0 PNG. Проверь, что файлы лежат в ' + currentPath, 'err');
+      setStatus('Найдено 0 PNG по пути ' + activePath, 'err');
     } else {
-      setStatus('Загружено ' + entries.length + ' из ' + list.length +
-        (skipped ? ' (пропущено ' + skipped + ')' : ''), 'ok');
+      setStatus('Загружено ' + entries.length + ' из ' + resolved.list.length +
+        (skipped ? ' (пропущено ' + skipped + ')' : '') +
+        ' · ' + activePath, 'ok');
     }
   } finally {
     loading = false;
   }
+}
+
+// ── Solid-превью: рендерим local 4 (solid) один раз ──
+function getSolidCanvas(entry) {
+  if (entry._solidCanvas) return entry._solidCanvas;
+  const cv = document.createElement('canvas');
+  cv.width = 120;
+  cv.height = 200;
+  const g = cv.getContext('2d');
+  g.imageSmoothingEnabled = false;
+  const img = entry.img;
+  const realTw = Math.round(img.naturalWidth / 3);
+  const realTh = Math.round(img.naturalHeight / 5);
+  const sx = 1 * realTw, sy = 1 * realTh;
+  const scale = Math.min(120 / realTw, 120 / realTh);
+  const dw = Math.round(realTw * scale);
+  const dh = Math.round(realTh * scale);
+  const dx = Math.floor((120 - dw) / 2);
+  const dy = Math.floor((200 - dh) / 2);
+  g.drawImage(img, sx, sy, realTw, realTh, dx, dy, dw, dh);
+  entry._solidCanvas = cv;
+  return cv;
+}
+
+function getFullCanvas(entry) {
+  const cv = document.createElement('canvas');
+  cv.width = 120;
+  cv.height = 200;
+  const g = cv.getContext('2d');
+  g.imageSmoothingEnabled = false;
+  const img = entry.img;
+  const iw = img.naturalWidth, ih = img.naturalHeight;
+  const s = Math.min(120 / iw, 200 / ih);
+  const dw = Math.round(iw * s);
+  const dh = Math.round(ih * s);
+  const dx = Math.floor((120 - dw) / 2);
+  const dy = Math.floor((200 - dh) / 2);
+  g.drawImage(img, 0, 0, iw, ih, dx, dy, dw, dh);
+  return cv;
 }
 
 function ensureModal() {
@@ -115,7 +246,7 @@ function ensureModal() {
   const dialog = document.createElement('div');
   dialog.className = 'mini-lib-dialog';
 
-  // ─── header ───
+  // header
   const header = document.createElement('div');
   header.className = 'mini-lib-header';
   const ttl = document.createElement('span');
@@ -127,41 +258,36 @@ function ensureModal() {
   header.append(ttl, closeBtn);
   dialog.appendChild(header);
 
-  // ─── path bar ───
-  const pathBar = document.createElement('div');
-  pathBar.className = 'mini-lib-pathbar';
+  // filter bar (search + sort)
+  const filterBar = document.createElement('div');
+  filterBar.className = 'mini-lib-filterbar';
 
-  const pathLbl = document.createElement('span');
-  pathLbl.className = 'mini-lib-path-lbl';
-  pathLbl.textContent = 'PATH';
-  pathBar.appendChild(pathLbl);
-
-  pathInputEl = document.createElement('input');
-  pathInputEl.type = 'text';
-  pathInputEl.className = 'mini-lib-path-input';
-  pathInputEl.value = currentPath;
-  pathInputEl.spellcheck = false;
-  pathInputEl.addEventListener('keydown', (e) => {
-    e.stopPropagation();
-    if (e.key === 'Enter') { e.preventDefault(); doReload(); }
+  searchInputEl = document.createElement('input');
+  searchInputEl.type = 'text';
+  searchInputEl.className = 'mini-lib-search';
+  searchInputEl.placeholder = 'Search by name...';
+  searchInputEl.spellcheck = false;
+  searchInputEl.addEventListener('input', () => {
+    searchQuery = searchInputEl.value.trim().toLowerCase();
+    renderGrid();
   });
-  pathBar.appendChild(pathInputEl);
+  searchInputEl.addEventListener('keydown', (e) => e.stopPropagation());
+  filterBar.appendChild(searchInputEl);
 
-  const testBtn = document.createElement('button');
-  testBtn.className = 'mini-lib-path-btn';
-  testBtn.textContent = 'TEST';
-  testBtn.addEventListener('click', doTest);
-  pathBar.appendChild(testBtn);
+  sortBtnEl = document.createElement('button');
+  sortBtnEl.className = 'mini-lib-sort';
+  sortBtnEl.textContent = 'Name ▲';
+  sortBtnEl.title = 'Sort by name';
+  sortBtnEl.addEventListener('click', () => {
+    sortAsc = !sortAsc;
+    sortBtnEl.textContent = sortAsc ? 'Name ▲' : 'Name ▼';
+    renderGrid();
+  });
+  filterBar.appendChild(sortBtnEl);
 
-  const reloadBtn = document.createElement('button');
-  reloadBtn.className = 'mini-lib-path-btn primary';
-  reloadBtn.textContent = 'LOAD';
-  reloadBtn.addEventListener('click', doReload);
-  pathBar.appendChild(reloadBtn);
+  dialog.appendChild(filterBar);
 
-  dialog.appendChild(pathBar);
-
-  // ─── body ───
+  // body
   const body = document.createElement('div');
   body.className = 'mini-lib-body';
   gridEl = document.createElement('div');
@@ -169,7 +295,12 @@ function ensureModal() {
   body.appendChild(gridEl);
   dialog.appendChild(body);
 
-  // ─── status ───
+  // tags bar
+  tagsBarEl = document.createElement('div');
+  tagsBarEl.className = 'mini-lib-tagsbar';
+  dialog.appendChild(tagsBarEl);
+
+  // status
   statusEl = document.createElement('div');
   statusEl.className = 'mini-lib-status';
   statusEl.textContent = 'Ready.';
@@ -183,67 +314,59 @@ function ensureModal() {
   document.body.appendChild(modalEl);
 }
 
-async function doTest() {
-  const base = pathInputEl.value.trim() || DEFAULT_PATH;
-  setStatus('Testing: ' + joinPath(base, INI_NAME), 'warn');
-  const r = await testPath(base);
-  if (r.ok) {
-    setStatus('✓ ' + r.url + ' — OK, ' + r.count + ' записей (' + r.sample + ')', 'ok');
-  } else {
-    setStatus('✗ ' + r.url + ' — ' + r.msg, 'err');
-  }
-}
-
-async function doReload() {
-  currentPath = pathInputEl.value.trim() || DEFAULT_PATH;
-  loaded = false;
-  entries = [];
-  renderGrid();
-  try {
-    await loadLibrary();
-    renderGrid();
-  } catch (err) {
-    console.error(err);
-    setStatus('Ошибка: ' + err.message, 'err');
-    renderGrid();
-  }
-}
-
 function setStatus(text, cls) {
   if (!statusEl) return;
   statusEl.innerHTML = cls ? '<span class="' + cls + '">' + text + '</span>' : text;
 }
 
+function getFilteredEntries() {
+  let list = entries.slice();
+  if (searchQuery) list = list.filter(e => e.name.toLowerCase().includes(searchQuery));
+  if (activeTags.size) {
+    list = list.filter(e => e.tags.some(t => activeTags.has(t)));
+  }
+  list.sort((a, b) => sortAsc
+    ? a.name.localeCompare(b.name)
+    : b.name.localeCompare(a.name));
+  return list;
+}
+
 function renderGrid() {
   if (!gridEl) return;
   gridEl.innerHTML = '';
-  if (!entries.length) {
+  const list = getFilteredEntries();
+
+  if (!list.length) {
     const em = document.createElement('div');
     em.className = 'mini-lib-empty';
-    em.textContent = loaded ? 'Library пустая' : 'Нажми LOAD или TEST';
+    em.textContent = entries.length
+      ? 'Ничего не найдено'
+      : (loaded ? 'Library пустая' : 'Loading...');
     gridEl.appendChild(em);
     return;
   }
 
-  for (const e of entries) {
+  for (const e of list) {
     const item = document.createElement('div');
     item.className = 'mini-lib-item';
-    item.title = e.name + ' · priority ' + e.priority;
+    item.title = e.name + ' · priority ' + e.priority +
+      (e.tags.length ? ' · #' + e.tags.join(' #') : '') +
+      (Object.keys(e.properties).length
+        ? ' · ' + Object.keys(e.properties).join(', ')
+        : '');
 
-    const cnv = document.createElement('canvas');
-    cnv.width = 120;
-    cnv.height = 200;
-    cnv.className = 'mini-lib-preview';
-    const g = cnv.getContext('2d');
-    g.imageSmoothingEnabled = false;
-    const iw = e.img.naturalWidth, ih = e.img.naturalHeight;
-    const s = Math.min(120 / iw, 200 / ih);
-    const dw = Math.round(iw * s);
-    const dh = Math.round(ih * s);
-    const dx = Math.floor((120 - dw) / 2);
-    const dy = Math.floor((200 - dh) / 2);
-    g.drawImage(e.img, 0, 0, iw, ih, dx, dy, dw, dh);
-    item.appendChild(cnv);
+    const preview = document.createElement('div');
+    preview.className = 'mini-lib-preview-wrap';
+
+    const solidCv = getSolidCanvas(e);
+    solidCv.className = 'mini-lib-preview mini-lib-preview-solid';
+    preview.appendChild(solidCv);
+
+    const fullCv = getFullCanvas(e);
+    fullCv.className = 'mini-lib-preview mini-lib-preview-full';
+    preview.appendChild(fullCv);
+
+    item.appendChild(preview);
 
     const nameEl = document.createElement('div');
     nameEl.className = 'mini-lib-name';
@@ -255,6 +378,31 @@ function renderGrid() {
     prioEl.textContent = 'P' + e.priority;
     item.appendChild(prioEl);
 
+    if (e.tags.length) {
+      const tagsRow = document.createElement('div');
+      tagsRow.className = 'mini-lib-item-tags';
+      for (const t of e.tags) {
+        const tg = document.createElement('span');
+        tg.className = 'mini-lib-item-tag';
+        tg.textContent = '#' + t;
+        tagsRow.appendChild(tg);
+      }
+      item.appendChild(tagsRow);
+    }
+
+    const propKeys = Object.keys(e.properties || {});
+    if (propKeys.length) {
+      const propRow = document.createElement('div');
+      propRow.className = 'mini-lib-item-props';
+      for (const k of propKeys) {
+        const pr = document.createElement('span');
+        pr.className = 'mini-lib-item-prop';
+        pr.textContent = e.properties[k] ? k + '=' + e.properties[k] : k;
+        propRow.appendChild(pr);
+      }
+      item.appendChild(propRow);
+    }
+
     item.addEventListener('click', () => {
       if (onPickCb) onPickCb(e);
     });
@@ -263,31 +411,63 @@ function renderGrid() {
   }
 }
 
+function renderTags() {
+  if (!tagsBarEl) return;
+  tagsBarEl.innerHTML = '';
+  if (!entries.length) return;
+
+  const all = new Set();
+  for (const e of entries) for (const t of e.tags) all.add(t);
+  if (!all.size) return;
+
+  const label = document.createElement('span');
+  label.className = 'mini-lib-tags-label';
+  label.textContent = 'TAGS:';
+  tagsBarEl.appendChild(label);
+
+  const sorted = Array.from(all).sort();
+  for (const t of sorted) {
+    const btn = document.createElement('button');
+    btn.className = 'mini-lib-tag' + (activeTags.has(t) ? ' active' : '');
+    btn.textContent = '#' + t;
+    btn.addEventListener('click', () => {
+      if (activeTags.has(t)) activeTags.delete(t);
+      else activeTags.add(t);
+      renderGrid();
+      renderTags();
+    });
+    tagsBarEl.appendChild(btn);
+  }
+
+  if (activeTags.size) {
+    const clearBtn = document.createElement('button');
+    clearBtn.className = 'mini-lib-tag-clear';
+    clearBtn.textContent = 'clear';
+    clearBtn.addEventListener('click', () => {
+      activeTags.clear();
+      renderGrid();
+      renderTags();
+    });
+    tagsBarEl.appendChild(clearBtn);
+  }
+}
+
 function open(cb) {
   onPickCb = cb;
   ensureModal();
   modalEl.classList.remove('hidden');
-  pathInputEl.value = currentPath;
 
   if (loaded) {
     renderGrid();
+    renderTags();
     return;
   }
 
-  // авто-test при открытии, потом auto-load если test прошёл
   (async () => {
-    setStatus('Проверка пути: ' + joinPath(currentPath, INI_NAME), 'warn');
-    const r = await testPath(currentPath);
-    if (!r.ok) {
-      setStatus('✗ ' + r.url + ' — ' + r.msg +
-        ' · измени PATH и нажми TEST', 'err');
-      renderGrid();
-      return;
-    }
-    setStatus('Найдено ' + r.count + ' записей, загрузка...', 'warn');
     try {
       await loadLibrary();
       renderGrid();
+      renderTags();
     } catch (err) {
       setStatus('Ошибка загрузки: ' + err.message, 'err');
       renderGrid();
@@ -305,7 +485,9 @@ RW.MiniTNSLib = {
   isLoaded: () => loaded,
   entries: () => entries,
   reload: () => { loaded = false; entries = []; },
-  currentPath: () => currentPath
+  currentPath: () => activePath,
+  isTileEmpty,
+  ALLOWED_PROPS
 };
 
 })(window.RWEditor = window.RWEditor || {});

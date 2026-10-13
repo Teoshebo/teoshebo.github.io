@@ -636,7 +636,7 @@ class TilesetTabs {
     zoomLabel.textContent = 'Zoom: ' + this.zoom + '×';
     toolbar.appendChild(zoomLabel);
 
-    // ── Edit ──
+    // Edit
     const editLbl = document.createElement('label');
     editLbl.className = 'ts-check';
     editLbl.title = 'Edit tile (terrain / properties)';
@@ -650,7 +650,7 @@ class TilesetTabs {
     editLbl.append(editCb, document.createTextNode(' Edit'));
     toolbar.appendChild(editLbl);
 
-    // ── Show IDs ──
+    // IDs
     const idsLbl = document.createElement('label');
     idsLbl.className = 'ts-check';
     idsLbl.title = 'Show tile IDs';
@@ -664,7 +664,7 @@ class TilesetTabs {
     idsLbl.append(idsCb, document.createTextNode(' IDs'));
     toolbar.appendChild(idsLbl);
 
-    // ── Grid (тайловая сетка, жёлтая сплошная) ──
+    // Grid
     const gridLbl = document.createElement('label');
     gridLbl.className = 'ts-check';
     gridLbl.title = 'Tile grid (' + ts.tileW + '×' + ts.tileH + ' px)';
@@ -678,10 +678,10 @@ class TilesetTabs {
     gridLbl.append(gridCb, document.createTextNode(' Grid'));
     toolbar.appendChild(gridLbl);
 
-    // ── Grid 10×10 (подсетка каждые 10px, циановая пунктирная) ──
+    // 10×10
     const grid10Lbl = document.createElement('label');
     grid10Lbl.className = 'ts-check ts-check-cyan';
-    grid10Lbl.title = 'Sub-grid every 10 px (half-tile)';
+    grid10Lbl.title = 'Sub-grid every 10 px';
     const grid10Cb = document.createElement('input');
     grid10Cb.type = 'checkbox';
     grid10Cb.checked = this.showGrid10;
@@ -692,7 +692,7 @@ class TilesetTabs {
     grid10Lbl.append(grid10Cb, document.createTextNode(' 10×10'));
     toolbar.appendChild(grid10Lbl);
 
-    // ── Terrain toggle ──
+    // Terrain toggle
     const terrainBtn = document.createElement('button');
     terrainBtn.textContent = this.terrainEditMode ? '▼ Terrain' : '▶ Terrain';
     terrainBtn.className = 'ts-terrain-btn';
@@ -713,6 +713,30 @@ class TilesetTabs {
 
     const wrapEl = document.createElement('div');
     wrapEl.className = 'ts-canvas-wrap';
+
+    // Middle-mouse pan в атласе
+    wrapEl.addEventListener('pointerdown', (e) => {
+      if (e.button !== 1) return;
+      e.preventDefault();
+      try { wrapEl.setPointerCapture(e.pointerId); } catch (_) {}
+      wrapEl.classList.add('panning');
+      const startX = e.clientX, startY = e.clientY;
+      const sl0 = wrapEl.scrollLeft, st0 = wrapEl.scrollTop;
+      const onMove = (ev) => {
+        wrapEl.scrollLeft = sl0 - (ev.clientX - startX);
+        wrapEl.scrollTop  = st0 - (ev.clientY - startY);
+      };
+      const onUp = () => {
+        wrapEl.classList.remove('panning');
+        wrapEl.removeEventListener('pointermove', onMove);
+        wrapEl.removeEventListener('pointerup', onUp);
+        wrapEl.removeEventListener('pointercancel', onUp);
+      };
+      wrapEl.addEventListener('pointermove', onMove);
+      wrapEl.addEventListener('pointerup', onUp);
+      wrapEl.addEventListener('pointercancel', onUp);
+    });
+    wrapEl.addEventListener('contextmenu', (e) => e.preventDefault());
 
     if (ts.image) {
       const cnv = document.createElement('canvas');
@@ -748,13 +772,10 @@ class TilesetTabs {
       function redraw() {
         cnv.style.width = (cnv.width * self.zoom) + 'px';
         cnv.style.height = (cnv.height * self.zoom) + 'px';
-
-        // ── БАГФИКС: чистый канвас перед отрисовкой ──
         g.clearRect(0, 0, cnv.width, cnv.height);
-
         g.drawImage(ts.image, 0, 0);
 
-        // ─── Подсетка 10×10 — циановая, пунктирная ───
+        // 10×10 sub-grid — cyan dashed
         if (self.showGrid10) {
           g.save();
           g.strokeStyle = 'rgba(80,220,255,0.55)';
@@ -776,7 +797,7 @@ class TilesetTabs {
           g.restore();
         }
 
-        // ─── Основная тайловая сетка — жёлтая, сплошная ───
+        // Tile grid — yellow solid
         if (self.showGrid) {
           g.strokeStyle = 'rgba(255,220,80,0.55)';
           g.lineWidth = 1;
@@ -793,7 +814,7 @@ class TilesetTabs {
           g.stroke();
         }
 
-        // ─── ID labels ───
+        // ID labels
         if (self.showIds && !self.quadrantMode) {
           g.font = 'bold 8px monospace';
           g.textAlign = 'left';
@@ -810,7 +831,7 @@ class TilesetTabs {
           }
         }
 
-        // ─── Quadrant overlay (цветные квадранты, БЕЗ крестовины) ───
+        // Quadrant overlay
         if (self.quadrantMode) {
           const activeTerr = self.activeTerrainIdx;
           const hw = ts.tileW / 2;
@@ -834,7 +855,7 @@ class TilesetTabs {
           }
         }
 
-        // ─── Выделение кисти ───
+        // Selected brush tiles
         for (let i = 0; i < ts.tilecount; i++) {
           if (!isSelected(i)) continue;
           const col = i % ts.columns;
@@ -843,7 +864,7 @@ class TilesetTabs {
           g.lineWidth = 2;
           g.strokeRect(col * ts.tileW + 1, row * ts.tileH + 1, ts.tileW - 2, ts.tileH - 2);
         }
-        // ─── Pick target ───
+        // Pick targets
         for (let i = 0; i < ts.tilecount; i++) {
           if (!isPickTarget(i)) continue;
           const col = i % ts.columns;
@@ -899,10 +920,11 @@ class TilesetTabs {
         } else if (self.editMode) {
           info.textContent = 'Edit: клик по тайлу — редактирование';
         } else {
-          info.textContent = '— клик: выбрать · Shift+клик: добавить · колесо: zoom —';
+          info.textContent = '— клик: выбрать · Shift+клик: добавить · колесо: zoom · MMB: pan —';
         }
       });
       cnv.addEventListener('click', (e) => {
+        if (e.button === 1) return;
         const r = cnv.getBoundingClientRect();
         const px = (e.clientX - r.left) / self.zoom;
         const py = (e.clientY - r.top) / self.zoom;
@@ -987,7 +1009,7 @@ class TilesetTabs {
     } else if (this.editMode) {
       info.textContent = 'Edit: клик по тайлу — редактирование';
     } else {
-      info.textContent = '— клик: выбрать · Shift+клик: добавить · колесо: zoom —';
+      info.textContent = '— клик: выбрать · Shift+клик: добавить · колесо: zoom · MMB: pan —';
     }
   }
 

@@ -1,0 +1,21 @@
+Файл	Тул	Fallback (если нет файла)
+move.png	MOVE	✋
+brush.png	BRUSH	🖌
+type.png	TYPE	🌍
+terrain.png	TERRAIN	▦
+erase.png	ERASE	🧽
+rect.png	RECT	▭
+fill.png	FILL	🪣
+picker.png	PICK	💧
+auto.png	AUTO	⚙
+open.png	📂 Open	📂
+save.png	💾 Save	💾
+undo.png	↶ Undo	↶
+redo.png	↷ Redo	↷
+resize.png	⤢ Size	⤢
+merge.png	⌘ Merge	⌘
+export.png	📷 _map	📷
+add-tileset.png	+ Tileset	＋
+settings.png	⚙ (только иконка)	⚙
+docs.png	📖 Docs	📖
+help.png	? (только иконка)	?
