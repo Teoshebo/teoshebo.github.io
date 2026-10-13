@@ -145,16 +145,27 @@ class TypesPanel {
     });
     listStrip.appendChild(btnAdd);
 
-    // ── Import MiniTNS ──
+    // ── Import MiniTNS (local file) ──
     const btnMini = document.createElement('button');
     btnMini.className = 'types-add-btn';
     btnMini.textContent = '📦 Import MiniTNS';
-    btnMini.title = 'Импорт PNG 3×5 тайлов: добавить tileset + создать тип (12 edges + 3 solids)';
+    btnMini.title = 'Импорт PNG 3×5 тайлов → новый tileset + тип';
     btnMini.addEventListener('click', () => {
       if (this.ctx.onImportMiniTNS) this.ctx.onImportMiniTNS();
       else alert('onImportMiniTNS не подключён');
     });
     listStrip.appendChild(btnMini);
+
+    // ── Library (MiniTNS из asset/miniTNS/) ──
+    const btnLib = document.createElement('button');
+    btnLib.className = 'types-add-btn';
+    btnLib.textContent = '📚 Library';
+    btnLib.title = 'Библиотека MiniTNS (asset/miniTNS/)';
+    btnLib.addEventListener('click', () => {
+      if (this.ctx.onOpenLibrary) this.ctx.onOpenLibrary();
+      else alert('onOpenLibrary не подключён');
+    });
+    listStrip.appendChild(btnLib);
 
     topbar.appendChild(listStrip);
     this.root.appendChild(topbar);
@@ -162,7 +173,7 @@ class TypesPanel {
     if (!model.types.length) {
       const empty = document.createElement('div');
       empty.className = 'empty-msg';
-      empty.textContent = 'Нет типов. Нажми "+ тип" или "📦 Import MiniTNS".';
+      empty.textContent = 'Нет типов. Нажми "+ тип", "📦 Import MiniTNS" или "📚 Library".';
       this.root.appendChild(empty);
       return;
     }

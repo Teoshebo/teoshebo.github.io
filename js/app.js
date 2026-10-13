@@ -1081,7 +1081,8 @@ async function initFromParsed(parsed, filename) {
     endPick: () => endPick(),
     findTileset: (id) => renderer.findTileset(id),
     onChanged: () => { typesPanel.build(); },
-    onImportMiniTNS: () => startMiniTNSImport()
+    onImportMiniTNS: () => startMiniTNSImport(),
+    onOpenLibrary: () => openMiniTNSLibrary()
   });
 
   layersPanel.build();
@@ -1648,6 +1649,107 @@ document.getElementById('btnClearBrush').addEventListener('click', () => {
 });
 mapNameEl.addEventListener('input', () => { /* autosave disabled */ });
 document.getElementById('btnPickCancel').addEventListener('click', () => endPick());
+
+// ═══════════════════════════════════════════════
+// MiniTNS Library
+// ═══════════════════════════════════════════════
+function openMiniTNSLibrary() {
+  if (!mapModel) { statusEl.textContent = 'Сначала открой карту'; return; }
+  if (!RW.MiniTNSLib) { statusEl.textContent = 'MiniTNSLib не загружен'; return; }
+
+  RW.MiniTNSLib.open(async (entry) => {
+    RW.MiniTNSLib.close();
+    try {
+      await addMiniTNSFromEntry(entry);
+    } catch (err) {
+      console.error(err);
+      statusEl.textContent = 'MiniTNS: ' + err.message;
+    }
+  });
+}
+
+async function addMiniTNSFromEntry(entry) {
+  const tw = mapModel.tw, th = mapModel.th;
+  const img = entry.img;
+  const cols = Math.floor(img.naturalWidth / tw);
+  const rows = Math.floor(img.naturalHeight / th);
+  if (cols !== 3 || rows !== 5) {
+    throw new Error('PNG не 3×5 тайлов (' +
+      (tw*3) + '×' + (th*5) + ' px, получил ' +
+      img.naturalWidth + '×' + img.naturalHeight +
+      ' = ' + cols + '×' + rows + ')');
+  }
+  const tilecount = 15;
+
+  // firstgid
+  let firstgid = 1;
+  for (const ts of mapModel.tilesets) {
+    const end = ts.firstgid + ts.tilecount;
+    if (end > firstgid) firstgid = end;
+  }
+
+  // имя tileset (без дублей)
+  const baseName = entry.name;
+  let name = baseName;
+  if (mapModel.tilesets.find(t => t.name === name)) {
+    let i = 2;
+    while (mapModel.tilesets.find(t => t.name === baseName + '_' + i)) i++;
+    name = baseName + '_' + i;
+  }
+
+  const ts = {
+    firstgid, name, columns: cols, tilecount,
+    tileW: tw, tileH: th,
+    image: img, imageDataUrl: entry.dataUrl, embeddedPngB64: entry.b64,
+    imageSource: null, imageW: img.naturalWidth, imageH: img.naturalHeight,
+    terrainTypes: [], tiles: {},
+    xmlStr: null, _dirty: true
+  };
+  mapModel.tilesets.push(ts);
+  mapModel.tilesets.sort((a, b) => a.firstgid - b.firstgid);
+
+  if (tilesetTabs) {
+    tilesetTabs.activeIdx = mapModel.tilesets.indexOf(ts);
+    tilesetTabs.build();
+  }
+
+  // имя типа (без дублей)
+  let typeName = entry.name;
+  if (typesModel.types.find(t => t.name === typeName)) {
+    let i = 2;
+    while (typesModel.types.find(t => t.name === typeName + '_' + i)) i++;
+    typeName = typeName + '_' + i;
+  }
+
+  const t = typesModel.add(typeName, entry.priority);
+  const g = (local) => firstgid + local;
+
+  t.solids = [
+    { tileID: g(4),  weight: 1 },
+    { tileID: g(11), weight: 1 },
+    { tileID: g(14), weight: 1 }
+  ];
+  t.edges.NWo = g(0);
+  t.edges.N   = g(1);
+  t.edges.NEo = g(2);
+  t.edges.W   = g(3);
+  t.edges.E   = g(5);
+  t.edges.SWo = g(6);
+  t.edges.S   = g(7);
+  t.edges.SEo = g(8);
+  t.edges.NWi = g(9);
+  t.edges.NEi = g(10);
+  t.edges.SWi = g(12);
+  t.edges.SEi = g(13);
+
+  activeTypeId = t.id;
+  if (typesPanel) typesPanel.build();
+  invalidateMarkersCache();
+
+  statusEl.textContent = 'MiniTNS "' + entry.name +
+    '": tileset + тип "' + typeName +
+    '" (P' + entry.priority + ', firstgid=' + firstgid + ')';
+}
 
 // ═══════════════════════════════════════════════
 // INIT

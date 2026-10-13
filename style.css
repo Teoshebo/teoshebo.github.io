@@ -749,3 +749,134 @@ canvas#cv.crosshair{cursor:crosshair}
   background:#1a3a5a;border-color:#48a;color:#cff;
 }
 .settings-footer button.primary:hover{background:#254a70;border-color:#6af}
+
+/* ═══════════════════════════════════════════════
+   TERRAIN QUADRANT EDITOR
+   ═══════════════════════════════════════════════ */
+.terrain-swatch{
+  width:14px;height:14px;flex:none;
+  border:1px solid #222;border-radius:2px;
+  cursor:pointer;
+}
+.terrain-row{cursor:pointer}
+.terrain-row:hover{background:#1a1024}
+.terrain-row.active{
+  border-color:#c8f;
+  background:#2a1a3a;
+  box-shadow:0 0 0 1px #c8f inset;
+}
+.terrain-row.active .terrain-swatch{
+  box-shadow:0 0 6px rgba(200,140,255,0.8);
+}
+.terrain-hint{
+  margin-top:10px;padding:8px 10px;
+  background:#0a0510;border:1px dashed #3a2a4a;border-radius:3px;
+  font-size:10px;line-height:1.7;color:#9aa;
+}
+/* ═══════════════════════════════════════════════
+   MINI TNS LIBRARY MODAL
+   ═══════════════════════════════════════════════ */
+#miniLibModal{
+  position:fixed;inset:0;z-index:1100;
+  background:rgba(0,0,0,0.78);
+  display:flex;align-items:center;justify-content:center;
+  backdrop-filter:blur(2px);
+}
+#miniLibModal.hidden{display:none}
+
+.mini-lib-dialog{
+  width:min(1000px, 92vw);
+  max-height:88vh;
+  background:#161616;
+  border:1px solid #333;
+  border-radius:8px;
+  display:flex;flex-direction:column;
+  overflow:hidden;
+  box-shadow:0 20px 60px rgba(0,0,0,0.7);
+}
+
+.mini-lib-header{
+  flex:none;display:flex;align-items:center;justify-content:space-between;
+  padding:12px 18px;background:#1a1a1a;border-bottom:1px solid #2a2a2a;
+  font-size:11px;letter-spacing:3px;color:#e8f;font-weight:bold;
+}
+.mini-lib-header button{
+  background:transparent;color:#888;border:0;font-size:20px;
+  cursor:pointer;padding:0 8px;line-height:1;font-family:inherit;
+}
+.mini-lib-header button:hover{color:#f44}
+
+.mini-lib-body{
+  flex:1;overflow:auto;padding:16px;
+  background:#0a0a0a;
+}
+
+.mini-lib-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fill, minmax(140px, 1fr));
+  gap:12px;
+}
+
+.mini-lib-item{
+  background:#1a1a1a;
+  border:1px solid #333;
+  border-radius:4px;
+  padding:8px;
+  cursor:pointer;
+  text-align:center;
+  transition:background .12s, border-color .12s, transform .08s;
+  user-select:none;
+}
+.mini-lib-item:hover{
+  background:#2a1a3a;
+  border-color:#c8f;
+  transform:translateY(-1px);
+}
+.mini-lib-item:active{
+  transform:translateY(0);
+}
+
+.mini-lib-preview{
+  display:block;
+  width:120px;height:200px;
+  margin:0 auto;
+  background:#000;
+  border:1px solid #222;
+  image-rendering:pixelated;
+}
+
+.mini-lib-name{
+  margin-top:6px;
+  font-size:11px;
+  color:#eee;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+
+.mini-lib-prio{
+  font-size:10px;
+  color:#fd4;
+  margin-top:2px;
+}
+
+.mini-lib-empty{
+  grid-column:1/-1;
+  padding:40px;
+  text-align:center;
+  color:#555;
+  font-size:13px;
+  letter-spacing:2px;
+}
+
+.mini-lib-status{
+  flex:none;
+  padding:10px 18px;
+  background:#1a1a1a;
+  border-top:1px solid #2a2a2a;
+  font-size:11px;
+  color:#8cf;
+}
+.mini-lib-status .ok{color:#86efac}
+.mini-lib-status .warn{color:#fbbf24}
+.mini-lib-status .err{color:#f87171}
