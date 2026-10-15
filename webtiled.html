@@ -6,41 +6,6 @@
 <meta name="theme-color" content="#161616">
 <title>WebTiled</title>
 <link rel="stylesheet" href="style.css">
-
-<!-- ═══════════════════════════════════════════════════════════
-     PATCH 1/2: DEVICE VISIBILITY
-     Грузится ПОСЛЕ style.css → перебивает его.
-     - на широком экране с точным указателем (мышь) скрываем .mobile-only
-     - на узком экране / тач-устройстве скрываем .desktop-only
-     - html.force-mobile / html.force-desktop (ставится скриптом ниже
-       или при заходе через index.html?mobile=1) перебивают всё
-     ═══════════════════════════════════════════════════════════ -->
-<style>
-  /* --- DESKTOP (широкий + точный указатель) --- */
-  @media (min-width: 821px) and (pointer: fine) {
-    html:not(.force-mobile) .mobile-only { display: none !important; }
-  }
-
-  /* --- MOBILE (узкий экран ИЛИ coarse pointer) --- */
-  @media (max-width: 820px), (pointer: coarse) {
-    html:not(.force-desktop) .desktop-only { display: none !important; }
-  }
-
-  /* --- ЯВНЫЙ ФОРС --- */
-  html.force-mobile  .desktop-only { display: none !important; }
-  html.force-desktop .mobile-only  { display: none !important; }
-
-  /* Мобильный топбар: не сжимать кнопки, разрешить wrap */
-  #topbar { flex-wrap: wrap; }
-  #topbar .mobile-only { flex: 0 0 auto; }
-
-  /* Кнопка ☰ — квадратная, как остальные mtool */
-  #btnMobileRightPanel {
-    padding: 6px 10px;
-    font-size: 16px;
-    line-height: 1;
-  }
-</style>
 </head>
 <body>
 
@@ -170,7 +135,7 @@
     <div id="bottomGrabber" title="Drag to resize"></div>
     <div id="tsTabs">
       <button id="btnAtlasesTab" class="section-tab active" data-i18n="tab.atlases">ATLASES</button>
-      <button id="btnTypesTab" class="section-tab types-tab active" data-i18n="tab.types">TYPES</button>
+      <button id="btnTypesTab" class="section-tab types-tab" data-i18n="tab.types">TYPES</button>
       <button id="btnGenTab" class="section-tab gen-tab" data-i18n="tab.gen">GENERATOR</button>
       <button id="btnV3Tab" class="section-tab v3-tab" data-i18n="tab.v3">3D</button>
       <div id="tsTabsList"></div>
@@ -397,17 +362,17 @@
 <script src="js/app.js"></script>
 
 <!-- ═══════════════════════════════════════════════════════════
-     PATCH 2/2: RUNTIME FIXES
-     Грузится ПОСЛЕ всех js/*.js.
-     1) ?mobile=1 / sessionStorage → html.force-mobile
-     2) Fallback переводы для отсутствующих ключей i18n
-     3) Авто-переключение вкладок нижней панели при смене инструмента
+     RUNTIME FIXES (после всех js/*.js)
+     1) Форс мобильного режима через ?mobile=1 / sessionStorage
+     2) Fallback переводов для отсутствующих ключей i18n
+     3) Авто-переключение нижней вкладки при смене инструмента
+     4) Гарантия «только одна вкладка нижней панели видна»
      ═══════════════════════════════════════════════════════════ -->
 <script>
 (function () {
   'use strict';
 
-  /* ─────────────── 1. FORCE MOBILE / DESKTOP ─────────────── */
+  /* ─────────── 1. FORCE MODE ─────────── */
   var params       = new URLSearchParams(location.search);
   var forceMobile  = params.get('mobile') === '1';
   var forceDesktop = params.get('mobile') === '0';
@@ -416,6 +381,13 @@
     try {
       if (sessionStorage.getItem('webtiled.isMobile') === '1') forceMobile = true;
     } catch (e) {}
+  }
+  // Автодетект по UA — подстраховка для старых браузеров без pointer:coarse
+  if (!forceMobile && !forceDesktop) {
+    var ua = navigator.userAgent || '';
+    if (/Android|iPhone|iPad|iPod|Mobile|webOS|BlackBerry|IEMobile|Opera Mini/i.test(ua)) {
+      forceMobile = true;
+    }
   }
 
   if (forceMobile) {
@@ -427,70 +399,93 @@
     window.WEBTILED_FORCE_DESKTOP = true;
   }
 
-  /* ─────────────── 2. FALLBACK i18n ───────────────
-     Проблема: ui.js при отсутствии ключа оставляет в DOM сам ключ
-     (напр. "btn.savePreview"). Ловим это и подменяем.
-     Работает и при смене языка — MutationObserver увидит смену
-     текста и применит нужный язык.                                */
+  /* ─────────── 2. i18n FALLBACK ───────────
+     ui.js не знает ключи btn.savePreview и btn.ref → выводит их как текст.
+     Ловим это и подменяем. */
   var EXTRA_I18N = {
-    en: {
-      'btn.savePreview': 'Save Preview',
-      'btn.ref':         'REF'
-    },
-    ru: {
-      'btn.savePreview': 'Скриншот',
-      'btn.ref':         'REF'
-    }
+    en: { 'btn.savePreview': 'Save Preview', 'btn.ref': 'REF' },
+    ru: { 'btn.savePreview': 'Скриншот',     'btn.ref': 'REF' }
   };
-
-  function currentLang() {
+  function lang() {
     var l = (document.documentElement.lang || '').toLowerCase();
     if (l.indexOf('ru') === 0) return 'ru';
     if (l.indexOf('en') === 0) return 'en';
     var nav = (navigator.language || '').toLowerCase();
     return nav.indexOf('ru') === 0 ? 'ru' : 'en';
   }
-
-  function fixI18nFallback() {
-    var dict = EXTRA_I18N[currentLang()] || EXTRA_I18N.en;
+  function fixI18n() {
+    var dict = EXTRA_I18N[lang()] || EXTRA_I18N.en;
     var nodes = document.querySelectorAll('[data-i18n]');
     for (var i = 0; i < nodes.length; i++) {
-      var el  = nodes[i];
+      var el = nodes[i];
       var key = el.getAttribute('data-i18n');
-      if (!key || !dict[key]) continue;
-      // подменяем ТОЛЬКО когда ui.js не нашёл ключ и оставил его как текст
-      if (el.textContent.trim() === key) {
+      if (dict[key] && el.textContent.trim() === key) {
         el.textContent = dict[key];
       }
     }
   }
-
-  // применяем по готовности DOM и по load (на случай поздних перерисовок)
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', function () {
-      setTimeout(fixI18nFallback, 0);
-    });
+    document.addEventListener('DOMContentLoaded', function () { setTimeout(fixI18n, 0); });
   } else {
-    setTimeout(fixI18nFallback, 0);
+    setTimeout(fixI18n, 0);
   }
-  window.addEventListener('load', function () {
-    setTimeout(fixI18nFallback, 0);
-  });
-
-  // реакция на перерисовки и смену языка
+  window.addEventListener('load', function () { setTimeout(fixI18n, 0); });
   try {
-    var mo = new MutationObserver(function () { fixI18nFallback(); });
-    mo.observe(document.body, { childList: true, subtree: true, characterData: true });
+    new MutationObserver(fixI18n).observe(document.body, {
+      childList: true, subtree: true, characterData: true
+    });
   } catch (e) {}
 
-  /* ─────────────── 3. TOOL → BOTTOM-TAB AUTO-SWITCH ───────────────
-     TERRAIN / AUTO → вкладка TYPES
-     BRUSH / CLS / ERASE / RECT / FILL / PICK → вкладка ATLASES
-     PAN → не трогаем
-     Также раскрывает свёрнутую нижнюю панель.                     */
+  /* ─────────── 3. BOTTOM TABS SYNC ───────────
+     Гарантирует, что видна ровно одна секция нижней панели. */
+  var TAB_PAIRS = [
+    ['btnAtlasesTab', 'tsBody'],
+    ['btnTypesTab',   'typesBody'],
+    ['btnGenTab',     'hmGenBody'],
+    ['btnV3Tab',      'hmV3Body']
+  ];
+  function syncBottomTabs() {
+    TAB_PAIRS.forEach(function (p) {
+      var btn  = document.getElementById(p[0]);
+      var body = document.getElementById(p[1]);
+      if (!btn || !body) return;
+      if (btn.classList.contains('active')) {
+        body.classList.remove('hidden');
+        body.style.display = '';
+      } else {
+        body.classList.add('hidden');
+        body.style.display = 'none';
+      }
+    });
+  }
+  window.addEventListener('load', function () {
+    setTimeout(syncBottomTabs, 0);
+    var tabs = document.getElementById('tsTabs');
+    if (tabs) {
+      new MutationObserver(syncBottomTabs).observe(tabs, {
+        attributes: true, attributeFilter: ['class'], subtree: true
+      });
+      tabs.addEventListener('click', function () {
+        setTimeout(syncBottomTabs, 0);
+      });
+    }
+  });
 
-  // какие подстроки искать в id / data-tool / title / тексте кнопки
-  var TOOL_PATTERNS = {
+  /* ─────────── 4. TOOL → TAB AUTO-SWITCH ───────────
+     TERRAIN / AUTO → TYPES
+     BRUSH / CLS / ERASE / RECT / FILL / PICK → ATLASES
+     PAN → не трогаем */
+  var TAB_FOR_TOOL = {
+    terrain: 'btnTypesTab',
+    auto:    'btnTypesTab',
+    brush:   'btnAtlasesTab',
+    cls:     'btnAtlasesTab',
+    erase:   'btnAtlasesTab',
+    rect:    'btnAtlasesTab',
+    fill:    'btnAtlasesTab',
+    pick:    'btnAtlasesTab'
+  };
+  var TOOL_ALIASES = {
     terrain: ['terrain', 'террейн', 'terr'],
     auto:    ['auto', 'авто'],
     cls:     ['cls', 'classic', 'классик'],
@@ -501,19 +496,6 @@
     brush:   ['brush', 'кисть'],
     pan:     ['pan', 'рука']
   };
-
-  var TAB_FOR_TOOL = {
-    terrain: 'btnTypesTab',
-    auto:    'btnTypesTab',
-    brush:   'btnAtlasesTab',
-    cls:     'btnAtlasesTab',
-    erase:   'btnAtlasesTab',
-    rect:    'btnAtlasesTab',
-    fill:    'btnAtlasesTab',
-    pick:    'btnAtlasesTab'
-    // pan — намеренно нет
-  };
-
   function guessTool(el) {
     var hay = [
       el.id || '',
@@ -521,119 +503,83 @@
       el.getAttribute('title') || '',
       el.textContent || ''
     ].join(' ').toLowerCase();
-
-    // порядок важен: terrain раньше auto, cls раньше brush и т.п.
-    var order = ['terrain', 'auto', 'cls', 'erase', 'rect', 'fill', 'pick', 'brush', 'pan'];
+    var order = ['terrain','auto','cls','erase','rect','fill','pick','brush','pan'];
     for (var i = 0; i < order.length; i++) {
-      var name  = order[i];
-      var pats  = TOOL_PATTERNS[name];
+      var pats = TOOL_ALIASES[order[i]];
       for (var j = 0; j < pats.length; j++) {
-        if (hay.indexOf(pats[j]) !== -1) return name;
+        if (hay.indexOf(pats[j]) !== -1) return order[i];
       }
     }
     return null;
   }
-
-  function isActive(el) {
-    return el.classList.contains('active') ||
-           el.classList.contains('selected') ||
-           el.getAttribute('aria-pressed') === 'true';
-  }
-
   function currentTool() {
-    var root  = document.getElementById('tools');
+    var root = document.getElementById('tools');
     if (!root) return null;
     var cands = root.querySelectorAll('button, [data-tool], .tool');
     for (var i = 0; i < cands.length; i++) {
-      if (isActive(cands[i])) {
-        var t = guessTool(cands[i]);
+      var el = cands[i];
+      if (el.classList.contains('active') ||
+          el.classList.contains('selected') ||
+          el.getAttribute('aria-pressed') === 'true') {
+        var t = guessTool(el);
         if (t) return t;
       }
     }
     return null;
   }
-
-  function ensureBottomOpen() {
-    var body = document.getElementById('bottomBody');
-    if (!body) return;
-    var cs = getComputedStyle(body);
-    var hidden = body.classList.contains('hidden') ||
-                 cs.display === 'none' ||
-                 cs.visibility === 'hidden';
-    if (hidden) {
-      var t = document.getElementById('btnToggleBottom');
-      if (t) t.click();
-    }
+  function activateTab(id) {
+    var btn = document.getElementById(id);
+    if (btn && !btn.classList.contains('active')) btn.click();
   }
-
-  function switchBottomTab(tabId) {
-    var btn = document.getElementById(tabId);
-    if (!btn) return;
-    if (!btn.classList.contains('active')) btn.click();
-  }
-
   function applyToolToTabs() {
     var tool = currentTool();
     if (!tool) return;
     var tabId = TAB_FOR_TOOL[tool];
     if (!tabId) return;
-    ensureBottomOpen();
-    switchBottomTab(tabId);
+    // раскрыть нижнюю панель, если свёрнута
+    var bottom = document.getElementById('bottom');
+    if (bottom && bottom.classList.contains('collapsed')) {
+      var t = document.getElementById('btnToggleBottom');
+      if (t) t.click();
+    }
+    activateTab(tabId);
   }
-
-  // следим за сменой активного инструмента
   window.addEventListener('load', function () {
     var root = document.getElementById('tools');
     if (!root) return;
-
     var last = null;
-    var obs = new MutationObserver(function () {
+    new MutationObserver(function () {
       var tool = currentTool();
       if (tool && tool !== last) {
         last = tool;
         applyToolToTabs();
       }
-    });
-    obs.observe(root, {
+    }).observe(root, {
       attributes: true,
-      attributeFilter: ['class', 'aria-pressed', 'data-active'],
-      subtree: true,
-      childList: true
+      attributeFilter: ['class','aria-pressed','data-active'],
+      subtree: true, childList: true
     });
-
-    // первичный прогон
     var t = currentTool();
     if (t) { last = t; applyToolToTabs(); }
   });
 
-  /* ─────────────── 4. КНОПКА ☰ — на всякий случай подстрахуемся ───────────────
-     Если ui.js её не связал (id мог поменяться), сделаем fallback:
-     клик по ☰ просто кликает по уже существующей кнопке открытия панели.   */
+  /* ─────────── 5. КНОПКА ☰ — fallback ───────────
+     Если ui.js её не подвязал — открываем панель сами. */
   window.addEventListener('load', function () {
     var mb = document.getElementById('btnMobileRightPanel');
-    if (!mb) return;
-    // если ui.js уже навесил обработчик — он сработает и без нас,
-    // а наш флаг предотвратит двойное открытие
-    if (mb.__webtiledBound) return;
+    if (!mb || mb.__wtBound) return;
     mb.addEventListener('click', function () {
-      // пробуем найти кнопку открытия правой панели, которую использует ui.js
-      var openers = [
-        'btnToggleRightPanel',
-        'btnRightPanel',
-        'btnShowRightPanel',
-        'btnPanelToggle'
-      ];
+      var openers = ['btnToggleRightPanel','btnRightPanel','btnShowRightPanel','btnPanelToggle'];
       for (var i = 0; i < openers.length; i++) {
         var b = document.getElementById(openers[i]);
         if (b && b !== mb) { b.click(); return; }
       }
-      // fallback — просто переключаем класс у #rightPanel
       var rp = document.getElementById('rightPanel');
       var bd = document.getElementById('rightBackdrop');
       if (rp) rp.classList.toggle('open');
-      if (bd) bd.classList.toggle('hidden');
+      if (bd) bd.classList.toggle('show');
     });
-    mb.__webtiledBound = true;
+    mb.__wtBound = true;
   });
 
 })();
