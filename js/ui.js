@@ -4,9 +4,7 @@
 const LAYER_PALETTE = ['#8cf','#fc8','#8f8','#f8c','#c8f','#f88','#ff8','#8ff','#f8f'];
 const PROTECTED_LAYER_NAMES = new Set(['Ground', 'Units', 'Items']);
 
-function terrainHue(idx) {
-  return (idx * 137.5) % 360;
-}
+function terrainHue(idx) { return (idx * 137.5) % 360; }
 function terrainColorCss(idx, alpha) {
   return 'hsla(' + terrainHue(idx) + ', 75%, 55%, ' + alpha + ')';
 }
@@ -19,6 +17,7 @@ class LayersPanel {
     this.el = el;
     this.ctx = ctx;
     this._delegated = false;
+    this._flashTimers = new Map();
   }
 
   build() {
@@ -160,6 +159,23 @@ class LayersPanel {
       row.append(cb, sw, nm, upBtn, dnBtn, clrBtn, delBtn, solo);
       this.el.appendChild(row);
     });
+  }
+
+  // ─── FLASH ───
+  flash(name) {
+    if (!name) return;
+    const row = this.el.querySelector('.layer[data-layer-name="' + name + '"]');
+    if (!row) return;
+    row.classList.remove('flash');
+    void row.offsetWidth;
+    row.classList.add('flash');
+    const prev = this._flashTimers.get(name);
+    if (prev) clearTimeout(prev);
+    const t = setTimeout(() => {
+      row.classList.remove('flash');
+      this._flashTimers.delete(name);
+    }, 500);
+    this._flashTimers.set(name, t);
   }
 
   startRename(row, oldName) {
@@ -309,19 +325,43 @@ class LayersPanel {
 }
 
 // ═══════════════════════════════════════════════
-// BRUSH PANEL
+// BRUSH PANEL — 3 режима
 // ═══════════════════════════════════════════════
 class BrushPanel {
-  constructor(listEl, totalEl, settingsEl, ctx) {
-    this.listEl = listEl;
-    this.totalEl = totalEl;
-    this.settingsEl = settingsEl;
-    this.ctx = ctx;
+  constructor(opts) {
+    this.listEl = opts.listEl;
+    this.totalEl = opts.totalEl;
+    this.settingsEl = opts.settingsEl;
+    this.classicListEl = opts.classicListEl;
+    this.tnsListEl = opts.tnsListEl;
+    this.classicPanelEl = opts.classicPanelEl;
+    this.tnsPanelEl = opts.tnsPanelEl;
+    this.ctx = opts.ctx;
   }
 
-  build() { this.buildSettings(); this.buildList(); }
+  build() {
+    const tool = this.ctx.getActiveTool ? this.ctx.getActiveTool() : 'brush';
+    this.applyMode(tool);
+    if (tool === 'classic') this.buildClassicList();
+    else if (tool === 'terrain') this.buildTNSList();
+    else { this.buildSettings(); this.buildList(); }
+  }
 
+  applyMode(tool) {
+    const isClassic = (tool === 'classic');
+    const isTNS = (tool === 'terrain');
+    const isDefault = !isClassic && !isTNS;
+
+    if (this.settingsEl) this.settingsEl.style.display = isDefault ? '' : 'none';
+    if (this.listEl) this.listEl.style.display = isDefault ? '' : 'none';
+    if (this.totalEl) this.totalEl.style.display = isDefault ? '' : 'none';
+    if (this.classicPanelEl) this.classicPanelEl.style.display = isClassic ? '' : 'none';
+    if (this.tnsPanelEl) this.tnsPanelEl.style.display = isTNS ? '' : 'none';
+  }
+
+  // ─── DEFAULT: size/shape/brush list ───
   buildSettings() {
+    if (!this.settingsEl) return;
     const st = this.ctx.getBrushSettings();
     this.settingsEl.innerHTML = '';
 
@@ -357,6 +397,7 @@ class BrushPanel {
   }
 
   buildList() {
+    if (!this.listEl) return;
     const brush = this.ctx.getBrush();
     this.listEl.innerHTML = '';
     if (!brush.length) {
@@ -366,7 +407,7 @@ class BrushPanel {
       empty.style.padding = '4px';
       empty.textContent = 'Клик по тайлу в атласе. +EMPTY — пустота.';
       this.listEl.appendChild(empty);
-      this.totalEl.textContent = 'Σ 0';
+      if (this.totalEl) this.totalEl.textContent = 'Σ 0';
       return;
     }
 
@@ -434,13 +475,191 @@ class BrushPanel {
   }
 
   updateTotal() {
+    if (!this.totalEl) return;
     const sum = this.ctx.getBrush().reduce((s, b) => s + b.weight, 0);
     this.totalEl.textContent = 'Σ ' + sum.toFixed(2);
+  }
+
+  // ─── CLASSIC: список террейнов ───
+  buildClassicList() {
+    if (!this.classicListEl) return;
+    this.classicListEl.innerHTML = '';
+    const map = this.ctx.getMap();
+    const renderer = this.ctx.getRenderer();
+    if (!map) {
+      const empty = document.createElement('div');
+      empty.className = 'empty-inline';
+      empty.textContent = 'Карта не загружена';
+      this.classicListEl.appendChild(empty);
+      return;
+    }
+
+    const activeAnchor = this.ctx.getActiveClassicTerrain ? this.ctx.getActiveClassicTerrain() : null;
+    let anyItem = false;
+    let firstRow = null;
+    let activeRow = null;
+
+    map.tilesets.forEach(ts => {
+      if (!ts.terrainTypes || !ts.terrainTypes.length) return;
+      ts.terrainTypes.forEach((tt, ti) => {
+        anyItem = true;
+        const isActive = activeAnchor &&
+          activeAnchor.tsFirstgid === ts.firstgid &&
+          activeAnchor.terrName === tt.name;
+
+        const row = document.createElement('div');
+        row.className = 'classic-row' + (isActive ? ' active' : '');
+        row.title = ts.name + ' · ' + tt.name + ' · local ' + tt.tile + ' · global ' + (tt.tile + ts.firstgid);
+
+        const cnv = document.createElement('canvas');
+        cnv.className = 'classic-preview';
+        cnv.width = 32; cnv.height = 32;
+        const g = cnv.getContext('2d');
+        g.imageSmoothingEnabled = false;
+        if (ts.image) {
+          const localID = tt.tile;
+          const c = localID % ts.columns;
+          const r = Math.floor(localID / ts.columns);
+          g.drawImage(ts.image,
+            c * ts.tileW, r * ts.tileH, ts.tileW, ts.tileH,
+            0, 0, 32, 32);
+        } else {
+          g.fillStyle = '#333';
+          g.fillRect(0, 0, 32, 32);
+        }
+        row.appendChild(cnv);
+
+        const info = document.createElement('div');
+        info.className = 'classic-info';
+        const nmEl = document.createElement('div');
+        nmEl.className = 'classic-name';
+        nmEl.textContent = tt.name;
+        const metaEl = document.createElement('div');
+        metaEl.className = 'classic-meta';
+        metaEl.textContent = 'local ' + tt.tile + ' · global ' + (tt.tile + ts.firstgid);
+        info.append(nmEl, metaEl);
+        row.appendChild(info);
+
+        row.addEventListener('click', () => {
+          this.ctx.setActiveClassicTerrain({
+            tsFirstgid: ts.firstgid,
+            terrName: tt.name
+          });
+          this.buildClassicList();
+        });
+
+        if (firstRow === null) firstRow = row;
+        if (isActive) activeRow = row;
+        this.classicListEl.appendChild(row);
+      });
+    });
+
+    if (!anyItem) {
+      const empty = document.createElement('div');
+      empty.className = 'empty-inline';
+      empty.textContent = 'Нет terraintypes в tileset\'ах. Зайди в ATLASES → ▶ Terrain.';
+      this.classicListEl.appendChild(empty);
+      return;
+    }
+
+    // Auto-select first if none active — исправляет баг «пишет не выбран»
+    if (!activeRow && firstRow && this.ctx.setActiveClassicTerrain) {
+      const tsFirst = parseInt(firstRow.title.split(' · ')[0].replace(/^.*? · /, ''), 10);
+      // проще: перебрать tilesets ещё раз и взять первый
+      const map2 = this.ctx.getMap();
+      if (map2) {
+        outer:
+        for (const ts of map2.tilesets) {
+          if (!ts.terrainTypes || !ts.terrainTypes.length) continue;
+          for (const tt of ts.terrainTypes) {
+            this.ctx.setActiveClassicTerrain({
+              tsFirstgid: ts.firstgid,
+              terrName: tt.name
+            });
+            break outer;
+          }
+        }
+        this.buildClassicList();
+      }
+    }
+  }
+
+  // ─── TNS: список типов ───
+  buildTNSList() {
+    if (!this.tnsListEl) return;
+    this.tnsListEl.innerHTML = '';
+
+    const model = this.ctx.getTypesModel ? this.ctx.getTypesModel() : null;
+    const renderer = this.ctx.getRenderer();
+    const activeTypeId = this.ctx.getActiveType ? this.ctx.getActiveType() : null;
+
+    if (!model || !model.types.length) {
+      const empty = document.createElement('div');
+      empty.className = 'empty-inline';
+      empty.textContent = 'Нет типов. Выбери TYPES в нижней панели и добавь.';
+      this.tnsListEl.appendChild(empty);
+      return;
+    }
+
+    const sorted = [...model.types].sort((a, b) => b.priority - a.priority);
+    for (const t of sorted) {
+      const row = document.createElement('div');
+      row.className = 'tns-row' + (t.id === activeTypeId ? ' active' : '');
+
+      const cnv = document.createElement('canvas');
+      cnv.className = 'tns-preview';
+      cnv.width = 32; cnv.height = 32;
+      const g = cnv.getContext('2d');
+      g.imageSmoothingEnabled = false;
+
+      const firstSolid = (t.solids && t.solids.length) ? t.solids[0].tileID : 0;
+      if (firstSolid && renderer) {
+        const ts = renderer.findTileset(firstSolid);
+        if (ts && ts.image) {
+          const localID = firstSolid - ts.firstgid;
+          const c = localID % ts.columns;
+          const r = Math.floor(localID / ts.columns);
+          g.drawImage(ts.image,
+            c * ts.tileW, r * ts.tileH, ts.tileW, ts.tileH,
+            0, 0, 32, 32);
+        } else {
+          g.fillStyle = '#222';
+          g.fillRect(0, 0, 32, 32);
+        }
+      } else {
+        g.fillStyle = '#222';
+        g.fillRect(0, 0, 32, 32);
+        g.strokeStyle = '#444';
+        g.strokeRect(0.5, 0.5, 31, 31);
+      }
+      row.appendChild(cnv);
+
+      const info = document.createElement('div');
+      info.className = 'tns-info';
+      const nmEl = document.createElement('div');
+      nmEl.className = 'tns-name';
+      nmEl.textContent = t.name || '(no name)';
+      if (t.color) nmEl.style.color = t.color;
+      const metaEl = document.createElement('div');
+      metaEl.className = 'tns-meta';
+      metaEl.textContent = 'P' + t.priority + ' · ' + (t.solids ? t.solids.length : 0) + ' solid';
+      info.append(nmEl, metaEl);
+      row.appendChild(info);
+
+      row.addEventListener('click', () => {
+        if (this.ctx.setActiveType) this.ctx.setActiveType(t.id);
+        this.buildTNSList();
+        // Уведомим app о смене
+        if (this.ctx.onBrushChanged) this.ctx.onBrushChanged();
+      });
+
+      this.tnsListEl.appendChild(row);
+    }
   }
 }
 
 // ═══════════════════════════════════════════════
-// TILESET TABS
+// TILESET TABS — без изменений (полный код)
 // ═══════════════════════════════════════════════
 class TilesetTabs {
   constructor(tabsListEl, bodyEl, bottomEl, ctx) {
@@ -462,9 +681,7 @@ class TilesetTabs {
     this._restoreViewState = null;
   }
 
-  get quadrantMode() {
-    return this.editMode && this.terrainEditMode;
-  }
+  get quadrantMode() { return this.editMode && this.terrainEditMode; }
 
   build() {
     const map = this.ctx.getMap();
@@ -636,7 +853,6 @@ class TilesetTabs {
     zoomLabel.textContent = 'Zoom: ' + this.zoom + '×';
     toolbar.appendChild(zoomLabel);
 
-    // Edit
     const editLbl = document.createElement('label');
     editLbl.className = 'ts-check';
     editLbl.title = 'Edit tile (terrain / properties)';
@@ -650,7 +866,6 @@ class TilesetTabs {
     editLbl.append(editCb, document.createTextNode(' Edit'));
     toolbar.appendChild(editLbl);
 
-    // IDs
     const idsLbl = document.createElement('label');
     idsLbl.className = 'ts-check';
     idsLbl.title = 'Show tile IDs';
@@ -664,7 +879,6 @@ class TilesetTabs {
     idsLbl.append(idsCb, document.createTextNode(' IDs'));
     toolbar.appendChild(idsLbl);
 
-    // Grid
     const gridLbl = document.createElement('label');
     gridLbl.className = 'ts-check';
     gridLbl.title = 'Tile grid (' + ts.tileW + '×' + ts.tileH + ' px)';
@@ -678,7 +892,6 @@ class TilesetTabs {
     gridLbl.append(gridCb, document.createTextNode(' Grid'));
     toolbar.appendChild(gridLbl);
 
-    // 10×10
     const grid10Lbl = document.createElement('label');
     grid10Lbl.className = 'ts-check ts-check-cyan';
     grid10Lbl.title = 'Sub-grid every 10 px';
@@ -692,7 +905,6 @@ class TilesetTabs {
     grid10Lbl.append(grid10Cb, document.createTextNode(' 10×10'));
     toolbar.appendChild(grid10Lbl);
 
-    // Terrain toggle
     const terrainBtn = document.createElement('button');
     terrainBtn.textContent = this.terrainEditMode ? '▼ Terrain' : '▶ Terrain';
     terrainBtn.className = 'ts-terrain-btn';
@@ -714,7 +926,6 @@ class TilesetTabs {
     const wrapEl = document.createElement('div');
     wrapEl.className = 'ts-canvas-wrap';
 
-    // Middle-mouse pan в атласе
     wrapEl.addEventListener('pointerdown', (e) => {
       if (e.button !== 1) return;
       e.preventDefault();
@@ -775,7 +986,6 @@ class TilesetTabs {
         g.clearRect(0, 0, cnv.width, cnv.height);
         g.drawImage(ts.image, 0, 0);
 
-        // 10×10 sub-grid — cyan dashed
         if (self.showGrid10) {
           g.save();
           g.strokeStyle = 'rgba(80,220,255,0.55)';
@@ -797,7 +1007,6 @@ class TilesetTabs {
           g.restore();
         }
 
-        // Tile grid — yellow solid
         if (self.showGrid) {
           g.strokeStyle = 'rgba(255,220,80,0.55)';
           g.lineWidth = 1;
@@ -814,7 +1023,6 @@ class TilesetTabs {
           g.stroke();
         }
 
-        // ID labels
         if (self.showIds && !self.quadrantMode) {
           g.font = 'bold 8px monospace';
           g.textAlign = 'left';
@@ -831,7 +1039,6 @@ class TilesetTabs {
           }
         }
 
-        // Quadrant overlay
         if (self.quadrantMode) {
           const activeTerr = self.activeTerrainIdx;
           const hw = ts.tileW / 2;
@@ -855,7 +1062,6 @@ class TilesetTabs {
           }
         }
 
-        // Selected brush tiles
         for (let i = 0; i < ts.tilecount; i++) {
           if (!isSelected(i)) continue;
           const col = i % ts.columns;
@@ -864,7 +1070,6 @@ class TilesetTabs {
           g.lineWidth = 2;
           g.strokeRect(col * ts.tileW + 1, row * ts.tileH + 1, ts.tileW - 2, ts.tileH - 2);
         }
-        // Pick targets
         for (let i = 0; i < ts.tilecount; i++) {
           if (!isPickTarget(i)) continue;
           const col = i % ts.columns;
