@@ -24,9 +24,7 @@ let activeLayer = null;
 let brushGroup = [];
 let brushSettings = { size: 0, shape: 'square' };
 
-// Хранит { tsFirstgid: number, terrName: string } — стабильные ключи,
-// не зависят от порядка tileset'ов и terraintypes.
-let activeClassicTerrain = null;
+let activeClassicTerrain = null; // { tsFirstgid, terrName }
 let classicMaskCache = new Map();
 let classicEmptyCache = new Map();
 
@@ -155,11 +153,8 @@ RW.I18N = {
 };
 
 // ═══════════════════════════════════════════════
-// CLASSIC AUTOTILE — стабильный якорь
+// CLASSIC AUTOTILE — stable anchor (firstgid + name)
 // ═══════════════════════════════════════════════
-
-// Находит tileset + terrainType по { tsFirstgid, terrName }.
-// Возвращает { ts, tsIdx, terrIdx, terrType } или null.
 function resolveClassicAnchor() {
   if (!activeClassicTerrain || !mapModel) return null;
   const a = activeClassicTerrain;
@@ -264,6 +259,7 @@ function handleToolClick(id) {
   settings.activeTool = id;
   RW.Storage.saveSettings(settings);
   if (renderer) renderer.render();
+  if (typeof updateMobileToolBtn === 'function') updateMobileToolBtn();
 }
 
 // ─── Pick mode ───
@@ -421,7 +417,7 @@ function paintTerrainCells(cx, cy) {
 }
 
 // ═══════════════════════════════════════════════
-// CLASSIC AUTOTILE — paint
+// CLASSIC AUTOTILE
 // ═══════════════════════════════════════════════
 function buildClassicMaskIndex(tsIdx) {
   const c = classicMaskCache.get(tsIdx);
@@ -505,7 +501,6 @@ function paintClassicCell(tx, ty, anchor) {
   if (!activeLayer) return;
   const tsIdx = anchor.tsIdx;
   const terrIdx = anchor.terrIdx;
-  const ts = anchor.ts;
   const ev = findEmptyValue(tsIdx, terrIdx);
   const mask = resolveClassicMask(tx, ty, tsIdx, terrIdx, ev);
   const idx = buildClassicMaskIndex(tsIdx);
@@ -588,9 +583,6 @@ function finalizeClassicForStroke() {
     paintClassicCell(x, y, anchor);
   }
 }
-
-// ─── Classic select ───
-// value формата "firstgid:terrainName" — оба ключа стабильны.
 function rebuildClassicSelect() {
   const map = mapModel;
   if (!classicSelectEl) return;
@@ -624,12 +616,10 @@ function rebuildClassicSelect() {
     classicSelectEl.appendChild(o);
   }
 
-  // если активный anchor больше не разрешается — сбросить
   if (activeClassicTerrain && !resolveClassicAnchor()) {
     activeClassicTerrain = null;
   }
 }
-
 if (classicSelectEl) classicSelectEl.addEventListener('change', () => {
   const v = classicSelectEl.value;
   if (!v) { activeClassicTerrain = null; return; }
@@ -653,7 +643,6 @@ if (classicSelectEl) classicSelectEl.addEventListener('change', () => {
     '  (empty=' + ev + ', masks=' + mc + ')';
 });
 
-// ─── Custom autotile (TNS) ───
 function finalizeAutotileForStroke() {
   if (!generator || !strokeBound) return;
   const b = strokeBound;
@@ -1774,6 +1763,173 @@ function setupTopbarIcons() {
 }
 
 // ═══════════════════════════════════════════════
+// MOBILE UI
+// ═══════════════════════════════════════════════
+const mobile = {
+  isMobile: () => window.matchMedia('(max-width: 820px), ((max-width: 1024px) and (pointer: coarse))').matches,
+  rightOpen: false,
+  bottomOpen: false
+};
+
+function updateMobileToolBtn() {
+  const btn = el('btnMobileTool');
+  if (!btn) return;
+  const cur = TOOLS.find(t => t.id === activeTool);
+  if (!cur) return;
+  const icEl = btn.querySelector('.mtool-icon');
+  const lblEl = btn.querySelector('.mtool-label');
+  if (icEl) {
+    let html = cur.emoji || '?';
+    if (cur.icon) {
+      html = '<img src="' + cur.icon + '" alt="" ' +
+        'style="width:20px;height:20px;image-rendering:pixelated;vertical-align:-4px" ' +
+        'onerror="this.outerHTML=\'' + (cur.emoji || '?') + '\'">';
+    }
+    icEl.innerHTML = html;
+  }
+  if (lblEl) lblEl.textContent = cur.label || cur.id.toUpperCase();
+}
+
+function openToolPicker() {
+  const modal = el('toolPickerModal');
+  const grid = el('toolPickerGrid');
+  if (!modal || !grid) return;
+
+  grid.innerHTML = '';
+  for (const t of TOOLS) {
+    if (t.sep) continue;
+    const cell = document.createElement('div');
+    cell.className = 'tool-picker-cell' + (t.id === activeTool ? ' active' : '');
+    cell.dataset.tool = t.id;
+
+    const ic = document.createElement('div');
+    ic.className = 'tp-ic';
+    if (t.icon) {
+      const img = document.createElement('img');
+      img.src = t.icon;
+      img.alt = '';
+      img.onerror = () => {
+        ic.innerHTML = '';
+        ic.textContent = t.emoji || '?';
+      };
+      ic.appendChild(img);
+    } else {
+      ic.textContent = t.emoji || '?';
+    }
+    cell.appendChild(ic);
+
+    const lbl = document.createElement('div');
+    lbl.className = 'tp-lbl';
+    lbl.textContent = t.label || t.id.toUpperCase();
+    cell.appendChild(lbl);
+
+    cell.addEventListener('click', () => {
+      handleToolClick(t.id);
+      closeToolPicker();
+    });
+
+    grid.appendChild(cell);
+  }
+
+  modal.classList.remove('hidden');
+}
+
+function closeToolPicker() {
+  const modal = el('toolPickerModal');
+  if (modal) modal.classList.add('hidden');
+}
+
+function toggleRightPanel() {
+  if (mobile.rightOpen) closeRightPanel();
+  else openRightPanel();
+}
+function openRightPanel() {
+  const panel = el('rightPanel');
+  const back = el('rightBackdrop');
+  if (!panel || !back) return;
+  panel.classList.add('open');
+  back.classList.remove('hidden');
+  void back.offsetWidth;
+  back.classList.add('show');
+  mobile.rightOpen = true;
+}
+function closeRightPanel() {
+  const panel = el('rightPanel');
+  const back = el('rightBackdrop');
+  if (!panel || !back) return;
+  panel.classList.remove('open');
+  back.classList.remove('show');
+  const wasOpen = mobile.rightOpen;
+  mobile.rightOpen = false;
+  setTimeout(() => {
+    if (!mobile.rightOpen) back.classList.add('hidden');
+  }, 250);
+}
+function openBottomMobile() {
+  const b = el('bottom');
+  const bar = el('mobileBottomBar');
+  if (!b) return;
+  b.classList.add('mobile-open');
+  b.classList.remove('collapsed');
+  if (bar) bar.classList.add('hidden');
+  mobile.bottomOpen = true;
+  if (renderer) setTimeout(() => renderer.resize(), 240);
+}
+function closeBottomMobile() {
+  const b = el('bottom');
+  const bar = el('mobileBottomBar');
+  if (!b) return;
+  b.classList.remove('mobile-open');
+  if (bar) bar.classList.remove('hidden');
+  mobile.bottomOpen = false;
+  if (renderer) setTimeout(() => renderer.resize(), 240);
+}
+
+function setupMobileUI() {
+  updateMobileToolBtn();
+
+  on('btnMobileTool', 'click', openToolPicker);
+  on('toolPickerClose', 'click', closeToolPicker);
+
+  const tpModal = el('toolPickerModal');
+  if (tpModal) {
+    tpModal.addEventListener('click', (e) => {
+      if (e.target === tpModal) closeToolPicker();
+    });
+  }
+
+  on('btnMobileRightPanel', 'click', toggleRightPanel);
+  on('rightPanelClose', 'click', closeRightPanel);
+  on('rightBackdrop', 'click', closeRightPanel);
+
+  on('btnMobileBottom', 'click', openBottomMobile);
+  on('btnMobileBottomOpen', 'click', openBottomMobile);
+
+  // на мобиле btnToggleBottom внутри bottom закрывает fullscreen-режим
+  const toggleBtn = el('btnToggleBottom');
+  if (toggleBtn) {
+    toggleBtn.addEventListener('click', (e) => {
+      if (mobile.isMobile() && mobile.bottomOpen) {
+        e.preventDefault();
+        e.stopPropagation();
+        closeBottomMobile();
+      }
+    }, true);
+  }
+
+  window.addEventListener('resize', () => {
+    if (!mobile.isMobile()) {
+      closeRightPanel();
+      const b = el('bottom');
+      if (b) b.classList.remove('mobile-open');
+      const bar = el('mobileBottomBar');
+      if (bar) bar.classList.remove('hidden');
+      mobile.bottomOpen = false;
+    }
+  });
+}
+
+// ═══════════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════════
 window.addEventListener('DOMContentLoaded', () => {
@@ -1783,10 +1939,12 @@ window.addEventListener('DOMContentLoaded', () => {
   RW.I18N.apply();
   buildTools();
   setupTopbarIcons();
+  setupMobileUI();
 });
 
 RW.I18N.apply();
 buildTools();
 applyAtlasBg(settings.atlasBg);
 setupTopbarIcons();
+setupMobileUI();
 })(window.RWEditor = window.RWEditor || {});
