@@ -2,6 +2,11 @@
 'use strict';
 const M = RW.MergeUI = RW.MergeUI || {};
 
+const MOBILE_MQ = '(max-width: 820px), ((max-width: 1024px) and (pointer: coarse))';
+function isMobile() {
+  return window.matchMedia(MOBILE_MQ).matches;
+}
+
 let modalEl, stageEl, listEl, infoEl, fileInputEl, guidesEl, snapCb;
 let layout = [];                    // [{ parsed, name, x, y }]  x,y в ТАЙЛАХ
 let zoom = 1, panX = 0, panY = 0;   // screen-пространство
@@ -14,6 +19,13 @@ const previewCache = new Map();
 const ZOOM_MIN = 0.1, ZOOM_MAX = 4;
 const SNAP_PX = 10;                 // порог снапа в экранных пикселях
 
+// ── Multi-touch state ──
+const pointers = new Map();
+let multiActive = false;
+let lastPinchDist = 0;
+let lastPinchMidX = 0;
+let lastPinchMidY = 0;
+
 // ═══════════════════════════════════════════════
 M.open = function(opts) {
   onMergeCb = opts.onMerge;
@@ -22,13 +34,18 @@ M.open = function(opts) {
   previewCache.clear();
   zoom = 1; panX = 0; panY = 0;
   activeGuides = [];
+  pointers.clear();
+  multiActive = false;
   modalEl.classList.remove('hidden');
-  // после показа — fit
   requestAnimationFrame(() => { fitView(); renderAll(); });
 };
 
 M.close = function() {
   if (modalEl) modalEl.classList.add('hidden');
+  pointers.clear();
+  multiActive = false;
+  dragging = null;
+  panning = null;
 };
 
 function ensureDom() {
@@ -40,7 +57,6 @@ function ensureDom() {
   fileInputEl = document.getElementById('mergeFileInput');
   snapCb      = document.getElementById('mergeSnap');
 
-  // guide container — поверх stage, но под прямоугольниками
   guidesEl = document.createElement('div');
   guidesEl.id = 'mergeGuides';
   stageEl.appendChild(guidesEl);
@@ -86,6 +102,7 @@ function ensureDom() {
   stageEl.addEventListener('contextmenu', (e) => e.preventDefault());
   window.addEventListener('pointermove', onPointerMove);
   window.addEventListener('pointerup', onPointerUp);
+  window.addEventListener('pointercancel', onPointerUp);
 }
 
 // ═══════════════════════════════════════════════
@@ -93,7 +110,6 @@ function ensureDom() {
 // ═══════════════════════════════════════════════
 function addMap(parsed, name) {
   const bbox = computeBBox();
-  // первая → (0,0), следующая → впритык справа от bbox
   const x = bbox ? bbox.maxX : 0;
   const y = bbox ? bbox.minY : 0;
   layout.push({ parsed, name, x, y });
@@ -112,13 +128,13 @@ function computeBBox() {
 }
 
 // ═══════════════════════════════════════════════
-// VIEW (zoom/pan)
+// VIEW
 // ═══════════════════════════════════════════════
 function fitView() {
   const bbox = computeBBox();
   const sr = stageEl.getBoundingClientRect();
   if (!bbox || !sr.width || !sr.height) { zoom = 1; panX = 0; panY = 0; return; }
-  const pad = 60;
+  const pad = isMobile() ? 30 : 60;
   const sx = (sr.width  - pad*2) / bbox.w;
   const sy = (sr.height - pad*2) / bbox.h;
   zoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, Math.min(sx, sy)));
@@ -127,6 +143,7 @@ function fitView() {
 }
 
 function onWheel(e) {
+  if (isMobile()) return;  // touch devices — pinch instead
   e.preventDefault();
   const sr = stageEl.getBoundingClientRect();
   const mx = e.clientX - sr.left;
@@ -140,7 +157,6 @@ function onWheel(e) {
   renderStage();
 }
 
-// screen ↔ map
 function toScreenX(mapX) { return mapX * zoom + panX; }
 function toScreenY(mapY) { return mapY * zoom + panY; }
 
@@ -207,17 +223,12 @@ function getPreviewCanvas(parsed) {
   return cv;
 }
 
-// 1 тайл = 1 px превью, цвет тайла средневзвешенный по альфе
+// 1 тайл = 1 px в превью-canvas. На мобиле — downscale ×0.5.
 function makePreviewCanvas(parsed) {
   const W = parsed.W, H = parsed.H;
   const cv = document.createElement('canvas');
-  cv.width = W; cv.height = H;
-  cv.style.width = '100%';
-  cv.style.height = '100%';
-  cv.style.imageRendering = 'pixelated';
-  cv.style.position = 'absolute';
-  cv.style.inset = '0';
-  cv.style.pointerEvents = 'none';
+  cv.width = W;
+  cv.height = H;
 
   const ctx = cv.getContext('2d');
   const img = ctx.createImageData(W, H);
@@ -284,6 +295,32 @@ function makePreviewCanvas(parsed) {
     }
   }
   ctx.putImageData(img, 0, 0);
+
+  // ── На мобиле — даунскейл ×0.5 для меньшей памяти и быстрее рендер ──
+  if (isMobile()) {
+    const sw = Math.max(24, Math.round(W * 0.5));
+    const sh = Math.max(24, Math.round(H * 0.5));
+    const small = document.createElement('canvas');
+    small.width = sw;
+    small.height = sh;
+    const sg = small.getContext('2d');
+    sg.imageSmoothingEnabled = false;
+    sg.drawImage(cv, 0, 0, W, H, 0, 0, sw, sh);
+    small.style.width = '100%';
+    small.style.height = '100%';
+    small.style.imageRendering = 'pixelated';
+    small.style.position = 'absolute';
+    small.style.inset = '0';
+    small.style.pointerEvents = 'none';
+    return small;
+  }
+
+  cv.style.width = '100%';
+  cv.style.height = '100%';
+  cv.style.imageRendering = 'pixelated';
+  cv.style.position = 'absolute';
+  cv.style.inset = '0';
+  cv.style.pointerEvents = 'none';
   return cv;
 }
 
@@ -410,18 +447,13 @@ function rectsOverlap(a, b) {
 
 // ═══════════════════════════════════════════════
 // SNAP
-//
-// Ищем ближайшее выравнивание 4 граней moving-карты
-// по 4 граням всех остальных. Snap по X и Y независимо.
-// Порог — 10 экранных пикселей, переведённых в map-единицы.
 // ═══════════════════════════════════════════════
 function applySnap(movingIdx, proposedX, proposedY) {
   const res = { x: proposedX, y: proposedY, guides: [] };
   if (!snapCb || !snapCb.checked) return res;
   if (layout.length < 2) return res;
 
-  const threshold = SNAP_PX / zoom;
-
+  const threshold = (isMobile() ? 14 : SNAP_PX) / zoom;
   const movingW = layout[movingIdx].parsed.W;
   const movingH = layout[movingIdx].parsed.H;
 
@@ -434,7 +466,6 @@ function applySnap(movingIdx, proposedX, proposedY) {
     edgesY.push(e.y, e.y + e.parsed.H);
   }
 
-  // X
   const movingXs = [proposedX, proposedX + movingW];
   let bestDx = null, bestDistX = Infinity, guideX = null;
   for (const mx of movingXs) {
@@ -449,7 +480,6 @@ function applySnap(movingIdx, proposedX, proposedY) {
     res.guides.push({ type: 'v', coord: guideX });
   }
 
-  // Y
   const movingYs = [proposedY, proposedY + movingH];
   let bestDy = null, bestDistY = Infinity, guideY = null;
   for (const my of movingYs) {
@@ -468,12 +498,29 @@ function applySnap(movingIdx, proposedX, proposedY) {
 }
 
 // ═══════════════════════════════════════════════
-// INPUT
+// POINTER INPUT
 // ═══════════════════════════════════════════════
 function onStageDown(e) {
   if (e.button !== 0 && e.button !== 1) return;
-  const rect = e.target.closest('.merge-rect');
 
+  pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  try { stageEl.setPointerCapture(e.pointerId); } catch (_) {}
+
+  // ── Два и больше пальцев → pinch / pan ──
+  if (pointers.size >= 2) {
+    dragging = null;
+    panning = null;
+    stageEl.classList.remove('panning');
+    const arr = Array.from(pointers.values());
+    lastPinchDist = Math.hypot(arr[0].x - arr[1].x, arr[0].y - arr[1].y);
+    lastPinchMidX = (arr[0].x + arr[1].x) / 2;
+    lastPinchMidY = (arr[0].y + arr[1].y) / 2;
+    multiActive = true;
+    e.preventDefault();
+    return;
+  }
+
+  const rect = e.target.closest('.merge-rect');
   if (rect && e.button === 0) {
     // drag карты
     const i = parseInt(rect.dataset.idx, 10);
@@ -482,21 +529,59 @@ function onStageDown(e) {
       startMouseX: e.clientX, startMouseY: e.clientY,
       startMapX: layout[i].x, startMapY: layout[i].y
     };
-    try { stageEl.setPointerCapture(e.pointerId); } catch (_) {}
     e.preventDefault();
   } else {
-    // pan (клик по пустому месту или средняя кнопка)
+    // pan
     panning = {
       startMouseX: e.clientX, startMouseY: e.clientY,
       startPanX: panX, startPanY: panY
     };
     stageEl.classList.add('panning');
-    try { stageEl.setPointerCapture(e.pointerId); } catch (_) {}
     e.preventDefault();
   }
 }
 
 function onPointerMove(e) {
+  if (!pointers.has(e.pointerId)) return;
+  const prev = pointers.get(e.pointerId);
+  prev.x = e.clientX;
+  prev.y = e.clientY;
+
+  // ── Multi-touch: pinch + pan ──
+  if (pointers.size >= 2) {
+    const arr = Array.from(pointers.values());
+    const d = Math.hypot(arr[0].x - arr[1].x, arr[0].y - arr[1].y);
+    const mx = (arr[0].x + arr[1].x) / 2;
+    const my = (arr[0].y + arr[1].y) / 2;
+
+    // pan midpoint
+    panX += mx - lastPinchMidX;
+    panY += my - lastPinchMidY;
+
+    // zoom
+    if (lastPinchDist > 8 && d > 8) {
+      const k = d / lastPinchDist;
+      if (Math.abs(k - 1) > 0.002) {
+        const sr = stageEl.getBoundingClientRect();
+        const zx = mx - sr.left;
+        const zy = my - sr.top;
+        const mapX = (zx - panX) / zoom;
+        const mapY = (zy - panY) / zoom;
+        zoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, zoom * k));
+        panX = zx - mapX * zoom;
+        panY = zy - mapY * zoom;
+      }
+    }
+
+    lastPinchDist = d;
+    lastPinchMidX = mx;
+    lastPinchMidY = my;
+    renderStage();
+    renderInfoFast();
+    return;
+  }
+
+  // ── Single pointer ──
   if (dragging) {
     e.preventDefault();
     const dx = (e.clientX - dragging.startMouseX) / zoom;
@@ -528,7 +613,14 @@ function onPointerMove(e) {
   }
 }
 
-function onPointerUp() {
+function onPointerUp(e) {
+  pointers.delete(e.pointerId);
+
+  if (multiActive && pointers.size === 0) {
+    multiActive = false;
+    return;
+  }
+
   if (dragging) {
     dragging = null;
     activeGuides = [];
