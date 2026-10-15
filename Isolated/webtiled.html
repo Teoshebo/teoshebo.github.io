@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#161616">
+<title>WebTiled</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="app">
+  <div id="topbar">
+    <span class="logo">WebTiled</span>
+    <input type="file" id="fileInput" accept=".tmx,application/xml,text/xml" hidden>
+    <input type="file" id="tilesetInput" accept="image/png,image/*" hidden>
+
+    <!-- ═══ DESKTOP: file ops ═══ -->
+    <button id="btnOpen" class="primary desktop-only">
+      <img class="btn-ic" src="asset/icon/open.png" data-emoji="📂" alt="">
+      <span data-i18n="btn.open">Open</span>
+    </button>
+    <button id="btnSave" class="save desktop-only">
+      <img class="btn-ic" src="asset/icon/save.png" data-emoji="💾" alt="">
+      <span data-i18n="btn.save">Save</span>
+    </button>
+
+    <div class="sep desktop-only"></div>
+
+    <button id="btnUndo" title="Undo (Ctrl+Z)">
+      <img class="btn-ic" src="asset/icon/undo.png" data-emoji="↶" alt="">
+      <span class="desktop-only">Undo</span>
+    </button>
+    <button id="btnRedo" title="Redo (Ctrl+Y)">
+      <img class="btn-ic" src="asset/icon/redo.png" data-emoji="↷" alt="">
+      <span class="desktop-only">Redo</span>
+    </button>
+
+    <div class="sep desktop-only"></div>
+
+    <button id="btnResize" title="Change map size" class="desktop-only">
+      <img class="btn-ic" src="asset/icon/resize.png" data-emoji="⤢" alt="">
+      <span data-i18n="btn.resize">Size</span>
+    </button>
+    <button id="btnMerge" title="Merge multiple maps" class="desktop-only">
+      <img class="btn-ic" src="asset/icon/merge.png" data-emoji="⌘" alt="">
+      <span data-i18n="btn.merge">Merge</span>
+    </button>
+    <button id="btnExportMap" title="Save preview as PNG 500×500">
+      <img class="btn-ic" src="asset/icon/export.png" data-emoji="📷" alt="">
+      <span data-i18n="btn.savePreview">Save Preview</span>
+    </button>
+
+    <input type="text" id="mapName" placeholder="filename" title="Filename for saving" class="desktop-only">
+
+    <div class="sep desktop-only"></div>
+
+    <button id="btnFit" data-i18n="btn.fit" class="desktop-only">Fit</button>
+    <button id="btnReset" data-i18n="btn.reset" class="desktop-only">1:1</button>
+    <div class="zoom-box desktop-only">Zoom <b id="zoomVal">1.00</b></div>
+
+    <button id="btnRef" title="Reference image">
+      <img class="btn-ic" src="asset/icon/ref.png" data-emoji="🖼" alt="">
+      <span data-i18n="btn.ref">REF</span>
+    </button>
+
+    <div class="sep desktop-only"></div>
+
+    <button id="btnSettings" title="Settings">
+      <img class="btn-ic" src="asset/icon/settings.png" data-emoji="⚙" alt="">
+    </button>
+    <button id="btnDocs" title="Documentation">
+      <img class="btn-ic" src="asset/icon/docs.png" data-emoji="📖" alt="">
+    </button>
+
+    <span id="status" data-i18n="status.idle">Load .tmx file</span>
+
+    <!-- ═══ MOBILE-ONLY ═══ -->
+    <button id="btnMobileBrush" class="mobile-only" title="Brush tool">
+      <span class="mtool-icon">🖌</span>
+      <span class="mtool-label">BRUSH</span>
+    </button>
+    <button id="btnMobileMap" class="mobile-only" title="Map">
+      <span class="mtool-icon">🗺</span>
+      <span class="mtool-label">MAP</span>
+    </button>
+    <button id="btnMobileUtility" class="mobile-only" title="Utility">
+      <span class="mtool-icon">🛠</span>
+      <span class="mtool-label">UTILITY</span>
+    </button>
+    <button id="btnMobileRightPanel" class="mobile-only" title="Panels">☰</button>
+  </div>
+
+  <div id="main">
+    <div id="tools"></div>
+    <div id="wrap">
+      <canvas id="cv"></canvas>
+      <div id="fps">—</div>
+      <div id="info">—</div>
+      <div id="pickBanner" class="hidden">
+        <span id="pickBannerText">—</span>
+        <button id="btnPickCancel">Cancel</button>
+      </div>
+      <div id="warnBanner" class="hidden">
+        <span id="warnBannerText">—</span>
+        <button id="btnWarnClose">OK</button>
+      </div>
+      <div id="rightPanel">
+        <div class="right-panel-close mobile-only" id="rightPanelClose">×</div>
+        <div id="layers"><h3>LAYERS <span id="activeLayerLabel">—</span></h3></div>
+        <div id="brushPanel">
+          <h3>BRUSH
+            <button id="btnAddEmpty" title="Add EMPTY to brush">+EMPTY</button>
+            <button id="btnFlood" title="Flood dominant type (≥3 neighbors)">FLOOD</button>
+            <button id="btnClearBrush">CLEAR</button>
+          </h3>
+          <div id="brushSettings" class="brush-settings"></div>
+          <div id="brushList"></div>
+          <div id="brushTotal">Σ 0</div>
+          <div id="classicPanel" class="classic-panel">
+            <div class="classic-title">CLASSIC TERRAIN</div>
+            <div id="classicList"></div>
+          </div>
+          <div id="tnsPanel" class="tns-panel">
+            <div class="tns-title">TYPES</div>
+            <div id="tnsList"></div>
+          </div>
+        </div>
+      </div>
+      <div id="rightBackdrop" class="mobile-only hidden"></div>
+    </div>
+  </div>
+
+  <div id="bottom">
+    <div id="bottomGrabber" title="Drag to resize"></div>
+    <div id="tsTabs">
+      <button id="btnAtlasesTab" class="section-tab active" data-i18n="tab.atlases">ATLASES</button>
+      <button id="btnTypesTab" class="section-tab types-tab" data-i18n="tab.types">TYPES</button>
+      <button id="btnGenTab" class="section-tab gen-tab" data-i18n="tab.gen">GENERATOR</button>
+      <button id="btnV3Tab" class="section-tab v3-tab" data-i18n="tab.v3">3D</button>
+      <div id="tsTabsList"></div>
+      <div class="right">
+        <button id="btnToggleBottom" class="toggle">▼</button>
+      </div>
+    </div>
+    <div id="bottomBody">
+      <div id="tsBody"><div class="empty-msg">Load a map to see atlases</div></div>
+      <div id="typesBody"></div>
+      <div id="hmGenBody" class="hidden"></div>
+      <div id="hmV3Body" class="hidden"></div>
+    </div>
+  </div>
+
+  <div id="mobileBottomBar" class="mobile-only">
+    <button id="btnMobileBottomOpen" title="Open panel">▼</button>
+  </div>
+</div>
+
+<!-- ═══ TOOL PICKER (BRUSH, mobile) ═══ -->
+<div id="toolPickerModal" class="hidden mobile-only">
+  <div class="tool-picker-dialog">
+    <div class="tool-picker-header">
+      <span>BRUSH</span>
+      <button id="toolPickerClose">×</button>
+    </div>
+    <div id="toolPickerGrid" class="tool-picker-grid"></div>
+  </div>
+</div>
+
+<!-- ═══ MAP MODAL (mobile) ═══ -->
+<div id="mapModal" class="hidden mobile-only">
+  <div class="mobile-modal-dialog">
+    <div class="mobile-modal-header">
+      <span>MAP</span>
+      <button id="mapModalClose">×</button>
+    </div>
+    <div class="mobile-modal-body">
+      <button id="mapOpenBtn" class="mobile-action-btn primary">
+        <span class="ma-ic">📂</span>
+        <span class="ma-lbl" data-i18n="btn.open">Open</span>
+      </button>
+      <button id="mapSaveBtn" class="mobile-action-btn save">
+        <span class="ma-ic">💾</span>
+        <span class="ma-lbl" data-i18n="btn.save">Save</span>
+      </button>
+      <label class="mobile-field">
+        <span class="ma-lbl" data-i18n="field.filename">Filename</span>
+        <input type="text" id="mapNameMobile" placeholder="map.tmx">
+      </label>
+      <button id="mapResizeBtn" class="mobile-action-btn">
+        <span class="ma-ic">⤢</span>
+        <span class="ma-lbl" data-i18n="btn.resize">Size</span>
+      </button>
+      <button id="mapMergeBtn" class="mobile-action-btn">
+        <span class="ma-ic">⌘</span>
+        <span class="ma-lbl" data-i18n="btn.merge">Merge</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ UTILITY MODAL (mobile) ═══ -->
+<div id="utilityModal" class="hidden mobile-only">
+  <div class="mobile-modal-dialog">
+    <div class="mobile-modal-header">
+      <span>UTILITY</span>
+      <button id="utilityModalClose">×</button>
+    </div>
+    <div class="mobile-modal-body">
+      <button id="utilSavePreview" class="mobile-action-btn">
+        <span class="ma-ic">📷</span>
+        <span class="ma-lbl" data-i18n="btn.savePreview">Save Preview</span>
+      </button>
+      <button id="utilFit" class="mobile-action-btn">
+        <span class="ma-ic">⤢</span>
+        <span class="ma-lbl" data-i18n="btn.fit">Fit</span>
+      </button>
+      <button id="utilReset" class="mobile-action-btn">
+        <span class="ma-ic">1:1</span>
+        <span class="ma-lbl" data-i18n="btn.reset">1:1</span>
+      </button>
+      <div class="mobile-info-row">
+        <span class="ma-lbl" data-i18n="field.zoom">Zoom</span>
+        <b id="utilZoomVal">1.00</b>
+      </div>
+      <button id="utilRef" class="mobile-action-btn">
+        <span class="ma-ic">🖼</span>
+        <span class="ma-lbl" data-i18n="btn.ref">Reference</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ REFERENCE MODAL ═══ -->
+<div id="refModal" class="hidden">
+  <div class="ref-dialog">
+    <div class="ref-header">
+      <span data-i18n="ref.title">REFERENCE</span>
+      <button id="refClose" title="Close">×</button>
+    </div>
+    <div class="ref-body">
+      <div class="ref-status">
+        <span data-i18n="ref.status">Status</span>:
+        <b id="refStatusText">—</b>
+      </div>
+      <div class="ref-buttons">
+        <button id="refPickBtn" class="primary" data-i18n="ref.pick">Choose file</button>
+        <button id="refClearBtn" class="danger" data-i18n="ref.clear">Remove</button>
+      </div>
+      <label class="ref-field">
+        <span data-i18n="ref.opacity">Opacity</span>
+        <input type="range" id="refOpacity" min="0" max="1" step="0.05" value="0.5">
+        <b id="refOpacityVal">0.50</b>
+      </label>
+      <label class="ref-field ref-field-check">
+        <input type="checkbox" id="refUnderlay">
+        <span data-i18n="ref.underlay">Place under map (else overlay)</span>
+      </label>
+      <div class="ref-hint" data-i18n="ref.hint">
+        Reference is not saved into .tmx and not included in Save Preview. Chrome/Edge remember the file path between sessions.
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ MERGE MODAL ═══ -->
+<div id="mergeModal" class="hidden">
+  <div class="merge-dialog">
+    <div class="merge-header">
+      <span>MERGE MAPS</span>
+      <button id="mergeClose" title="Close">×</button>
+    </div>
+    <div class="merge-main">
+      <div id="mergeStage"></div>
+      <div class="merge-side">
+        <div class="merge-side-title">PRIORITY · top wins overlap</div>
+        <div id="mergeList"></div>
+        <div class="merge-side-actions">
+          <button id="mergeAdd">+ ADD MAP</button>
+        </div>
+      </div>
+    </div>
+    <div class="merge-footer">
+      <span id="mergeInfo">Empty</span>
+      <label class="merge-snap-label">
+        <input type="checkbox" id="mergeSnap" checked>
+        SNAP
+      </label>
+      <button id="mergeFit">FIT</button>
+      <button id="mergeClear" class="danger">CLEAR</button>
+      <button id="mergeCancel">CANCEL</button>
+      <button id="mergeRun" class="primary">MERGE</button>
+    </div>
+  </div>
+</div>
+<input type="file" id="mergeFileInput" accept=".tmx" multiple hidden>
+
+<!-- ═══ SETTINGS MODAL ═══ -->
+<div id="settingsModal" class="hidden">
+  <div class="settings-dialog">
+    <div class="settings-header">
+      <span data-i18n="settings.title">SETTINGS</span>
+      <button id="settingsClose" title="Close">×</button>
+    </div>
+    <div class="settings-body">
+      <div class="settings-section">
+        <div class="settings-section-title" data-i18n="settings.language">LANGUAGE</div>
+        <div class="settings-lang-row">
+          <button id="settingsLangEn" class="settings-lang-btn">English</button>
+          <button id="settingsLangRu" class="settings-lang-btn">Русский</button>
+        </div>
+      </div>
+      <div class="settings-section">
+        <div class="settings-section-title" data-i18n="settings.appearance">APPEARANCE</div>
+        <label class="settings-field">
+          <span data-i18n="settings.canvasBg">Editor background</span>
+          <input type="color" id="settingsCanvasBg" value="#0a0a0a">
+        </label>
+        <label class="settings-field">
+          <span data-i18n="settings.atlasBg">Atlas / tiles background</span>
+          <input type="color" id="settingsAtlasBg" value="#0a0a0a">
+        </label>
+      </div>
+      <div class="settings-section">
+        <div class="settings-section-title" data-i18n="settings.markers">MARKERS</div>
+        <label class="settings-field settings-field-check">
+          <input type="checkbox" id="settingsShowMarkers">
+          <span data-i18n="settings.showMarkers">Show markers</span>
+        </label>
+        <label class="settings-field">
+          <span data-i18n="settings.markerSize">Marker size</span>
+          <input type="range" id="settingsMarkerScale" min="0.3" max="3" step="0.05" value="1">
+          <b id="settingsMarkerScaleVal" class="settings-slider-val">1.00×</b>
+        </label>
+      </div>
+    </div>
+    <div class="settings-footer">
+      <button id="settingsCancel" data-i18n="settings.cancel">CANCEL</button>
+      <button id="settingsApply" class="primary" data-i18n="settings.apply">APPLY</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js"></script>
+<script src="js/utils.js"></script>
+<script src="js/tmx.js"></script>
+<script src="js/map.js"></script>
+<script src="js/types.js"></script>
+<script src="js/storage.js"></script>
+<script src="js/generator.js"></script>
+<script src="js/render.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/hm_core.js"></script>
+<script src="js/hm_png.js"></script>
+<script src="js/hm_apply.js"></script>
+<script src="js/view3d.js"></script>
+<script src="js/hm_panel.js"></script>
+<script src="js/hm_app.js"></script>
+<script src="js/merge.js"></script>
+<script src="js/merge_ui.js"></script>
+<script src="js/minitns_lib.js"></script>
+<script src="js/app.js"></script>
+
+<!-- ═══════════════════════════════════════════════════════════
+     RUNTIME FIXES (после всех js/*.js)
+     1) Форс мобильного режима через ?mobile=1 / sessionStorage
+     2) Fallback переводов для отсутствующих ключей i18n
+     3) Авто-переключение нижней вкладки при смене инструмента
+     4) Гарантия «только одна вкладка нижней панели видна»
+     ═══════════════════════════════════════════════════════════ -->
+<script>
+(function () {
+  'use strict';
+
+  /* ─────────── 1. FORCE MODE ─────────── */
+  var params       = new URLSearchParams(location.search);
+  var forceMobile  = params.get('mobile') === '1';
+  var forceDesktop = params.get('mobile') === '0';
+
+  if (!forceMobile && !forceDesktop) {
+    try {
+      if (sessionStorage.getItem('webtiled.isMobile') === '1') forceMobile = true;
+    } catch (e) {}
+  }
+  // Автодетект по UA — подстраховка для старых браузеров без pointer:coarse
+  if (!forceMobile && !forceDesktop) {
+    var ua = navigator.userAgent || '';
+    if (/Android|iPhone|iPad|iPod|Mobile|webOS|BlackBerry|IEMobile|Opera Mini/i.test(ua)) {
+      forceMobile = true;
+    }
+  }
+
+  if (forceMobile) {
+    document.documentElement.classList.add('force-mobile');
+    window.WEBTILED_FORCE_MOBILE = true;
+  }
+  if (forceDesktop) {
+    document.documentElement.classList.add('force-desktop');
+    window.WEBTILED_FORCE_DESKTOP = true;
+  }
+
+  /* ─────────── 2. i18n FALLBACK ───────────
+     ui.js не знает ключи btn.savePreview и btn.ref → выводит их как текст.
+     Ловим это и подменяем. */
+  var EXTRA_I18N = {
+    en: { 'btn.savePreview': 'Save Preview', 'btn.ref': 'REF' },
+    ru: { 'btn.savePreview': 'Скриншот',     'btn.ref': 'REF' }
+  };
+  function lang() {
+    var l = (document.documentElement.lang || '').toLowerCase();
+    if (l.indexOf('ru') === 0) return 'ru';
+    if (l.indexOf('en') === 0) return 'en';
+    var nav = (navigator.language || '').toLowerCase();
+    return nav.indexOf('ru') === 0 ? 'ru' : 'en';
+  }
+  function fixI18n() {
+    var dict = EXTRA_I18N[lang()] || EXTRA_I18N.en;
+    var nodes = document.querySelectorAll('[data-i18n]');
+    for (var i = 0; i < nodes.length; i++) {
+      var el = nodes[i];
+      var key = el.getAttribute('data-i18n');
+      if (dict[key] && el.textContent.trim() === key) {
+        el.textContent = dict[key];
+      }
+    }
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function () { setTimeout(fixI18n, 0); });
+  } else {
+    setTimeout(fixI18n, 0);
+  }
+  window.addEventListener('load', function () { setTimeout(fixI18n, 0); });
+  try {
+    new MutationObserver(fixI18n).observe(document.body, {
+      childList: true, subtree: true, characterData: true
+    });
+  } catch (e) {}
+
+  /* ─────────── 3. BOTTOM TABS SYNC ───────────
+     Гарантирует, что видна ровно одна секция нижней панели. */
+  var TAB_PAIRS = [
+    ['btnAtlasesTab', 'tsBody'],
+    ['btnTypesTab',   'typesBody'],
+    ['btnGenTab',     'hmGenBody'],
+    ['btnV3Tab',      'hmV3Body']
+  ];
+  function syncBottomTabs() {
+    TAB_PAIRS.forEach(function (p) {
+      var btn  = document.getElementById(p[0]);
+      var body = document.getElementById(p[1]);
+      if (!btn || !body) return;
+      if (btn.classList.contains('active')) {
+        body.classList.remove('hidden');
+        body.style.display = '';
+      } else {
+        body.classList.add('hidden');
+        body.style.display = 'none';
+      }
+    });
+  }
+  window.addEventListener('load', function () {
+    setTimeout(syncBottomTabs, 0);
+    var tabs = document.getElementById('tsTabs');
+    if (tabs) {
+      new MutationObserver(syncBottomTabs).observe(tabs, {
+        attributes: true, attributeFilter: ['class'], subtree: true
+      });
+      tabs.addEventListener('click', function () {
+        setTimeout(syncBottomTabs, 0);
+      });
+    }
+  });
+
+  /* ─────────── 4. TOOL → TAB AUTO-SWITCH ───────────
+     TERRAIN / AUTO → TYPES
+     BRUSH / CLS / ERASE / RECT / FILL / PICK → ATLASES
+     PAN → не трогаем */
+  var TAB_FOR_TOOL = {
+    terrain: 'btnTypesTab',
+    auto:    'btnTypesTab',
+    brush:   'btnAtlasesTab',
+    cls:     'btnAtlasesTab',
+    erase:   'btnAtlasesTab',
+    rect:    'btnAtlasesTab',
+    fill:    'btnAtlasesTab',
+    pick:    'btnAtlasesTab'
+  };
+  var TOOL_ALIASES = {
+    terrain: ['terrain', 'террейн', 'terr'],
+    auto:    ['auto', 'авто'],
+    cls:     ['cls', 'classic', 'классик'],
+    erase:   ['erase', 'eraser', 'стир', 'ластик'],
+    rect:    ['rect', 'прямоуг'],
+    fill:    ['fill', 'залив'],
+    pick:    ['pick', 'пипет'],
+    brush:   ['brush', 'кисть'],
+    pan:     ['pan', 'рука']
+  };
+  function guessTool(el) {
+    var hay = [
+      el.id || '',
+      el.getAttribute('data-tool') || '',
+      el.getAttribute('title') || '',
+      el.textContent || ''
+    ].join(' ').toLowerCase();
+    var order = ['terrain','auto','cls','erase','rect','fill','pick','brush','pan'];
+    for (var i = 0; i < order.length; i++) {
+      var pats = TOOL_ALIASES[order[i]];
+      for (var j = 0; j < pats.length; j++) {
+        if (hay.indexOf(pats[j]) !== -1) return order[i];
+      }
+    }
+    return null;
+  }
+  function currentTool() {
+    var root = document.getElementById('tools');
+    if (!root) return null;
+    var cands = root.querySelectorAll('button, [data-tool], .tool');
+    for (var i = 0; i < cands.length; i++) {
+      var el = cands[i];
+      if (el.classList.contains('active') ||
+          el.classList.contains('selected') ||
+          el.getAttribute('aria-pressed') === 'true') {
+        var t = guessTool(el);
+        if (t) return t;
+      }
+    }
+    return null;
+  }
+  function activateTab(id) {
+    var btn = document.getElementById(id);
+    if (btn && !btn.classList.contains('active')) btn.click();
+  }
+  function applyToolToTabs() {
+    var tool = currentTool();
+    if (!tool) return;
+    var tabId = TAB_FOR_TOOL[tool];
+    if (!tabId) return;
+    // раскрыть нижнюю панель, если свёрнута
+    var bottom = document.getElementById('bottom');
+    if (bottom && bottom.classList.contains('collapsed')) {
+      var t = document.getElementById('btnToggleBottom');
+      if (t) t.click();
+    }
+    activateTab(tabId);
+  }
+  window.addEventListener('load', function () {
+    var root = document.getElementById('tools');
+    if (!root) return;
+    var last = null;
+    new MutationObserver(function () {
+      var tool = currentTool();
+      if (tool && tool !== last) {
+        last = tool;
+        applyToolToTabs();
+      }
+    }).observe(root, {
+      attributes: true,
+      attributeFilter: ['class','aria-pressed','data-active'],
+      subtree: true, childList: true
+    });
+    var t = currentTool();
+    if (t) { last = t; applyToolToTabs(); }
+  });
+
+  /* ─────────── 5. КНОПКА ☰ — fallback ───────────
+     Если ui.js её не подвязал — открываем панель сами. */
+  window.addEventListener('load', function () {
+    var mb = document.getElementById('btnMobileRightPanel');
+    if (!mb || mb.__wtBound) return;
+    mb.addEventListener('click', function () {
+      var openers = ['btnToggleRightPanel','btnRightPanel','btnShowRightPanel','btnPanelToggle'];
+      for (var i = 0; i < openers.length; i++) {
+        var b = document.getElementById(openers[i]);
+        if (b && b !== mb) { b.click(); return; }
+      }
+      var rp = document.getElementById('rightPanel');
+      var bd = document.getElementById('rightBackdrop');
+      if (rp) rp.classList.toggle('open');
+      if (bd) bd.classList.toggle('show');
+    });
+    mb.__wtBound = true;
+  });
+
+})();
+</script>
+</body>
+</html>

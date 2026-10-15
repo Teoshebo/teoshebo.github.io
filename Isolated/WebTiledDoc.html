@@ -1,0 +1,1679 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WebTiled — Documentation</title>
+<style>
+/* ===== RESET & BASE ===== */
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:#0d0d0d;color:#ddd;
+  font-family:ui-monospace,Menlo,Consolas,monospace;
+  font-size:13px;line-height:1.65;
+}
+a{color:#8cf;text-decoration:none;border-bottom:1px dotted #48a}
+a:hover{color:#cff;border-bottom-color:#8cf}
+
+/* ===== LAYOUT ===== */
+#topbar{
+  position:sticky;top:0;z-index:100;
+  display:flex;align-items:center;gap:12px;
+  padding:10px 20px;
+  background:#141414;border-bottom:1px solid #2a2a2a;
+  flex-wrap:wrap;
+}
+#topbar .logo{
+  font-size:16px;font-weight:bold;letter-spacing:4px;color:#fd4;
+}
+#topbar .logo span{
+  color:#666;font-size:11px;letter-spacing:3px;font-weight:normal;margin-left:6px;
+}
+#topbar .spacer{flex:1}
+.lang-switch{display:flex;border:1px solid #444;border-radius:3px;overflow:hidden}
+.lang-switch button{
+  background:#1a1a1a;color:#888;border:0;
+  padding:6px 18px;font-family:inherit;font-size:11px;
+  letter-spacing:2px;font-weight:bold;cursor:pointer;
+  transition:background .15s,color .15s;
+}
+.lang-switch button:hover{background:#252525;color:#ccc}
+.lang-switch button.active{background:#225;color:#fff}
+.lang-switch button.active:hover{background:#225}
+
+/* ===== DISCORD BUTTON ===== */
+.discord-btn{
+  display:inline-flex;align-items:center;gap:8px;
+  background:#1a1a2e;color:#c8c8ff;
+  border:1px solid #5865F2;border-radius:3px;
+  padding:6px 12px;font-family:inherit;font-size:11px;
+  letter-spacing:1.5px;text-decoration:none;
+  transition:background .15s,border-color .15s,color .15s, box-shadow .15s;
+  border-bottom:1px solid #5865F2 !important;
+  white-space:nowrap;
+}
+.discord-btn:hover{
+  background:#2a2a4a;color:#fff;border-color:#8a92ff;
+  box-shadow:0 0 12px rgba(88,101,242,0.4);
+}
+.discord-btn svg{width:16px;height:16px;flex:none;fill:currentColor}
+.discord-btn .dname{color:#fff;font-weight:bold;letter-spacing:1px}
+.discord-btn .dsub{color:#8a92ff;font-size:10px;letter-spacing:1px}
+
+@media (max-width:640px){
+  .discord-btn .dtext{display:none}
+}
+
+#app{display:flex;align-items:flex-start;min-height:calc(100vh - 53px)}
+
+/* ===== TOC ===== */
+#toc{
+  flex:none;width:280px;
+  position:sticky;top:53px;
+  max-height:calc(100vh - 53px);
+  overflow-y:auto;
+  padding:24px 16px 40px;
+  background:#131313;border-right:1px solid #2a2a2a;
+}
+#toc h2{
+  font-size:10px;color:#666;letter-spacing:3px;
+  margin:0 0 14px;font-weight:normal;text-transform:uppercase;
+}
+#toc ol{list-style:none;margin:0;padding:0;counter-reset:toc}
+#toc li{counter-increment:toc;margin:1px 0}
+#toc a{
+  display:flex;gap:8px;
+  color:#9aa;text-decoration:none;
+  font-size:11px;line-height:1.35;
+  padding:5px 8px;border-radius:3px;
+  border-left:2px solid transparent;
+  transition:background .12s,color .12s,border-color .12s;
+  border-bottom:0;
+}
+#toc a::before{
+  content:counter(toc,decimal-leading-zero);
+  color:#555;font-size:10px;min-width:20px;
+}
+#toc a:hover{background:#1c1c1c;color:#fd4;border-left-color:#fd4}
+#toc a.active{background:#1a2a3a;color:#8cf;border-left-color:#48a}
+#toc a.active::before{color:#48a}
+
+/* ===== CONTENT ===== */
+#content{
+  flex:1;min-width:0;max-width:900px;
+  padding:36px 48px 100px;
+}
+.lang-content{display:none}
+.lang-content.active{display:block}
+
+#content h1{
+  font-size:28px;letter-spacing:5px;color:#fd4;
+  margin:0 0 6px;font-weight:bold;
+}
+#content .subtitle{
+  color:#8cf;font-size:12px;letter-spacing:2px;
+  margin:0 0 32px;padding-bottom:20px;
+  border-bottom:1px solid #2a2a2a;
+}
+#content .subtitle a{color:#c8f;border-bottom:1px dotted #c8f}
+#content .subtitle a:hover{color:#e8f;border-bottom-color:#e8f}
+
+#content h2{
+  font-size:18px;letter-spacing:2px;
+  color:#fd4;margin:46px 0 16px;
+  padding-bottom:8px;
+  border-bottom:1px solid #2a2a2a;
+  scroll-margin-top:70px;
+}
+#content h2:first-of-type{margin-top:0}
+#content h3{
+  font-size:13px;letter-spacing:1.5px;
+  color:#c8f;margin:28px 0 10px;
+  text-transform:uppercase;
+}
+#content h4{
+  font-size:12px;color:#9af;
+  margin:20px 0 8px;letter-spacing:1px;
+}
+
+#content p{margin:0 0 14px;color:#ccc}
+#content strong{color:#fd4;font-weight:bold}
+#content em{color:#c8f;font-style:normal;font-weight:bold}
+
+#content ul,#content ol{margin:0 0 16px;padding-left:24px;color:#ccc}
+#content li{margin:5px 0}
+#content li::marker{color:#666}
+
+#content code{
+  background:#0a0a0a;
+  border:1px solid #2a2a2a;
+  padding:1px 6px;border-radius:3px;
+  color:#fc8;font-size:11px;
+  font-family:inherit;
+  word-break:break-word;
+}
+#content pre{
+  background:#0a0a0a;
+  border:1px solid #2a2a2a;
+  border-left:3px solid #48a;
+  border-radius:4px;
+  padding:14px 16px;
+  margin:0 0 18px;
+  overflow-x:auto;
+  font-size:11px;line-height:1.6;
+  color:#ddd;
+}
+#content pre code{
+  background:none;border:0;padding:0;color:inherit;font-size:inherit;
+  word-break:normal;
+}
+
+/* ===== TABLES ===== */
+#content table{
+  width:100%;
+  border-collapse:collapse;
+  margin:0 0 20px;
+  font-size:12px;
+  background:#141414;
+  border:1px solid #2a2a2a;
+  border-radius:4px;
+  overflow:hidden;
+}
+#content th{
+  background:#1a1a1a;
+  color:#fd4;
+  font-weight:normal;
+  letter-spacing:1.5px;
+  text-align:left;
+  padding:10px 12px;
+  border-bottom:1px solid #2a2a2a;
+  font-size:10px;
+  text-transform:uppercase;
+}
+#content td{
+  padding:9px 12px;
+  border-bottom:1px solid #1f1f1f;
+  color:#ccc;
+  vertical-align:top;
+}
+#content tr:last-child td{border-bottom:0}
+#content tbody tr:hover{background:#181818}
+#content td code{font-size:10px}
+
+/* ===== CALLOUTS ===== */
+.callout{
+  background:#1a1024;
+  border:1px solid #3a2a4a;
+  border-left:3px solid #c8f;
+  border-radius:4px;
+  padding:12px 16px;
+  margin:0 0 18px;
+  font-size:12px;
+  color:#ddd;
+}
+.callout.warn{
+  background:#2a1a05;
+  border-color:#5a3a1a;
+  border-left-color:#fd4;
+}
+.callout.danger{
+  background:#2a0f0f;
+  border-color:#5a2020;
+  border-left-color:#f44;
+}
+.callout.ok{
+  background:#0f2a14;
+  border-color:#1a4a25;
+  border-left-color:#6c6;
+}
+.callout b{color:#fd4}
+.callout.warn b{color:#fd4}
+.callout.danger b{color:#f88}
+.callout.ok b{color:#9f9}
+
+/* ===== KBD ===== */
+.kbd{
+  display:inline-block;
+  background:#1a1a1a;
+  border:1px solid #444;
+  border-bottom-width:2px;
+  border-radius:3px;
+  padding:1px 8px;
+  font-size:10px;
+  color:#ddd;
+  letter-spacing:1px;
+  margin:0 1px;
+}
+
+/* ===== IMAGE FIGURE ===== */
+.doc-figure{
+  display:flex;flex-direction:column;align-items:center;
+  gap:10px;
+  margin:16px 0 22px;
+  padding:16px;
+  background:#0a0a0a;
+  border:1px solid #2a2a2a;
+  border-left:3px solid #c8f;
+  border-radius:4px;
+}
+.doc-figure img{
+  display:block;
+  image-rendering:pixelated;
+  background:#000;
+  border:1px solid #333;
+  max-width:100%;
+  height:auto;
+}
+.doc-figure figcaption{
+  font-size:10px;color:#888;letter-spacing:1.5px;
+  text-align:center;text-transform:uppercase;
+}
+
+/* ===== MISC ===== */
+hr.doc-sep{
+  border:0;border-top:1px dashed #2a2a2a;margin:36px 0;
+}
+
+/* ===== SCROLLBARS ===== */
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-track{background:#0d0d0d}
+::-webkit-scrollbar-thumb{background:#2a2a2a;border-radius:5px;border:2px solid #0d0d0d}
+::-webkit-scrollbar-thumb:hover{background:#3a3a3a}
+
+/* ===== MOBILE ===== */
+@media (max-width:820px){
+  #toc{display:none}
+  #content{padding:24px 18px 80px}
+  #content h1{font-size:20px;letter-spacing:2px}
+  #content h2{font-size:15px}
+  #topbar{padding:8px 12px}
+  #topbar .logo{font-size:13px}
+}
+</style>
+</head>
+<body>
+
+<!-- ===== TOP BAR ===== -->
+<header id="topbar">
+  <div class="logo">WEBTILED<span>DOCS</span></div>
+  <div class="spacer"></div>
+
+  <!-- Discord contact button -->
+  <a class="discord-btn"
+     href="https://discord.com/users/709138215935934525"
+     target="_blank" rel="noopener noreferrer"
+     title="Discord — teoshebo">
+    <svg viewBox="0 0 127.14 96.36" aria-hidden="true">
+      <path d="M107.7,8.07A105.15,105.15,0,0,0,81.47,0a72.06,72.06,0,0,0-3.36,6.83A97.68,97.68,0,0,0,49,6.83,72.37,72.37,0,0,0,45.64,0,105.89,105.89,0,0,0,19.39,8.09C2.79,32.65-1.71,56.6.54,80.21h0A105.73,105.73,0,0,0,32.71,96.36,77.7,77.7,0,0,0,39.6,85.25a68.42,68.42,0,0,1-10.85-5.18c.91-.66,1.8-1.34,2.66-2a75.57,75.57,0,0,0,64.32,0c.87.71,1.76,1.39,2.66,2a68.68,68.68,0,0,1-10.87,5.19,77,77,0,0,0,6.89,11.1A105.25,105.25,0,0,0,126.6,80.22h0C129.24,52.84,122.09,29.11,107.7,8.07ZM42.45,65.69C36.18,65.69,31,60,31,53s5-12.74,11.43-12.74S54,46,53.89,53,48.84,65.69,42.45,65.69Zm42.24,0C78.41,65.69,73.25,60,73.25,53s5-12.74,11.44-12.74S96.23,46,96.12,53,91.08,65.69,84.69,65.69Z"/>
+    </svg>
+    <span class="dtext">
+      Discord · <span class="dname">teoshebo</span>
+    </span>
+  </a>
+
+  <div class="lang-switch">
+    <button type="button" data-set-lang="en" class="active">EN</button>
+    <button type="button" data-set-lang="ru">RU</button>
+  </div>
+</header>
+
+<div id="app">
+
+<!-- ===== TOC (EN) ===== -->
+<nav id="toc" class="toc-en">
+  <h2>Contents</h2>
+  <ol>
+    <li><a href="#en-s1">Overview</a></li>
+    <li><a href="#en-s2">Main screen</a></li>
+    <li><a href="#en-s3">Atlases</a></li>
+    <li><a href="#en-s4">Types</a></li>
+    <li><a href="#en-s5">Classic autotile</a></li>
+    <li><a href="#en-s6">FLOOD</a></li>
+    <li><a href="#en-s7">Generator</a></li>
+    <li><a href="#en-s8">3D view</a></li>
+    <li><a href="#en-s9">Merge</a></li>
+    <li><a href="#en-s10">Settings</a></li>
+    <li><a href="#en-s11">Markers</a></li>
+    <li><a href="#en-s11b">Reference</a></li>
+    <li><a href="#en-s12">Layers</a></li>
+    <li><a href="#en-s13">Tilesets</a></li>
+    <li><a href="#en-s14">PNG export</a></li>
+    <li><a href="#en-s15">Hotkeys</a></li>
+    <li><a href="#en-s16">Undo / Redo</a></li>
+    <li><a href="#en-s17">Map format</a></li>
+    <li><a href="#en-s18">Limitations</a></li>
+    <li><a href="#en-s19">Saving</a></li>
+  </ol>
+</nav>
+
+<!-- ===== TOC (RU) ===== -->
+<nav id="toc" class="toc-ru" style="display:none">
+  <h2>Содержание</h2>
+  <ol>
+    <li><a href="#ru-s1">Что это</a></li>
+    <li><a href="#ru-s2">Главный экран</a></li>
+    <li><a href="#ru-s3">Атласы</a></li>
+    <li><a href="#ru-s4">Типы</a></li>
+    <li><a href="#ru-s5">Classic autotile</a></li>
+    <li><a href="#ru-s6">FLOOD</a></li>
+    <li><a href="#ru-s7">Генератор</a></li>
+    <li><a href="#ru-s8">3D-вид</a></li>
+    <li><a href="#ru-s9">Склейка</a></li>
+    <li><a href="#ru-s10">Настройки</a></li>
+    <li><a href="#ru-s11">Маркеры</a></li>
+    <li><a href="#ru-s11b">Референс</a></li>
+    <li><a href="#ru-s12">Слои</a></li>
+    <li><a href="#ru-s13">Tileset'ы</a></li>
+    <li><a href="#ru-s14">Экспорт PNG</a></li>
+    <li><a href="#ru-s15">Горячие клавиши</a></li>
+    <li><a href="#ru-s16">Undo / Redo</a></li>
+    <li><a href="#ru-s17">Формат карты</a></li>
+    <li><a href="#ru-s18">Ограничения</a></li>
+    <li><a href="#ru-s19">Сохранение</a></li>
+  </ol>
+</nav>
+
+<!-- ===== CONTENT ===== -->
+<main id="content">
+
+<!-- ============================================================= -->
+<!-- ENGLISH                                                       -->
+<!-- ============================================================= -->
+<div class="lang-content active" data-lang="en">
+
+<h1>WEBTILED</h1>
+<p class="subtitle">Map editor for <strong>Rusted Warfare</strong> · <code>.tmx</code> format · <b style="color:#8cf">Beta 0.4</b></p>
+
+<!-- 1 -->
+<section id="en-s1">
+<h2>1. Overview</h2>
+<p><strong>WebTiled</strong> is a map editor for <strong>Rusted Warfare</strong> (the <code>.tmx</code> format). It replaces NotTiled and adds custom systems: <em>Types</em>, procedural generator, isometric 3D view, and map merging.</p>
+<div class="callout">
+<b>Questions / feedback?</b> Ping <b>teoshebo</b> on Discord — <a href="https://discord.com/users/709138215935934525" target="_blank" rel="noopener noreferrer">discord.com/users/709138215935934525</a>
+</div>
+</section>
+
+<!-- 2 -->
+<section id="en-s2">
+<h2>2. Main screen</h2>
+
+<h3>Top bar</h3>
+<table>
+<thead><tr><th>Button</th><th>Action</th></tr></thead>
+<tbody>
+<tr><td><b>📂 Open</b></td><td>Open a <code>.tmx</code> file</td></tr>
+<tr><td><b>💾 Save</b></td><td>Save as <code>.tmx</code> (name from the field to the right)</td></tr>
+<tr><td><b>⤢ Size</b></td><td>Resize the map (W×H)</td></tr>
+<tr><td><b>⌘ Merge</b></td><td>Merge several maps (opens a modal window)</td></tr>
+<tr><td><b>📷 Save Preview</b></td><td>Export the map to PNG <b>500×500</b> (keeps aspect ratio, empty space is black). Reference layer is <b>not</b> included.</td></tr>
+<tr><td><b>🖼 REF</b></td><td>Reference image (overlay / underlay + opacity). Not saved in .tmx.</td></tr>
+<tr><td><b>Fit</b></td><td>Fit the view to the window</td></tr>
+<tr><td><b>1:1</b></td><td>Zoom 100%</td></tr>
+<tr><td><b>Zoom</b></td><td>Current zoom level</td></tr>
+<tr><td><b>⚙</b></td><td>Settings</td></tr>
+<tr><td><b>?</b></td><td>Help</td></tr>
+</tbody>
+</table>
+
+<h3>Left toolbar</h3>
+<table>
+<thead><tr><th>Tool</th><th>Hotkey</th><th>Action</th></tr></thead>
+<tbody>
+<tr><td><b>PAN</b></td><td><span class="kbd">P</span></td><td>Move the view</td></tr>
+<tr><td><b>BRUSH</b></td><td><span class="kbd">B</span></td><td>Paint tiles from the brush group</td></tr>
+<tr><td><b>TERRAIN</b></td><td><span class="kbd">T</span></td><td>Paint with a type (Solids from Types)</td></tr>
+<tr><td><b>CLS</b></td><td><span class="kbd">C</span></td><td>Classic corner-autotile using a terrain mask</td></tr>
+<tr><td><b>ERASE</b></td><td><span class="kbd">E</span></td><td>Erase (tile = 0)</td></tr>
+<tr><td><b>RECT</b></td><td><span class="kbd">R</span></td><td>Rectangular fill</td></tr>
+<tr><td><b>FILL</b></td><td><span class="kbd">F</span></td><td>Flood fill</td></tr>
+<tr><td><b>PICK</b></td><td><span class="kbd">I</span></td><td>Eyedropper (pick the tile under the cursor)</td></tr>
+<tr><td><b>AUTO</b></td><td>—</td><td>Autotile an area via Types / Generator</td></tr>
+<tr><td><b>UNDO</b></td><td><span class="kbd">Ctrl+Z</span></td><td>Undo</td></tr>
+<tr><td><b>REDO</b></td><td><span class="kbd">Ctrl+Y</span></td><td>Redo</td></tr>
+</tbody>
+</table>
+
+<h3>Right panel</h3>
+<p><strong>LAYERS</strong> — list of layers:</p>
+<ul>
+<li>checkbox — visibility</li>
+<li>click — set active</li>
+<li><b>▲ ▼</b> — move up / down</li>
+<li><b>C</b> — clear (erase all tiles)</li>
+<li><b>×</b> — delete layer</li>
+<li><b>S</b> — solo (only this layer)</li>
+<li><b>double-click on the name</b> — rename</li>
+</ul>
+
+<p><strong>BRUSH</strong> — a group of tiles:</p>
+<ul>
+<li><b>+EMPTY</b> — add emptiness to the group</li>
+<li><b>FLOOD</b> — fill with the dominant type (≥3 orthogonal neighbours)</li>
+<li><b>CLEAR</b> — clear the group</li>
+<li>Size — brush radius</li>
+<li>Shape — square / circle / diamond</li>
+<li>List of tiles with weights</li>
+<li><b>CLASSIC TERRAIN</b> — terrain selection for the CLS tool</li>
+</ul>
+
+<h3>Bottom panel</h3>
+<p>Four tabs (each can be toggled independently):</p>
+<ul>
+<li><b>ATLASES</b> — all tilesets of the map</li>
+<li><b>TYPES</b> — the type system</li>
+<li><b>GENERATOR</b> — procedural generator</li>
+<li><b>3D</b> — isometric view</li>
+</ul>
+<p>The <b>▼</b> button collapses the whole panel. The <b>grabber</b> at the top is used for manual resizing.</p>
+</section>
+
+<!-- 3 -->
+<section id="en-s3">
+<h2>3. Atlases</h2>
+<p>For each tileset:</p>
+<ul>
+<li>A tab with the name + <b>×</b> (delete tileset)</li>
+<li><b>+ Tileset</b> — add a new tileset from a PNG</li>
+</ul>
+<p>Inside a tileset:</p>
+<ul>
+<li><b>Zoom</b> — 1×–8× (mouse wheel)</li>
+<li><b>Edit</b> — edit a tile (terrain + properties)</li>
+<li><b>Show IDs</b> — show / hide tile numbers</li>
+<li><b>▶ Terrain</b> — terrain types editor</li>
+</ul>
+<div class="callout">
+<b>Click on a tile</b> — put it into the brush (replace).<br>
+<b>Shift + click</b> — add to the brush.
+</div>
+</section>
+
+<!-- 4 -->
+<section id="en-s4">
+<h2>4. Types</h2>
+<p>A type system for autotiling <em>by priority</em> — not by terrain, but by semantics (Dirt, Water, Cliff, ...).</p>
+<p>Each type contains:</p>
+<ul>
+<li><b>Name</b> + <b>Priority</b> + <b>Color</b></li>
+<li><b>Solids</b> — list of solid tiles with weights (random selection when painting)</li>
+<li><b>Edges</b> — 4 sides + 4 outer corners (N, E, S, W, NWo, NEo, SWo, SEo)</li>
+<li><b>Inner</b> — 4 inner corners (NWi, NEi, SWi, SEi)</li>
+</ul>
+
+<h3>How it works</h3>
+<p>When painting with the TERRAIN tool, a cell gets <em>one of the solids</em> of the type. When the brush is released, the Generator recalculates the <code>Items0</code> layer: around cells of type A that border type B (with a higher priority), edge tiles of type B are drawn.</p>
+
+<h3>Rules</h3>
+<ul>
+<li><b>Priority</b> determines whose edge wins on a border. A higher priority → the edge is drawn <em>outside</em> the type, on the cells of the lower-priority neighbours.</li>
+<li><b>Solids</b> have weights; a tile is chosen randomly (so a tile can be variable).</li>
+<li><b>Edge roles:</b>
+<ul>
+<li><code>N / S / E / W</code> — straight sides</li>
+<li><code>NWo / NEo / SWo / SEo</code> — outer corners (the type wraps into a corner)</li>
+<li><code>NWi / NEi / SWi / SEi</code> — inner corners (a hole in the type)</li>
+</ul>
+</li>
+</ul>
+
+<h3>Buttons</h3>
+<ul>
+<li><b>+ type</b> — create a new one</li>
+<li><b>📦 Import MiniTNS</b> — import a 3×5 tile PNG → a new tileset + a new type (all 12 edges + 3 solids are filled automatically)</li>
+<li><b>× on the type card</b> — delete</li>
+</ul>
+
+<h3>Pick mode</h3>
+<p>Click on an edge/solid slot → pick mode. Choose a tile in the atlases. Clicking the same slot again clears it.</p>
+</section>
+
+<!-- 5 -->
+<section id="en-s5">
+<h2>5. Classic autotile (CLS tool)</h2>
+<p>Different from Types. Works with the <b>terrain mask</b> of a tileset (classic corner-autotile like in Tiled).</p>
+<div class="callout warn">
+The corner order in the XML tileset is <b><code>[TL, TR, BL, BR]</code></b> (not TL, TR, BR, BL).
+</div>
+
+<h3>How it works</h3>
+<ol>
+<li>Choose a tileset + terrain in the <b>CLASSIC TERRAIN</b> selector (in the BRUSH panel).</li>
+<li>Paint on the active layer.</li>
+<li>Each cell receives the solid tile of the chosen terrain.</li>
+<li>When the brush is released, the masks are recalculated for all painted cells + 8 neighbours.</li>
+</ol>
+
+<h3>Corner logic</h3>
+<p>For a cell (x,y), the mask consists of 4 corners from the perspective of <em>neighbours</em>:</p>
+<pre><code>TL = NW.BR &amp;&amp; N.BL &amp;&amp; W.TR   (all three = target → corner is target)
+TR = N.BR  &amp;&amp; NE.BL &amp;&amp; E.TL
+BL = W.BR  &amp;&amp; SW.TR &amp;&amp; S.TL
+BR = E.BL  &amp;&amp; SE.TL &amp;&amp; S.TR</code></pre>
+<p><b>Fallback</b> (if the exact mask is missing): from maximum to minimum (4 substitutions → 3 → 2 → 1). A single cell lands directly in the solid.</p>
+
+<h3>Undo</h3>
+<p>A single <span class="kbd">Ctrl+Z</span> rolls back the <b>entire stroke</b> at once (activeLayer, Items0, everything).</p>
+</section>
+
+<!-- 6 -->
+<section id="en-s6">
+<h2>6. FLOOD (type brush)</h2>
+<p>The <b>FLOOD</b> button in the BRUSH panel.</p>
+<p>For each Ground cell, its 4 orthogonal neighbours are checked:</p>
+<ul>
+<li>If <b>3+ neighbours</b> share the same type B</li>
+<li>And B.priority &gt; A.priority (the cell's type)</li>
+<li>→ the cell is repainted to tile B (the most frequent ID among those 3+ neighbours is used)</li>
+</ul>
+<p><b>Does not cascade</b> in one pass — it works on a snapshot. If new “3-surrounded” cells appeared after the repaint — press FLOOD again.</p>
+<p>One undo transaction.</p>
+</section>
+
+<!-- 7 -->
+<section id="en-s7">
+<h2>7. Generator</h2>
+<p>A procedural heightmap generator.</p>
+
+<h3>Procedural generation</h3>
+<table>
+<thead><tr><th>Parameter</th><th>Action</th></tr></thead>
+<tbody>
+<tr><td><b>WIDTH / HEIGHT</b></td><td>Map size (in tiles)</td></tr>
+<tr><td><b>LEVELS</b></td><td>Number of height levels (usually 10)</td></tr>
+<tr><td><b>FLATTEN BOTTOM</b></td><td>How many bottom levels to merge into a “floor”</td></tr>
+<tr><td><b>NOISE SCALE</b></td><td>Perlin noise scale (larger = smoother)</td></tr>
+<tr><td><b>OCTAVES</b></td><td>Number of fBm octaves</td></tr>
+<tr><td><b>PLAYABLE %</b></td><td>Share of the “playable” plane</td></tr>
+<tr><td><b>EDGE BIAS / CURVE</b></td><td>Raise / lower the edges</td></tr>
+<tr><td><b>SYMMETRY</b></td><td>none / mirror X / mirror Y / rotate 180° / quad / diag / anti-diag</td></tr>
+<tr><td><b>SYM STRENGTH</b></td><td>Symmetry strength (0–1)</td></tr>
+<tr><td><b>PASSES / PASS W / PASS LEN</b></td><td>Carve “paths” along plateau borders</td></tr>
+<tr><td><b>SEED</b></td><td>Generator seed</td></tr>
+</tbody>
+</table>
+<p><b>Buttons:</b></p>
+<ul>
+<li><b>GENERATE</b> — generate</li>
+<li><b>RANDOM SEED</b> — random seed</li>
+</ul>
+
+<h3>PNG Import</h3>
+<p><b>📂 Choose file</b> — load a PNG as a base. Brightness = height (dark → top, light → bottom). The PNG size becomes the map size.</p>
+
+<h3>Rivers</h3>
+<ul>
+<li><b>ENABLE</b> — draw rivers</li>
+<li><b>SMOOTH</b> — valley smoothing depth</li>
+<li><b>+ AUTO RIVER</b> — add a random S-shaped river</li>
+<li><b>CLEAR</b> — erase all</li>
+</ul>
+
+<h3>Auto Points</h3>
+<p>Auto-generation of starts and respools:</p>
+<ul>
+<li><b>PLAYERS</b> — how many teams</li>
+<li><b>HOME / PLAYER</b> — respools at the start</li>
+<li><b>FRONT PTS</b> — respools on the front</li>
+<li><b>SPREAD</b> — minimum distance between starts</li>
+<li><b>EDGE MARGIN %</b> — margin from the edges</li>
+<li><b>HEIGHT MARGIN</b> — how high the terrain can be for the points</li>
+</ul>
+<p><b>GENERATE POINTS</b> — create. <b>CLEAR</b> — erase.</p>
+
+<h3>Preview</h3>
+<p>A 256×256 PNG preview of the current heightmap + start markers (green/red) and respools (yellow).</p>
+
+<h3>Apply to Map</h3>
+<ul>
+<li><b>TARGET LAYER</b> — where to write solids (default <code>Ground</code>)</li>
+<li><b>EDGE LAYER</b> — where to write edges (default <code>Items0</code>)</li>
+<li><b>APPLY</b> — apply</li>
+</ul>
+<p>The level → typeId mapping is done automatically by priority (level 0 = peak → the type with the max priority, level N-1 = floor → the one with the min).</p>
+</section>
+
+<!-- 8 -->
+<section id="en-s8">
+<h2>8. 3D view</h2>
+<p>An isometric 3D view of the map.</p>
+
+<h3>Source</h3>
+<ul>
+<li><b>HEIGHT SOURCE</b>:
+<ul>
+<li><code>Generator / PNG</code> — heights from the generator's heightmap</li>
+<li><code>Ground layer</code> — heights from the Ground tiles</li>
+</ul>
+</li>
+<li><b>COLOR MODE</b>:
+<ul>
+<li><code>Map texture (screenshot)</code> — color from the current map render (composited with alpha)</li>
+<li><code>Classic palette</code> — blue water / green grass / grey mountains</li>
+<li><code>Grayscale</code> — grey</li>
+<li><code>Imported PNG file</code> — an arbitrary PNG</li>
+</ul>
+</li>
+</ul>
+
+<h3>Parameters</h3>
+<ul>
+<li><b>CELL</b> — cell size in pixels</li>
+<li><b>HEIGHT PX</b> — terrain height</li>
+</ul>
+
+<h3>Buttons</h3>
+<ul>
+<li><b>RENDER 3D</b> — render (no auto-render, press manually)</li>
+<li><b>DOWNLOAD PNG</b> — download the result</li>
+</ul>
+
+<h3>Markers in 3D</h3>
+<p>If markers are enabled (in settings) and the heightmap size equals the map size — the markers will be drawn over the 3D view.</p>
+</section>
+
+<!-- 9 -->
+<section id="en-s9">
+<h2>9. Merge (map merging)</h2>
+<p>A modal window for merging several <code>.tmx</code> maps.</p>
+
+<h3>How it works</h3>
+<ol>
+<li><b>+ ADD MAP</b> — choose one or several <code>.tmx</code> files (can be a whole batch at once).</li>
+<li>Each map is a rectangle with a mini-preview in the window on the left.</li>
+<li><b>Drag with the mouse</b> — move the maps.</li>
+<li><b>Snap to the faces</b> of other maps (pink guide lines) — if the SNAP checkbox is on.</li>
+<li>Intersections are highlighted with a <b>red frame</b>. Allowed, but on merge the <b>topmost</b> one in the priority list wins.</li>
+<li><b>▲ ▼</b> in the list on the right — change the priority.</li>
+<li><b>×</b> — remove a map.</li>
+<li><b>MERGE</b> — merge. On OK, the current map in the editor is replaced.</li>
+</ol>
+
+<h3>Controls</h3>
+<ul>
+<li><b>Mouse wheel</b> — zoom (10%–400%)</li>
+<li><b>Click on empty space</b> — pan</li>
+<li><b>Middle button</b> — pan anywhere</li>
+<li><b>Click on a map</b> — drag the map</li>
+<li><b>FIT</b> — fit everything</li>
+</ul>
+
+<h3>What happens</h3>
+<ul>
+<li>Bounding box = from the top-left to the bottom-right corner.</li>
+<li>Empty gaps → Ground = 0 → these are “holes” (a counter in the footer).</li>
+<li>Tilesets are merged by <code>name + fingerprint(PNG)</code>. If they match → one, all IDs are remapped.</li>
+<li>Name conflict → <code>Name_2</code>, <code>Name_3</code>, ...</li>
+<li>Layers — union, order from the first map, <code>Items</code> at the end.</li>
+<li>Overlap → the map with the higher priority wins.</li>
+<li>Types config — from the first map, IDs are remapped.</li>
+</ul>
+</section>
+
+<!-- 10 -->
+<section id="en-s10">
+<h2>10. Settings</h2>
+<p>Opened via <b>⚙</b> in the top bar.</p>
+<table>
+<thead><tr><th>Parameter</th><th>Action</th></tr></thead>
+<tbody>
+<tr><td><b>LANGUAGE</b></td><td>English / Русский. Default — English.</td></tr>
+<tr><td><b>Canvas background</b></td><td>Background color under the map on the canvas</td></tr>
+<tr><td><b>Show markers</b></td><td>Show markers (starts/respools) in 2D and 3D</td></tr>
+<tr><td><b>Marker size</b></td><td>Marker size multiplier (0.3×–3.0×)</td></tr>
+</tbody>
+</table>
+<p><b>APPLY</b> — save. <b>CANCEL</b> — cancel (reverts to the state at the moment of opening).</p>
+<p>Settings are stored in <code>localStorage</code> and survive a page reload.</p>
+</section>
+
+<!-- 11 -->
+<section id="en-s11">
+<h2>11. Markers (starts and respools)</h2>
+
+<h3>Recognition</h3>
+<p>Searches across all layers of the map for tiles with the properties:</p>
+<ul>
+<li><code>res_pool</code> (no value) → respool</li>
+<li><code>team=N</code> + <code>unit="commandCenter"</code> → start of team N</li>
+</ul>
+
+<h3>Appearance</h3>
+<ul>
+<li><b>Start</b>: a black semi-transparent circle (alpha 50%) with the team number inside. The digit is the player's color. Font — <b>Arial Black</b>.</li>
+<li><b>Respool</b>: a yellow dot with a black outline.</li>
+</ul>
+
+<h3>Team colors</h3>
+<p>Cycles through the 10 base RW colors:</p>
+<pre><code>0,10,20,30 → green
+1,11,21,31 → red
+2,12,22,32 → blue
+3,13,23,33 → yellow
+4,14,24,34 → purple
+5,15,25,35 → cyan
+6,16,26,36 → orange
+7,17,27,37 → pink
+8,18,28,38 → lime
+9,19,29,39 → violet</code></pre>
+
+<h3>Sizes</h3>
+<ul>
+<li><b>Start</b>: circle_radius = 5 tiles</li>
+<li><b>Respool</b>: dot_radius = 2.5 tiles</li>
+<li>Multiplier from settings (0.3×–3.0×)</li>
+<li>Digit = 80% of the circle diameter</li>
+</ul>
+
+<h3>_map export</h3>
+<p>When exporting a 500×500 PNG, the markers are stored in a <b>readable</b> form. On a reference map (500 px on the long side) start circles are ≈ 30 px, respool dots ≈ 16 px.</p>
+</section>
+
+<!-- 11b REFERENCE -->
+<section id="en-s11b">
+<h2>11b. Reference image</h2>
+<p>Overlay / underlay image for tracing your map.</p>
+<h3>How to use</h3>
+<ul>
+<li><b>🖼 REF</b> button in the top bar (desktop) or in the UTILITY menu (mobile).</li>
+<li><b>Choose file</b> — load a PNG/JPG. On Chrome / Edge the path is remembered between sessions (File System Access API). On Firefox / Safari you re-pick the file each session.</li>
+<li><b>Opacity</b> slider — 0.00 to 1.00.</li>
+<li><b>Place under map</b> checkbox — reference goes behind all layers instead of on top.</li>
+<li><b>Remove</b> — clears the reference and forgets the path.</li>
+</ul>
+<div class="callout warn">
+Reference is <b>not</b> saved into .tmx and <b>not</b> included in the Save Preview PNG. It is a helper for authoring only.
+</div>
+</section>
+
+<!-- 12 -->
+<section id="en-s12">
+<h2>12. Working with layers</h2>
+
+<h3>Adding</h3>
+<p>The <b>+</b> button in the header of the LAYERS panel. The layer is inserted <b>before <code>Items</code></b> (the last service layer of RW).</p>
+
+<h3>Moving</h3>
+<ul>
+<li><b>▲ ▼</b> on each row — shift by one position.</li>
+<li>The layer order matches the order in the XML.</li>
+</ul>
+
+<h3>Deleting</h3>
+<ul>
+<li><b>×</b> on the row. Requires confirm.</li>
+<li>There are no protected layers — even <code>Ground</code>, <code>Units</code>, <code>Items</code> can be deleted.</li>
+<li>The data of a deleted layer is lost.</li>
+</ul>
+
+<h3>Clearing</h3>
+<ul>
+<li><b>C</b> on the row. Erases all tiles of the layer (all cells = 0), the layer remains.</li>
+<li>Requires confirm.</li>
+</ul>
+
+<h3>Renaming</h3>
+<ul>
+<li><b>Double click</b> on the layer name.</li>
+<li><b>Enter</b> — save, <b>Esc</b> — cancel.</li>
+<li>For <code>Ground</code>, <code>Units</code>, <code>Items</code> — an additional confirm (renaming breaks the generator / RW order).</li>
+</ul>
+</section>
+
+<!-- 13 -->
+<section id="en-s13">
+<h2>13. Working with tilesets</h2>
+
+<h3>Adding</h3>
+<p>The <b>+ Tileset</b> button in the tileset tab area. Choose a PNG — the tileset is embedded into the map as <code>embedded_png</code> (base64).</p>
+<p><b>Rules:</b></p>
+<ul>
+<li>The PNG size must be a multiple of tileW × tileH of the map.</li>
+<li>The tileset name is requested.</li>
+<li>firstgid = max ID of existing tilesets + 1.</li>
+</ul>
+
+<h3>MiniTNS import</h3>
+<p>The <b>📦 Import MiniTNS</b> button in the TYPES panel. The PNG must be exactly 3×5 tiles:</p>
+
+<figure class="doc-figure">
+  <img src="minitns.png" alt="MiniTNS 3×5 template" width="180" height="300">
+  <figcaption>MiniTNS · 3×5 tiles</figcaption>
+</figure>
+
+<pre><code>1 2 3     NWo N   NEo
+4 5 6     W   ·   E
+7 8 9     SWo S   SEo
+A B 5     NWi NEi ·
+C D 5     SWi SEi ·</code></pre>
+<p>Where <code>5</code> are three solid tiles with equal weights. Everything is automatic: a new tileset + a new type with 12 edges + 3 solids.</p>
+
+<h3>Deleting</h3>
+<p><b>×</b> to the right of the tileset tab. The confirm shows the number of usages. If the tile is used — all cells are erased (one undo transaction).</p>
+
+<h3>Edit tile</h3>
+<p>The <b>Edit</b> checkbox in the atlas. Click on a tile → form:</p>
+<ul>
+<li><b>Terrain mask</b> — 4 numbers <code>[TL, TR, BL, BR]</code></li>
+<li><b>Properties</b> — arbitrary key-values</li>
+</ul>
+
+<h3>Terrain editor</h3>
+<p>The <b>▶ Terrain</b> button. Manage the list of terraintypes: add / rename / change / delete.</p>
+
+<h3>Show IDs</h3>
+<p>Checkbox. Hides the tile number labels in the atlas.</p>
+</section>
+
+<!-- 14 -->
+<section id="en-s14">
+<h2>14. Exporting the map to PNG (<code>📷 Save Preview</code>)</h2>
+<p><b>What it does:</b></p>
+<ol>
+<li>Renders the whole map at <b>native resolution</b> (W×H × tileW/H).</li>
+<li>If markers are enabled — adds them.</li>
+<li>Compresses with aspect ratio preserved: <b>long side = 500 px</b>.</li>
+<li>Centers into a <b>500×500</b> PNG, empty space — <b>black</b>.</li>
+</ol>
+<p><b>File name:</b> <code>&lt;map_name&gt;_map.png</code>.</p>
+<p><b>Usage:</b> map preview for README, Discord, pack description.</p>
+</section>
+
+<!-- 15 -->
+<section id="en-s15">
+<h2>15. Hotkeys</h2>
+<table>
+<thead><tr><th>Key</th><th>Action</th></tr></thead>
+<tbody>
+<tr><td><span class="kbd">B</span></td><td>Brush</td></tr>
+<tr><td><span class="kbd">T</span></td><td>Terrain</td></tr>
+<tr><td><span class="kbd">C</span></td><td>Classic autotile</td></tr>
+<tr><td><span class="kbd">E</span></td><td>Eraser</td></tr>
+<tr><td><span class="kbd">R</span></td><td>Rect</td></tr>
+<tr><td><span class="kbd">F</span></td><td>Fill</td></tr>
+<tr><td><span class="kbd">I</span></td><td>Picker</td></tr>
+<tr><td><span class="kbd">P</span></td><td>Pan</td></tr>
+<tr><td><span class="kbd">Ctrl+Z</span> / <span class="kbd">Ctrl+Y</span></td><td>Undo / Redo</td></tr>
+<tr><td><span class="kbd">Ctrl+S</span></td><td>Save</td></tr>
+<tr><td><span class="kbd">Esc</span></td><td>Cancel pick mode</td></tr>
+<tr><td colspan="2" style="color:#888;font-size:11px;padding-top:12px">
+Mobile: top bar buttons — <b>BRUSH</b> (tool picker) · <b>MAP</b> (open / save / name / resize / merge) · <b>UTILITY</b> (save preview / zoom / reference).
+</td></tr>
+</tbody>
+</table>
+</section>
+
+<!-- 16 -->
+<section id="en-s16">
+<h2>16. Undo / Redo</h2>
+<ul>
+<li>Stack of 50 actions.</li>
+<li>The <b>TERRAIN</b> and <b>CLS</b> brushes write in <b>one transaction</b> (both Ground and Items0) — one Ctrl+Z rolls back the whole stroke.</li>
+<li>All changes are written to undo, including:
+<ul>
+<li>Painting with any brush</li>
+<li>Flood fill, Rect</li>
+<li>Tileset delete (tile erasing)</li>
+<li>Map resize</li>
+</ul>
+</li>
+<li><b>Not undoable:</b>
+<ul>
+<li>Map merge (replaces mapModel)</li>
+<li>Add tileset</li>
+<li>Import MiniTNS</li>
+<li>Rename / add / remove layer</li>
+</ul>
+</li>
+</ul>
+</section>
+
+<!-- 17 -->
+<section id="en-s17">
+<h2>17. Map format</h2>
+
+<h3>Layer structure (fixed)</h3>
+<pre><code>Ground, Items0, Units, Items1, Items2, Items, (+ Items3+ if present)</code></pre>
+<ul>
+<li><code>Ground</code> — required, 1 item, first</li>
+<li><code>Units</code> — 3rd layer, 1 item</li>
+<li><code>Items</code> — last, 1 item (mountains + respools + starts, all with collision)</li>
+<li><code>Items0/1/2/3</code> — intermediate layers (transitions, junctions, decor)</li>
+</ul>
+
+<h3>Data format</h3>
+<p>base64 → zlib → Uint32Array Little Endian.</p>
+<p>Empty layer = <code>eJxjYA==</code> (16 bytes: 4 zero uint32).</p>
+
+<h3>Tileset in .tmx</h3>
+<ul>
+<li><code>&lt;properties&gt;&lt;property name="embedded_png"&gt;base64&lt;/property&gt;&lt;/properties&gt;</code> — the atlas is embedded</li>
+<li><code>&lt;terraintypes&gt;</code> — list of types</li>
+<li><code>&lt;tile id="N" terrain="A,B,C,D"&gt;</code> — terrain mask (order TL, TR, BL, BR!)</li>
+<li><code>&lt;properties&gt;</code> on a tile — flags (<code>water</code>, <code>res_pool</code>, <code>large-rock</code>, <code>team</code> + <code>unit</code>)</li>
+</ul>
+
+<h3>Tile flags</h3>
+<ul>
+<li><code>large-rock</code> — impassable at all</li>
+<li><code>large-cliff</code> — passable only to mechs / expa</li>
+<li><code>water</code>, <code>water-bridge</code> — water</li>
+<li><code>res_pool</code> — respool point</li>
+<li><code>team</code> + <code>unit="commandCenter"</code> — player start (team 0–49)</li>
+</ul>
+</section>
+
+<!-- 18 -->
+<section id="en-s18">
+<h2>18. Limitations and known quirks</h2>
+<ul>
+<li><b>Layers are not reordered in the XML on save</b> — the order comes from <code>layerOrder</code>.</li>
+<li><b>Autosave is disabled.</b> Unsaved changes are lost on reload.</li>
+<li><b>Merge replaces the current map without undo.</b> The confirm warns about this.</li>
+<li><b>There is no undo stack for tileset operations.</b></li>
+<li><b>Renaming <code>Ground</code> / <code>Units</code> / <code>Items</code></b> is allowed, but breaks the generator and the RW order.</li>
+</ul>
+</section>
+
+<!-- 19 -->
+<section id="en-s19">
+<h2>19. Saving</h2>
+<p><span class="kbd">Ctrl+S</span> or the <b>💾 Save</b> button. The name is taken from the field to the right of <code>Save</code>. If the extension is not <code>.tmx</code> — it is added automatically.</p>
+<p>The file is saved via a browser download. The map contains:</p>
+<ul>
+<li>All layers in <code>layerOrder</code></li>
+<li>All tilesets (untouched — as they were; modified — rebuilt)</li>
+<li><code>types_config</code> in the map properties (JSON with all types)</li>
+</ul>
+<p>Opens in <b>Rusted Warfare</b> or <b>Tiled</b>.</p>
+</section>
+
+</div><!-- /lang en -->
+
+
+<!-- ============================================================= -->
+<!-- RUSSIAN                                                       -->
+<!-- ============================================================= -->
+<div class="lang-content" data-lang="ru">
+
+<h1>WEBTILED</h1>
+<p class="subtitle">Редактор карт для <strong>Rusted Warfare</strong> · формат <code>.tmx</code> · <b style="color:#8cf">Beta 0.4</b></p>
+
+<!-- 1 -->
+<section id="ru-s1">
+<h2>1. Что это</h2>
+<p><strong>WebTiled</strong> — редактор карт для <strong>Rusted Warfare</strong> (формат <code>.tmx</code>). Заменяет NotTiled, добавляет кастомные системы: <em>Types</em>, процедурный генератор, изометрический 3D-вид, склейку карт.</p>
+<div class="callout">
+<b>Вопросы / фидбек?</b> Пиши <b>teoshebo</b> в Discord — <a href="https://discord.com/users/709138215935934525" target="_blank" rel="noopener noreferrer">discord.com/users/709138215935934525</a>
+</div>
+</section>
+
+<!-- 2 -->
+<section id="ru-s2">
+<h2>2. Главный экран</h2>
+
+<h3>Верхняя панель</h3>
+<table>
+<thead><tr><th>Кнопка</th><th>Что делает</th></tr></thead>
+<tbody>
+<tr><td><b>📂 Open</b></td><td>Открыть файл <code>.tmx</code></td></tr>
+<tr><td><b>💾 Save</b></td><td>Сохранить как <code>.tmx</code> (имя из поля правее)</td></tr>
+<tr><td><b>⤢ Size</b></td><td>Изменить размер карты (W×H)</td></tr>
+<tr><td><b>⌘ Merge</b></td><td>Склеить несколько карт (открывает модальное окно)</td></tr>
+<tr><td><b>📷 Скриншот</b></td><td>Экспорт карты в PNG <b>500×500</b> (сохраняет пропорции, пустота — чёрная). Reference-слой в эскиз <b>не</b> попадает.</td></tr>
+<tr><td><b>🖼 REF</b></td><td>Референс-картинка (overlay / underlay + прозрачность). Не сохраняется в .tmx.</td></tr>
+<tr><td><b>Fit</b></td><td>Подогнать вид под окно</td></tr>
+<tr><td><b>1:1</b></td><td>Масштаб 100%</td></tr>
+<tr><td><b>Zoom</b></td><td>Текущий масштаб</td></tr>
+<tr><td><b>⚙</b></td><td>Настройки</td></tr>
+<tr><td><b>?</b></td><td>Помощь</td></tr>
+</tbody>
+</table>
+
+<h3>Левая панель инструментов</h3>
+<table>
+<thead><tr><th>Инструмент</th><th>Хоткей</th><th>Что делает</th></tr></thead>
+<tbody>
+<tr><td><b>PAN</b></td><td><span class="kbd">P</span></td><td>Двигать вид</td></tr>
+<tr><td><b>BRUSH</b></td><td><span class="kbd">B</span></td><td>Рисовать тайлами из brush-группы</td></tr>
+<tr><td><b>TERRAIN</b></td><td><span class="kbd">T</span></td><td>Рисовать типом (Solids из Types)</td></tr>
+<tr><td><b>CLS</b></td><td><span class="kbd">C</span></td><td>Classic corner-autotile по terrain-маске</td></tr>
+<tr><td><b>ERASE</b></td><td><span class="kbd">E</span></td><td>Стирать (tile = 0)</td></tr>
+<tr><td><b>RECT</b></td><td><span class="kbd">R</span></td><td>Прямоугольная заливка</td></tr>
+<tr><td><b>FILL</b></td><td><span class="kbd">F</span></td><td>Flood fill</td></tr>
+<tr><td><b>PICK</b></td><td><span class="kbd">I</span></td><td>Пипетка (взять тайл из-под курсора)</td></tr>
+<tr><td><b>AUTO</b></td><td>—</td><td>Автотайл области через Types / Generator</td></tr>
+<tr><td><b>UNDO</b></td><td><span class="kbd">Ctrl+Z</span></td><td>Отменить</td></tr>
+<tr><td><b>REDO</b></td><td><span class="kbd">Ctrl+Y</span></td><td>Повторить</td></tr>
+</tbody>
+</table>
+
+<h3>Правая панель</h3>
+<p><strong>LAYERS</strong> — список слоёв:</p>
+<ul>
+<li>чекбокс — видимость</li>
+<li>клик — сделать активным</li>
+<li><b>▲ ▼</b> — переместить вверх / вниз</li>
+<li><b>C</b> — очистить (стереть все тайлы)</li>
+<li><b>×</b> — удалить слой</li>
+<li><b>S</b> — solo (только этот слой)</li>
+<li><b>двойной клик по имени</b> — переименовать</li>
+</ul>
+
+<p><strong>BRUSH</strong> — группа тайлов:</p>
+<ul>
+<li><b>+EMPTY</b> — добавить пустоту в группу</li>
+<li><b>FLOOD</b> — залить доминирующим типом (≥3 ортогональных соседа)</li>
+<li><b>CLEAR</b> — очистить группу</li>
+<li>Size — радиус кисти</li>
+<li>Shape — square / circle / diamond</li>
+<li>Список тайлов с весами</li>
+<li><b>CLASSIC TERRAIN</b> — выбор terrain для CLS-инструмента</li>
+</ul>
+
+<h3>Нижняя панель</h3>
+<p>Четыре вкладки (можно включать / выключать независимо):</p>
+<ul>
+<li><b>ATLASES</b> — все tileset'ы карты</li>
+<li><b>TYPES</b> — система типов</li>
+<li><b>GENERATOR</b> — процедурный генератор</li>
+<li><b>3D</b> — изометрический вид</li>
+</ul>
+<p>Кнопка <b>▼</b> — свернуть всю панель. <b>Грэббер</b> сверху — ручной ресайз.</p>
+</section>
+
+<!-- 3 -->
+<section id="ru-s3">
+<h2>3. Atlases (Атласы)</h2>
+<p>Для каждого tileset'а:</p>
+<ul>
+<li>Вкладка с именем + <b>×</b> (удалить tileset)</li>
+<li><b>+ Tileset</b> — добавить новый tileset из PNG</li>
+</ul>
+<p>Внутри tileset'а:</p>
+<ul>
+<li><b>Zoom</b> — 1×–8× (колесо мыши)</li>
+<li><b>Edit</b> — редактировать tile (terrain + properties)</li>
+<li><b>Show IDs</b> — показывать / скрывать номера тайлов</li>
+<li><b>▶ Terrain</b> — редактор terrain types</li>
+</ul>
+<div class="callout">
+<b>Клик по тайлу</b> — положить в brush (заменить).<br>
+<b>Shift + клик</b> — добавить к brush.
+</div>
+</section>
+
+<!-- 4 -->
+<section id="ru-s4">
+<h2>4. Types (Типы)</h2>
+<p>Система типов для автотайла <em>по приоритету</em> — не по terrain, а по семантике (Dirt, Water, Cliff, ...).</p>
+<p>Каждый тип содержит:</p>
+<ul>
+<li><b>Имя</b> + <b>Priority</b> + <b>Цвет</b></li>
+<li><b>Solids</b> — список solid-тайлов с весами (случайный выбор при рисовании)</li>
+<li><b>Edges</b> — 4 стороны + 4 внешних угла (N, E, S, W, NWo, NEo, SWo, SEo)</li>
+<li><b>Inner</b> — 4 внутренних угла (NWi, NEi, SWi, SEi)</li>
+</ul>
+
+<h3>Как работает</h3>
+<p>При рисовании инструментом TERRAIN — клетка получает <em>один из solids</em> типа. При отпускании кисти Generator пересчитывает слой <code>Items0</code>: вокруг клеток типа A, граничащих с типом B (с более высоким приоритетом), рисуются edge-тайлы типа B.</p>
+
+<h3>Правила</h3>
+<ul>
+<li><b>Приоритет</b> определяет, чей edge победит на границе. Больший priority → edge рисуется <em>вне</em> типа, на клетках соседей с меньшим приоритетом.</li>
+<li><b>Solids</b> — с весами, выбирается случайно (можно сделать tile вариативным).</li>
+<li><b>Edge-роли:</b>
+<ul>
+<li><code>N / S / E / W</code> — прямые стороны</li>
+<li><code>NWo / NEo / SWo / SEo</code> — внешние углы (тип заходит в угол)</li>
+<li><code>NWi / NEi / SWi / SEi</code> — внутренние углы (дырка в типе)</li>
+</ul>
+</li>
+</ul>
+
+<h3>Кнопки</h3>
+<ul>
+<li><b>+ тип</b> — создать новый</li>
+<li><b>📦 Import MiniTNS</b> — импорт PNG 3×5 тайлов → новый tileset + новый тип (все 12 edges + 3 solids заполняются автоматически)</li>
+<li><b>× на карточке типа</b> — удалить</li>
+</ul>
+
+<h3>Режим pick</h3>
+<p>Клик по слоту edge/solid → режим pick. В атласах выбираешь тайл. Повторный клик по тому же слоту — очистить.</p>
+</section>
+
+<!-- 5 -->
+<section id="ru-s5">
+<h2>5. Classic Autotile (инструмент CLS)</h2>
+<p>Отличается от Types. Работает по <b>terrain-маске</b> tileset'а (классический corner-autotile как в Tiled).</p>
+<div class="callout warn">
+Порядок углов в XML tileset — <b><code>[TL, TR, BL, BR]</code></b> (не TL,TR,BR,BL).
+</div>
+
+<h3>Как работает</h3>
+<ol>
+<li>Выбираешь tileset + terrain в <b>CLASSIC TERRAIN</b> селекторе (в панели BRUSH).</li>
+<li>Рисуешь на активном слое.</li>
+<li>Каждая клетка получает solid-тайл выбранного terrain.</li>
+<li>После отпускания кисти — пересчёт масок для всех нарисованных клеток + 8 соседей.</li>
+</ol>
+
+<h3>Corner logic</h3>
+<p>Для клетки (x,y) маска = 4 угла из perspective <em>соседей</em>:</p>
+<pre><code>TL = NW.BR &amp;&amp; N.BL &amp;&amp; W.TR (все три = target → угол target)
+TR = N.BR &amp;&amp; NE.BL &amp;&amp; E.TL
+BL = W.BR &amp;&amp; SW.TR &amp;&amp; S.TL
+BR = E.BL &amp;&amp; SE.TL &amp;&amp; S.TR</code></pre>
+<p><b>Fallback</b> (если точной маски нет): от максимума к минимуму (4 замены → 3 → 2 → 1). Одиночная клетка попадает сразу в solid.</p>
+
+<h3>Undo</h3>
+<p>Один <span class="kbd">Ctrl+Z</span> откатывает <b>весь штрих целиком</b> (и activeLayer, и Items0, и всё остальное).</p>
+</section>
+
+<!-- 6 -->
+<section id="ru-s6">
+<h2>6. FLOOD (кисть типов)</h2>
+<p>Кнопка <b>FLOOD</b> в панели BRUSH.</p>
+<p>Для каждой клетки Ground проверяет её 4 ортогональных соседа:</p>
+<ul>
+<li>Если <b>3+ соседа</b> одного и того же типа B</li>
+<li>И B.priority &gt; A.priority (тип клетки)</li>
+<li>→ клетка перекрашивается в тайл B (берётся самый частый ID среди этих 3+ соседей)</li>
+</ul>
+<p><b>Не каскадится</b> за один проход — работает по снапшоту. Если после перекраски появились новые «3-окружённые» клетки — жми FLOOD ещё раз.</p>
+<p>Одна транзакция undo.</p>
+</section>
+
+<!-- 7 -->
+<section id="ru-s7">
+<h2>7. Generator (Генератор)</h2>
+<p>Процедурный генератор heightmap'а.</p>
+
+<h3>Процедурная генерация</h3>
+<table>
+<thead><tr><th>Параметр</th><th>Что делает</th></tr></thead>
+<tbody>
+<tr><td><b>WIDTH / HEIGHT</b></td><td>Размер карты (в тайлах)</td></tr>
+<tr><td><b>LEVELS</b></td><td>Количество уровней высот (обычно 10)</td></tr>
+<tr><td><b>FLATTEN BOTTOM</b></td><td>Сколько нижних уровней объединить в «пол»</td></tr>
+<tr><td><b>NOISE SCALE</b></td><td>Масштаб шума Перлина (больше = плавнее)</td></tr>
+<tr><td><b>OCTAVES</b></td><td>Количество октав fBm</td></tr>
+<tr><td><b>PLAYABLE %</b></td><td>Доля «игровой» плоскости</td></tr>
+<tr><td><b>EDGE BIAS / CURVE</b></td><td>Приподнять/опустить края</td></tr>
+<tr><td><b>SYMMETRY</b></td><td>Симметрия: none / mirror X / mirror Y / rotate 180° / quad / diag / anti-diag</td></tr>
+<tr><td><b>SYM STRENGTH</b></td><td>Сила симметрии (0–1)</td></tr>
+<tr><td><b>PASSES / PASS W / PASS LEN</b></td><td>Резка «троп» по границам плато</td></tr>
+<tr><td><b>SEED</b></td><td>Сид генератора</td></tr>
+</tbody>
+</table>
+<p><b>Кнопки:</b></p>
+<ul>
+<li><b>GENERATE</b> — сгенерировать</li>
+<li><b>RANDOM SEED</b> — случайный сид</li>
+</ul>
+
+<h3>PNG Import</h3>
+<p><b>📂 Выбрать файл</b> — загрузить PNG как основу. Яркость = высота (тёмное → верх, светлое → низ). Размер PNG становится размером карты.</p>
+
+<h3>Rivers</h3>
+<ul>
+<li><b>ENABLE</b> — рисовать реки</li>
+<li><b>SMOOTH</b> — глубина сглаживания долины</li>
+<li><b>+ AUTO RIVER</b> — добавить случайную S-образную реку</li>
+<li><b>CLEAR</b> — стереть все</li>
+</ul>
+
+<h3>Auto Points</h3>
+<p>Авто-генерация стартов и respools:</p>
+<ul>
+<li><b>PLAYERS</b> — сколько команд</li>
+<li><b>HOME / PLAYER</b> — respools у старта</li>
+<li><b>FRONT PTS</b> — respools на фронте</li>
+<li><b>SPREAD</b> — минимальная дистанция между стартами</li>
+<li><b>EDGE MARGIN %</b> — отступ от краёв</li>
+<li><b>HEIGHT MARGIN</b> — насколько высокий рельеф допустим для точек</li>
+</ul>
+<p><b>GENERATE POINTS</b> — создать. <b>CLEAR</b> — стереть.</p>
+
+<h3>Preview</h3>
+<p>256×256 PNG-preview текущего heightmap'а + маркеры стартов (зелёные/красные) и respools (жёлтые).</p>
+
+<h3>Apply to Map</h3>
+<ul>
+<li><b>TARGET LAYER</b> — куда писать solids (по умолчанию <code>Ground</code>)</li>
+<li><b>EDGE LAYER</b> — куда писать edges (по умолчанию <code>Items0</code>)</li>
+<li><b>APPLY</b> — применить</li>
+</ul>
+<p>Маппинг level → typeId — автоматически по приоритету (level 0 = peak → тип с максимальным priority, level N-1 = floor → с минимальным).</p>
+</section>
+
+<!-- 8 -->
+<section id="ru-s8">
+<h2>8. 3D View</h2>
+<p>Изометрический 3D-вид карты.</p>
+
+<h3>Source</h3>
+<ul>
+<li><b>HEIGHT SOURCE</b>:
+<ul>
+<li><code>Generator / PNG</code> — высоты из heightmap'а генератора</li>
+<li><code>Ground layer</code> — высоты из тайлов Ground</li>
+</ul>
+</li>
+<li><b>COLOR MODE</b>:
+<ul>
+<li><code>Map texture (screenshot)</code> — цвет из текущего рендера карты (с композитингом по альфе)</li>
+<li><code>Classic palette</code> — синяя вода / зелёная трава / серые горы</li>
+<li><code>Grayscale</code> — серый</li>
+<li><code>Imported PNG file</code> — произвольный PNG</li>
+</ul>
+</li>
+</ul>
+
+<h3>Параметры</h3>
+<ul>
+<li><b>CELL</b> — размер клетки в пикселях</li>
+<li><b>HEIGHT PX</b> — высота рельефа</li>
+</ul>
+
+<h3>Кнопки</h3>
+<ul>
+<li><b>RENDER 3D</b> — отрисовать (не авто-рендер, жми вручную)</li>
+<li><b>DOWNLOAD PNG</b> — скачать результат</li>
+</ul>
+
+<h3>Markers в 3D</h3>
+<p>Если включены маркеры (в настройках) и размеры heightmap'а = размерам карты — маркеры отрисуются поверх 3D.</p>
+</section>
+
+<!-- 9 -->
+<section id="ru-s9">
+<h2>9. Merge (Склейка карт)</h2>
+<p>Модальное окно для склейки нескольких <code>.tmx</code> карт.</p>
+
+<h3>Как работает</h3>
+<ol>
+<li><b>+ ADD MAP</b> — выбрать одну или несколько <code>.tmx</code> (можно сразу пачкой).</li>
+<li>Каждая карта — прямоугольник с мини-превью в окне слева.</li>
+<li><b>Тащить мышью</b> — двигать карты.</li>
+<li><b>Снап к граням</b> других карт (розовые линии-гайды) — если включён чекбокс SNAP.</li>
+<li>Пересечения подсвечиваются <b>красной рамкой</b>. Разрешены, но при merge побеждает <b>верхняя</b> в списке приоритета.</li>
+<li><b>▲ ▼</b> в списке справа — изменить приоритет.</li>
+<li><b>×</b> — удалить карту.</li>
+<li><b>MERGE</b> — склеить. По OK текущая карта в редакторе заменяется.</li>
+</ol>
+
+<h3>Управление</h3>
+<ul>
+<li><b>Колесо мыши</b> — зум (10%–400%)</li>
+<li><b>Клик по пустому месту</b> — pan</li>
+<li><b>Средняя кнопка</b> — pan в любом месте</li>
+<li><b>Клик по карте</b> — drag карты</li>
+<li><b>FIT</b> — подогнать под всё</li>
+</ul>
+
+<h3>Что происходит</h3>
+<ul>
+<li>Bounding box = от верхнего-левого до нижнего-правого угла.</li>
+<li>Пустые промежутки → Ground = 0 → это «дырки» (счётчик в футере).</li>
+<li>Tilesets объединяются по <code>name + fingerprint(PNG)</code>. Совпадают → один, все ID ремапятся.</li>
+<li>Конфликт имени → <code>Name_2</code>, <code>Name_3</code>, ...</li>
+<li>Слои — union, порядок из первой карты, <code>Items</code> в конец.</li>
+<li>Overlap → побеждает карта с большим приоритетом.</li>
+<li>Types config — из первой карты, ID ремапятся.</li>
+</ul>
+</section>
+
+<!-- 10 -->
+<section id="ru-s10">
+<h2>10. Settings (Настройки)</h2>
+<p>Открывается через <b>⚙</b> в топбаре.</p>
+<table>
+<thead><tr><th>Параметр</th><th>Что делает</th></tr></thead>
+<tbody>
+<tr><td><b>LANGUAGE</b></td><td>English / Русский. Дефолт — English.</td></tr>
+<tr><td><b>Canvas background</b></td><td>Цвет фона под картой на канвасе</td></tr>
+<tr><td><b>Show markers</b></td><td>Показывать маркеры (старты/respools) на 2D и в 3D</td></tr>
+<tr><td><b>Marker size</b></td><td>Множитель размера маркеров (0.3×–3.0×)</td></tr>
+</tbody>
+</table>
+<p><b>APPLY</b> — сохранить. <b>CANCEL</b> — отменить (вернёт состояние на момент открытия).</p>
+<p>Настройки сохраняются в <code>localStorage</code> и переживают перезагрузку страницы.</p>
+</section>
+
+<!-- 11 -->
+<section id="ru-s11">
+<h2>11. Markers (Старты и Respools)</h2>
+
+<h3>Распознавание</h3>
+<p>Ищет по всем слоям карты тайлы с properties:</p>
+<ul>
+<li><code>res_pool</code> (без значения) → respool</li>
+<li><code>team=N</code> + <code>unit="commandCenter"</code> → старт команды N</li>
+</ul>
+
+<h3>Внешний вид</h3>
+<ul>
+<li><b>Старт</b>: чёрный полупрозрачный круг (alpha 50%) с цифрой команды внутри. Цифра — цвет игрока. Шрифт — <b>Arial Black</b>.</li>
+<li><b>Respool</b>: жёлтая точка с чёрной обводкой.</li>
+</ul>
+
+<h3>Цвета команд</h3>
+<p>Цикл по 10 базовым цветам RW:</p>
+<pre><code>0,10,20,30 → green
+1,11,21,31 → red
+2,12,22,32 → blue
+3,13,23,33 → yellow
+4,14,24,34 → purple
+5,15,25,35 → cyan
+6,16,26,36 → orange
+7,17,27,37 → pink
+8,18,28,38 → lime
+9,19,29,39 → violet</code></pre>
+
+<h3>Размеры</h3>
+<ul>
+<li><b>Старт</b>: circle_radius = 5 тайлов</li>
+<li><b>Respool</b>: dot_radius = 2.5 тайла</li>
+<li>Множитель из настроек (0.3×–3.0×)</li>
+<li>Цифра = 80% от диаметра круга</li>
+</ul>
+
+<h3>Экспорт _map</h3>
+<p>При экспорте PNG 500×500 маркеры сохраняются в <b>читаемом</b> виде. На карте-эталоне (500px длинная сторона) круги стартов ≈ 30px, respool-точки ≈ 16px.</p>
+</section>
+
+<!-- 11b REFERENCE -->
+<section id="ru-s11b">
+<h2>11b. Референс-картинка</h2>
+<p>Overlay / underlay изображение для обводки карты.</p>
+<h3>Как пользоваться</h3>
+<ul>
+<li>Кнопка <b>🖼 REF</b> в топбаре (десктоп) или в меню UTILITY (мобила).</li>
+<li><b>Выбрать файл</b> — загрузить PNG/JPG. В Chrome / Edge путь запоминается между сессиями (File System Access API). В Firefox / Safari — выбираешь файл каждый раз.</li>
+<li>Ползунок <b>Прозрачность</b> — от 0.00 до 1.00.</li>
+<li>Чекбокс <b>Под карту</b> — референс уходит под все слои, иначе поверх.</li>
+<li><b>Удалить</b> — очищает референс и забывает путь.</li>
+</ul>
+<div class="callout warn">
+Референс <b>не</b> сохраняется в .tmx и <b>не</b> попадает в Скриншот (Save Preview). Это вспомогательный слой для авторинга.
+</div>
+</section>
+
+<!-- 12 -->
+<section id="ru-s12">
+<h2>12. Работа со слоями</h2>
+
+<h3>Добавление</h3>
+<p>Кнопка <b>+</b> в шапке панели LAYERS. Слой вставляется <b>перед <code>Items</code></b> (последний служебный слой RW).</p>
+
+<h3>Перемещение</h3>
+<ul>
+<li><b>▲ ▼</b> на каждой строке — сдвиг на одну позицию.</li>
+<li>Порядок слоёв соответствует порядку в XML.</li>
+</ul>
+
+<h3>Удаление</h3>
+<ul>
+<li><b>×</b> на строке. Требует confirm.</li>
+<li>Защищённых слоёв нет — можно удалить даже <code>Ground</code>, <code>Units</code>, <code>Items</code>.</li>
+<li>Данные удалённого слоя теряются.</li>
+</ul>
+
+<h3>Очистка</h3>
+<ul>
+<li><b>C</b> на строке. Стирает все тайлы слоя (все клетки = 0), слой остаётся.</li>
+<li>Требует confirm.</li>
+</ul>
+
+<h3>Переименование</h3>
+<ul>
+<li><b>Двойной клик</b> по имени слоя.</li>
+<li><b>Enter</b> — сохранить, <b>Esc</b> — отменить.</li>
+<li>Для <code>Ground</code>, <code>Units</code>, <code>Items</code> — дополнительный confirm (переименование сломает генератор/RW-порядок).</li>
+</ul>
+</section>
+
+<!-- 13 -->
+<section id="ru-s13">
+<h2>13. Работа с tileset'ами</h2>
+
+<h3>Добавление</h3>
+<p>Кнопка <b>+ Tileset</b> в области вкладок tileset'ов. Выбираешь PNG — tileset встраивается в карту как <code>embedded_png</code> (base64).</p>
+<p><b>Правила:</b></p>
+<ul>
+<li>Размер PNG должен быть кратен tileW × tileH карты.</li>
+<li>Имя tileset'а запрашивается.</li>
+<li>firstgid = максимальный ID существующих tileset'ов + 1.</li>
+</ul>
+
+<h3>Импорт MiniTNS</h3>
+<p>Кнопка <b>📦 Import MiniTNS</b> в панели TYPES. PNG ровно 3×5 тайлов:</p>
+
+<figure class="doc-figure">
+  <img src="minitns.png" alt="Шаблон MiniTNS 3×5" width="180" height="300">
+  <figcaption>MiniTNS · 3×5 тайлов</figcaption>
+</figure>
+
+<pre><code>1 2 3     NWo N   NEo
+4 5 6     W   ·   E
+7 8 9     SWo S   SEo
+A B 5     NWi NEi ·
+C D 5     SWi SEi ·</code></pre>
+<p>Где <code>5</code> — три solid-тайла с равными весами. Всё автоматически: новый tileset + новый тип с 12 edges + 3 solids.</p>
+
+<h3>Удаление</h3>
+<p><b>×</b> справа от вкладки tileset'а. Confirm показывает количество использований. Если tile используется — все клетки стираются (одна undo-транзакция).</p>
+
+<h3>Edit tile</h3>
+<p>Чекбокс <b>Edit</b> в атласе. Клик по тайлу → форма:</p>
+<ul>
+<li><b>Terrain mask</b> — 4 числа <code>[TL, TR, BL, BR]</code></li>
+<li><b>Properties</b> — произвольные ключ-значения</li>
+</ul>
+
+<h3>Terrain editor</h3>
+<p>Кнопка <b>▶ Terrain</b>. Управление списком terraintypes: add/rename/change/delete.</p>
+
+<h3>Show IDs</h3>
+<p>Чекбокс. Скрывает подписи номеров тайлов на атласе.</p>
+</section>
+
+<!-- 14 -->
+<section id="ru-s14">
+<h2>14. Экспорт карты в PNG (<code>📷 Скриншот</code>)</h2>
+<p><b>Что делает:</b></p>
+<ol>
+<li>Рендерит всю карту в <b>нативном разрешении</b> (W×H × tileW/H).</li>
+<li>Если маркеры включены — добавляет их.</li>
+<li>Сжимает с сохранением пропорций: <b>длинная сторона = 500px</b>.</li>
+<li>Центрирует в PNG <b>500×500</b>, пустое место — <b>чёрное</b>.</li>
+</ol>
+<p><b>Имя файла:</b> <code>&lt;имя_карты&gt;_map.png</code>.</p>
+<p><b>Использование:</b> превью карты для README, Discord, описания пака.</p>
+</section>
+
+<!-- 15 -->
+<section id="ru-s15">
+<h2>15. Горячие клавиши</h2>
+<table>
+<thead><tr><th>Клавиша</th><th>Действие</th></tr></thead>
+<tbody>
+<tr><td><span class="kbd">B</span></td><td>Brush</td></tr>
+<tr><td><span class="kbd">T</span></td><td>Terrain</td></tr>
+<tr><td><span class="kbd">C</span></td><td>Classic autotile</td></tr>
+<tr><td><span class="kbd">E</span></td><td>Eraser</td></tr>
+<tr><td><span class="kbd">R</span></td><td>Rect</td></tr>
+<tr><td><span class="kbd">F</span></td><td>Fill</td></tr>
+<tr><td><span class="kbd">I</span></td><td>Picker</td></tr>
+<tr><td><span class="kbd">P</span></td><td>Pan</td></tr>
+<tr><td><span class="kbd">Ctrl+Z</span> / <span class="kbd">Ctrl+Y</span></td><td>Undo / Redo</td></tr>
+<tr><td><span class="kbd">Ctrl+S</span></td><td>Save</td></tr>
+<tr><td><span class="kbd">Esc</span></td><td>Отмена режима pick</td></tr>
+<tr><td colspan="2" style="color:#888;font-size:11px;padding-top:12px">
+Мобильный топбар: <b>BRUSH</b> (выбор инструмента) · <b>MAP</b> (открыть / сохранить / имя / размер / склейка) · <b>UTILITY</b> (скриншот / зум / референс).
+</td></tr>
+</tbody>
+</table>
+</section>
+
+<!-- 16 -->
+<section id="ru-s16">
+<h2>16. Undo / Redo</h2>
+<ul>
+<li>Стек на 50 действий.</li>
+<li>Кисти <b>TERRAIN</b> и <b>CLS</b> пишут <b>одной транзакцией</b> (и Ground, и Items0) — один Ctrl+Z откатывает весь штрих.</li>
+<li>Все изменения пишутся в undo, включая:
+<ul>
+<li>Рисование любой кистью</li>
+<li>Flood fill, Rect</li>
+<li>Tileset delete (стирание тайлов)</li>
+<li>Resize карты</li>
+</ul>
+</li>
+<li><b>Не отменяется:</b>
+<ul>
+<li>Merge карт (заменяет mapModel)</li>
+<li>Add tileset</li>
+<li>Import MiniTNS</li>
+<li>Rename / add / remove layer</li>
+</ul>
+</li>
+</ul>
+</section>
+
+<!-- 17 -->
+<section id="ru-s17">
+<h2>17. Формат карты</h2>
+
+<h3>Структура слоёв (жёстко)</h3>
+<pre><code>Ground, Items0, Units, Items1, Items2, Items, (+ Items3+ если есть)</code></pre>
+<ul>
+<li><code>Ground</code> — обязателен, 1 штука, первый</li>
+<li><code>Units</code> — 3-й слой, 1 штука</li>
+<li><code>Items</code> — последний, 1 штука (горы + респулы + старты, всё с коллизией)</li>
+<li><code>Items0/1/2/3</code> — промежуточные слои (переходы, стыки, декор)</li>
+</ul>
+
+<h3>Формат данных</h3>
+<p>base64 → zlib → Uint32Array Little Endian.</p>
+<p>Пустой слой = <code>eJxjYA==</code> (16 байт: 4 нулевых uint32).</p>
+
+<h3>Tileset в .tmx</h3>
+<ul>
+<li><code>&lt;properties&gt;&lt;property name="embedded_png"&gt;base64&lt;/property&gt;&lt;/properties&gt;</code> — атлас зашит</li>
+<li><code>&lt;terraintypes&gt;</code> — список типов</li>
+<li><code>&lt;tile id="N" terrain="A,B,C,D"&gt;</code> — terrain маска (порядок TL, TR, BL, BR!)</li>
+<li><code>&lt;properties&gt;</code> на тайле — флаги (<code>water</code>, <code>res_pool</code>, <code>large-rock</code>, <code>team</code> + <code>unit</code>)</li>
+</ul>
+
+<h3>Флаги тайлов</h3>
+<ul>
+<li><code>large-rock</code> — непроходимо вообще</li>
+<li><code>large-cliff</code> — проходимо только мехам/экспам</li>
+<li><code>water</code>, <code>water-bridge</code> — вода</li>
+<li><code>res_pool</code> — точка респула</li>
+<li><code>team</code> + <code>unit="commandCenter"</code> — старт игрока (team 0–49)</li>
+</ul>
+</section>
+
+<!-- 18 -->
+<section id="ru-s18">
+<h2>18. Ограничения и известные особенности</h2>
+<ul>
+<li><b>Слои не переставляются в XML при сохранении</b> — порядок из <code>layerOrder</code>.</li>
+<li><b>Autosave отключён.</b> Несохранённые правки теряются при перезагрузке.</li>
+<li><b>Merge заменяет текущую карту без undo.</b> Confirm предупреждает.</li>
+<li><b>Undo стека для операций с tileset'ами нет.</b></li>
+<li><b>Переименование <code>Ground</code> / <code>Units</code> / <code>Items</code></b> разрешено, но ломает генератор и RW-порядок.</li>
+</ul>
+</section>
+
+<!-- 19 -->
+<section id="ru-s19">
+<h2>19. Сохранение</h2>
+<p><span class="kbd">Ctrl+S</span> или кнопка <b>💾 Save</b>. Имя берётся из поля справа от <code>Save</code>. Если расширение не <code>.tmx</code> — добавляется автоматически.</p>
+<p>Файл сохраняется через браузерный download. Карта содержит:</p>
+<ul>
+<li>Все слои в порядке <code>layerOrder</code></li>
+<li>Все tileset'ы (нетронутые — как были, изменённые — пересобраны)</li>
+<li><code>types_config</code> в properties карты (JSON со всеми типами)</li>
+</ul>
+<p>Открывается в <b>Rusted Warfare</b> или <b>Tiled</b>.</p>
+</section>
+
+</div><!-- /lang ru -->
+
+</main>
+</div><!-- /app -->
+
+<script>
+(function(){
+  var buttons = document.querySelectorAll('[data-set-lang]');
+  var contents = document.querySelectorAll('.lang-content');
+  var tocs = {
+    en: document.querySelector('.toc-en'),
+    ru: document.querySelector('.toc-ru')
+  };
+
+  function setLang(lang) {
+    buttons.forEach(function(b){
+      b.classList.toggle('active', b.getAttribute('data-set-lang') === lang);
+    });
+    contents.forEach(function(c){
+      c.classList.toggle('active', c.getAttribute('data-lang') === lang);
+    });
+    if (tocs.en) tocs.en.style.display = (lang === 'en') ? 'block' : 'none';
+    if (tocs.ru) tocs.ru.style.display = (lang === 'ru') ? 'block' : 'none';
+    document.documentElement.lang = lang;
+  }
+
+  buttons.forEach(function(b){
+    b.addEventListener('click', function(){
+      setLang(b.getAttribute('data-set-lang'));
+    });
+  });
+
+  // ===== TOC active highlighting =====
+  var tocLinks = document.querySelectorAll('#toc a');
+  var sections = document.querySelectorAll('section[id]');
+
+  function updateActiveToc() {
+    var scrollPos = window.scrollY || document.documentElement.scrollTop;
+    var currentId = null;
+
+    for (var i = sections.length - 1; i >= 0; i--) {
+      var sec = sections[i];
+      // only consider sections in the currently visible language
+      if (!sec.closest('.lang-content').classList.contains('active')) continue;
+      if (sec.offsetTop - 80 <= scrollPos) {
+        currentId = sec.id;
+        break;
+      }
+    }
+
+    tocLinks.forEach(function(link){
+      var href = link.getAttribute('href');
+      if (href && href.substring(1) === currentId) {
+        link.classList.add('active');
+      } else {
+        link.classList.remove('active');
+      }
+    });
+  }
+
+  window.addEventListener('scroll', updateActiveToc, { passive: true });
+  window.addEventListener('resize', updateActiveToc);
+  window.addEventListener('load', updateActiveToc);
+  buttons.forEach(function(b){
+    b.addEventListener('click', function(){
+      setTimeout(updateActiveToc, 50);
+    });
+  });
+
+  setLang('en');
+  updateActiveToc();
+})();
+</script>
+</body>
+</html>
