@@ -2,6 +2,8 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#161616">
 <title>WebTiled</title>
 <link rel="stylesheet" href="style.css">
 </head>
@@ -13,51 +15,56 @@
     <input type="file" id="fileInput" accept=".tmx,application/xml,text/xml" hidden>
     <input type="file" id="tilesetInput" accept="image/png,image/*" hidden>
 
-    <button id="btnOpen" class="primary">
+    <!-- ═══ DESKTOP: file ops ═══ -->
+    <button id="btnOpen" class="primary desktop-only">
       <img class="btn-ic" src="asset/icon/open.png" data-emoji="📂" alt="">
       <span data-i18n="btn.open">Open</span>
     </button>
-    <button id="btnSave" class="save">
+    <button id="btnSave" class="save desktop-only">
       <img class="btn-ic" src="asset/icon/save.png" data-emoji="💾" alt="">
       <span data-i18n="btn.save">Save</span>
     </button>
 
-    <div class="sep"></div>
+    <div class="sep desktop-only"></div>
 
     <button id="btnUndo" title="Undo (Ctrl+Z)">
       <img class="btn-ic" src="asset/icon/undo.png" data-emoji="↶" alt="">
-      <span>Undo</span>
+      <span class="desktop-only">Undo</span>
     </button>
     <button id="btnRedo" title="Redo (Ctrl+Y)">
       <img class="btn-ic" src="asset/icon/redo.png" data-emoji="↷" alt="">
-      <span>Redo</span>
+      <span class="desktop-only">Redo</span>
     </button>
 
-    <div class="sep"></div>
+    <div class="sep desktop-only"></div>
 
-    <button id="btnResize" title="Change map size">
+    <button id="btnResize" title="Change map size" class="desktop-only">
       <img class="btn-ic" src="asset/icon/resize.png" data-emoji="⤢" alt="">
       <span data-i18n="btn.resize">Size</span>
     </button>
-    <button id="btnMerge" title="Merge multiple maps">
+    <button id="btnMerge" title="Merge multiple maps" class="desktop-only">
       <img class="btn-ic" src="asset/icon/merge.png" data-emoji="⌘" alt="">
       <span data-i18n="btn.merge">Merge</span>
     </button>
-    <button id="btnExportMap" title="Save map as PNG 500×500">
+    <button id="btnExportMap" title="Save preview as PNG 500×500">
       <img class="btn-ic" src="asset/icon/export.png" data-emoji="📷" alt="">
-      <span data-i18n="btn.exportMap">_map</span>
+      <span data-i18n="btn.savePreview">Save Preview</span>
     </button>
 
+    <input type="text" id="mapName" placeholder="filename" title="Filename for saving" class="desktop-only">
 
-    <input type="text" id="mapName" placeholder="filename" title="Filename for saving">
+    <div class="sep desktop-only"></div>
 
-    <div class="sep"></div>
+    <button id="btnFit" data-i18n="btn.fit" class="desktop-only">Fit</button>
+    <button id="btnReset" data-i18n="btn.reset" class="desktop-only">1:1</button>
+    <div class="zoom-box desktop-only">Zoom <b id="zoomVal">1.00</b></div>
 
-    <button id="btnFit" data-i18n="btn.fit">Fit</button>
-    <button id="btnReset" data-i18n="btn.reset">1:1</button>
-    <div class="zoom-box">Zoom <b id="zoomVal">1.00</b></div>
+    <button id="btnRef" title="Reference image">
+      <img class="btn-ic" src="asset/icon/ref.png" data-emoji="🖼" alt="">
+      <span data-i18n="btn.ref">REF</span>
+    </button>
 
-    <div class="sep"></div>
+    <div class="sep desktop-only"></div>
 
     <button id="btnSettings" title="Settings">
       <img class="btn-ic" src="asset/icon/settings.png" data-emoji="⚙" alt="">
@@ -66,8 +73,22 @@
       <img class="btn-ic" src="asset/icon/docs.png" data-emoji="📖" alt="">
     </button>
 
-
     <span id="status" data-i18n="status.idle">Load .tmx file</span>
+
+    <!-- ═══ MOBILE-ONLY ═══ -->
+    <button id="btnMobileBrush" class="mobile-only" title="Brush tool">
+      <span class="mtool-icon">🖌</span>
+      <span class="mtool-label">BRUSH</span>
+    </button>
+    <button id="btnMobileMap" class="mobile-only" title="Map">
+      <span class="mtool-icon">🗺</span>
+      <span class="mtool-label">MAP</span>
+    </button>
+    <button id="btnMobileUtility" class="mobile-only" title="Utility">
+      <span class="mtool-icon">🛠</span>
+      <span class="mtool-label">UTILITY</span>
+    </button>
+	<button id="btnMobileRightPanel" class="mobile-only" title="Panels">☰</button>
   </div>
 
   <div id="main">
@@ -80,7 +101,12 @@
         <span id="pickBannerText">—</span>
         <button id="btnPickCancel">Cancel</button>
       </div>
+      <div id="warnBanner" class="hidden">
+        <span id="warnBannerText">—</span>
+        <button id="btnWarnClose">OK</button>
+      </div>
       <div id="rightPanel">
+        <div class="right-panel-close mobile-only" id="rightPanelClose">×</div>
         <div id="layers"><h3>LAYERS <span id="activeLayerLabel">—</span></h3></div>
         <div id="brushPanel">
           <h3>BRUSH
@@ -93,10 +119,15 @@
           <div id="brushTotal">Σ 0</div>
           <div id="classicPanel" class="classic-panel">
             <div class="classic-title">CLASSIC TERRAIN</div>
-            <select id="classicSelect"></select>
+            <div id="classicList"></div>
+          </div>
+          <div id="tnsPanel" class="tns-panel">
+            <div class="tns-title">TYPES</div>
+            <div id="tnsList"></div>
           </div>
         </div>
       </div>
+      <div id="rightBackdrop" class="mobile-only hidden"></div>
     </div>
   </div>
 
@@ -119,9 +150,120 @@
       <div id="hmV3Body" class="hidden"></div>
     </div>
   </div>
+
+  <div id="mobileBottomBar" class="mobile-only">
+    <button id="btnMobileBottomOpen" title="Open panel">▼</button>
+  </div>
 </div>
 
-<!-- MERGE MODAL -->
+<!-- ═══ TOOL PICKER (BRUSH, mobile) ═══ -->
+<div id="toolPickerModal" class="hidden mobile-only">
+  <div class="tool-picker-dialog">
+    <div class="tool-picker-header">
+      <span>BRUSH</span>
+      <button id="toolPickerClose">×</button>
+    </div>
+    <div id="toolPickerGrid" class="tool-picker-grid"></div>
+  </div>
+</div>
+
+<!-- ═══ MAP MODAL (mobile) ═══ -->
+<div id="mapModal" class="hidden mobile-only">
+  <div class="mobile-modal-dialog">
+    <div class="mobile-modal-header">
+      <span>MAP</span>
+      <button id="mapModalClose">×</button>
+    </div>
+    <div class="mobile-modal-body">
+      <button id="mapOpenBtn" class="mobile-action-btn primary">
+        <span class="ma-ic">📂</span>
+        <span class="ma-lbl" data-i18n="btn.open">Open</span>
+      </button>
+      <button id="mapSaveBtn" class="mobile-action-btn save">
+        <span class="ma-ic">💾</span>
+        <span class="ma-lbl" data-i18n="btn.save">Save</span>
+      </button>
+      <label class="mobile-field">
+        <span class="ma-lbl" data-i18n="field.filename">Filename</span>
+        <input type="text" id="mapNameMobile" placeholder="map.tmx">
+      </label>
+      <button id="mapResizeBtn" class="mobile-action-btn">
+        <span class="ma-ic">⤢</span>
+        <span class="ma-lbl" data-i18n="btn.resize">Size</span>
+      </button>
+      <button id="mapMergeBtn" class="mobile-action-btn">
+        <span class="ma-ic">⌘</span>
+        <span class="ma-lbl" data-i18n="btn.merge">Merge</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ UTILITY MODAL (mobile) ═══ -->
+<div id="utilityModal" class="hidden mobile-only">
+  <div class="mobile-modal-dialog">
+    <div class="mobile-modal-header">
+      <span>UTILITY</span>
+      <button id="utilityModalClose">×</button>
+    </div>
+    <div class="mobile-modal-body">
+      <button id="utilSavePreview" class="mobile-action-btn">
+        <span class="ma-ic">📷</span>
+        <span class="ma-lbl" data-i18n="btn.savePreview">Save Preview</span>
+      </button>
+      <button id="utilFit" class="mobile-action-btn">
+        <span class="ma-ic">⤢</span>
+        <span class="ma-lbl" data-i18n="btn.fit">Fit</span>
+      </button>
+      <button id="utilReset" class="mobile-action-btn">
+        <span class="ma-ic">1:1</span>
+        <span class="ma-lbl" data-i18n="btn.reset">1:1</span>
+      </button>
+      <div class="mobile-info-row">
+        <span class="ma-lbl" data-i18n="field.zoom">Zoom</span>
+        <b id="utilZoomVal">1.00</b>
+      </div>
+      <button id="utilRef" class="mobile-action-btn">
+        <span class="ma-ic">🖼</span>
+        <span class="ma-lbl" data-i18n="btn.ref">Reference</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ REFERENCE MODAL ═══ -->
+<div id="refModal" class="hidden">
+  <div class="ref-dialog">
+    <div class="ref-header">
+      <span data-i18n="ref.title">REFERENCE</span>
+      <button id="refClose" title="Close">×</button>
+    </div>
+    <div class="ref-body">
+      <div class="ref-status">
+        <span data-i18n="ref.status">Status</span>:
+        <b id="refStatusText">—</b>
+      </div>
+      <div class="ref-buttons">
+        <button id="refPickBtn" class="primary" data-i18n="ref.pick">Choose file</button>
+        <button id="refClearBtn" class="danger" data-i18n="ref.clear">Remove</button>
+      </div>
+      <label class="ref-field">
+        <span data-i18n="ref.opacity">Opacity</span>
+        <input type="range" id="refOpacity" min="0" max="1" step="0.05" value="0.5">
+        <b id="refOpacityVal">0.50</b>
+      </label>
+      <label class="ref-field ref-field-check">
+        <input type="checkbox" id="refUnderlay">
+        <span data-i18n="ref.underlay">Place under map (else overlay)</span>
+      </label>
+      <div class="ref-hint" data-i18n="ref.hint">
+        Reference is not saved into .tmx and not included in Save Preview. Chrome/Edge remember the file path between sessions.
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ MERGE MODAL ═══ -->
 <div id="mergeModal" class="hidden">
   <div class="merge-dialog">
     <div class="merge-header">
@@ -153,7 +295,7 @@
 </div>
 <input type="file" id="mergeFileInput" accept=".tmx" multiple hidden>
 
-<!-- SETTINGS MODAL -->
+<!-- ═══ SETTINGS MODAL ═══ -->
 <div id="settingsModal" class="hidden">
   <div class="settings-dialog">
     <div class="settings-header">
@@ -161,7 +303,6 @@
       <button id="settingsClose" title="Close">×</button>
     </div>
     <div class="settings-body">
-
       <div class="settings-section">
         <div class="settings-section-title" data-i18n="settings.language">LANGUAGE</div>
         <div class="settings-lang-row">
@@ -169,7 +310,6 @@
           <button id="settingsLangRu" class="settings-lang-btn">Русский</button>
         </div>
       </div>
-
       <div class="settings-section">
         <div class="settings-section-title" data-i18n="settings.appearance">APPEARANCE</div>
         <label class="settings-field">
@@ -181,7 +321,6 @@
           <input type="color" id="settingsAtlasBg" value="#0a0a0a">
         </label>
       </div>
-
       <div class="settings-section">
         <div class="settings-section-title" data-i18n="settings.markers">MARKERS</div>
         <label class="settings-field settings-field-check">
@@ -194,7 +333,6 @@
           <b id="settingsMarkerScaleVal" class="settings-slider-val">1.00×</b>
         </label>
       </div>
-
     </div>
     <div class="settings-footer">
       <button id="settingsCancel" data-i18n="settings.cancel">CANCEL</button>

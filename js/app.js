@@ -24,8 +24,6 @@ let activeLayer = null;
 let brushGroup = [];
 let brushSettings = { size: 0, shape: 'square' };
 
-// Хранит { tsFirstgid: number, terrName: string } — стабильные ключи,
-// не зависят от порядка tileset'ов и terraintypes.
 let activeClassicTerrain = null;
 let classicMaskCache = new Map();
 let classicEmptyCache = new Map();
@@ -39,12 +37,20 @@ let strokeBound = null;
 let rectStart = null, rectCurrent = null;
 let lastPaintKey = null;
 
+// ─── REFERENCE ───
+let refImage = null;
+let refHandle = null;
+
 let settings = RW.Storage.loadSettings();
 if (settings.showMarkers == null) settings.showMarkers = false;
 if (settings.markerScale == null) settings.markerScale = 1;
 if (settings.canvasBg == null) settings.canvasBg = '#0a0a0a';
 if (settings.atlasBg == null) settings.atlasBg = '#0a0a0a';
 if (settings.lang == null) settings.lang = 'en';
+if (settings.reference == null) settings.reference = { path: '', opacity: 0.5, mode: 'overlay' };
+if (settings.reference.path == null) settings.reference.path = '';
+if (settings.reference.opacity == null) settings.reference.opacity = 0.5;
+if (settings.reference.mode == null) settings.reference.mode = 'overlay';
 RW.Storage.saveSettings(settings);
 
 function applyAtlasBg(v) {
@@ -61,7 +67,10 @@ const layersEl = el('layers');
 const brushListEl = el('brushList');
 const brushTotalEl = el('brushTotal');
 const brushSettingsEl = el('brushSettings');
-const classicSelectEl = el('classicSelect');
+const classicListEl = el('classicList');
+const classicPanelEl = el('classicPanel');
+const tnsListEl = el('tnsList');
+const tnsPanelEl = el('tnsPanel');
 const tsTabsListEl = el('tsTabsList');
 const tsBodyEl = el('tsBody');
 const typesBodyEl = el('typesBody');
@@ -71,6 +80,15 @@ const toolsEl = el('tools');
 const mapNameEl = el('mapName');
 const pickBannerEl = el('pickBanner');
 const pickBannerTextEl = el('pickBannerText');
+const warnBannerEl = el('warnBanner');
+const warnBannerTextEl = el('warnBannerText');
+
+function updateZoomLabels() {
+  if (!renderer) return;
+  const v = renderer.view.zoom.toFixed(2);
+  const d = el('zoomVal'); if (d) d.textContent = v;
+  const m = el('utilZoomVal'); if (m) m.textContent = v;
+}
 
 // ═══════════════════════════════════════════════
 // I18N
@@ -83,8 +101,12 @@ const I18N = {
     'btn.resize': 'Size',
     'btn.merge': 'Merge',
     'btn.exportMap': '_map',
+    'btn.savePreview': 'Save Preview',
     'btn.fit': 'Fit',
     'btn.reset': '1:1',
+    'btn.ref': 'REF',
+    'field.filename': 'Filename',
+    'field.zoom': 'Zoom',
     'status.idle': 'Load .tmx file',
     'tab.atlases': 'ATLASES',
     'tab.types': 'TYPES',
@@ -100,7 +122,14 @@ const I18N = {
     'settings.markerSize': 'Marker size',
     'settings.apply': 'APPLY',
     'settings.cancel': 'CANCEL',
-    'settings.close': 'Close'
+    'settings.close': 'Close',
+    'ref.title': 'REFERENCE',
+    'ref.status': 'Status',
+    'ref.pick': 'Choose file',
+    'ref.clear': 'Remove',
+    'ref.opacity': 'Opacity',
+    'ref.underlay': 'Place under map (else overlay)',
+    'ref.hint': 'Reference is not saved into .tmx and not included in Save Preview. Chrome/Edge remember the file path between sessions.'
   },
   ru: {
     'title': 'WebTiled',
@@ -109,8 +138,12 @@ const I18N = {
     'btn.resize': 'Размер',
     'btn.merge': 'Склейка',
     'btn.exportMap': '_map',
+    'btn.savePreview': 'Скриншот',
     'btn.fit': 'Fit',
     'btn.reset': '1:1',
+    'btn.ref': 'REF',
+    'field.filename': 'Имя файла',
+    'field.zoom': 'Зум',
     'status.idle': 'Загрузи .tmx файл',
     'tab.atlases': 'АТЛАСЫ',
     'tab.types': 'ТИПЫ',
@@ -126,7 +159,14 @@ const I18N = {
     'settings.markerSize': 'Размер маркеров',
     'settings.apply': 'ПРИМЕНИТЬ',
     'settings.cancel': 'ОТМЕНА',
-    'settings.close': 'Закрыть'
+    'settings.close': 'Закрыть',
+    'ref.title': 'РЕФЕРЕНС',
+    'ref.status': 'Статус',
+    'ref.pick': 'Выбрать файл',
+    'ref.clear': 'Удалить',
+    'ref.opacity': 'Прозрачность',
+    'ref.underlay': 'Под карту (иначе поверх)',
+    'ref.hint': 'Референс не сохраняется в .tmx и не попадает в Скриншот. Chrome/Edge запоминают путь между сессиями.'
   }
 };
 
@@ -151,15 +191,13 @@ RW.I18N = {
     settings.lang = lang;
     RW.Storage.saveSettings(settings);
     this.apply();
+    if (typeof updateMobileBrushBtn === 'function') updateMobileBrushBtn();
   }
 };
 
 // ═══════════════════════════════════════════════
-// CLASSIC AUTOTILE — стабильный якорь
+// CLASSIC AUTOTILE — stable anchor
 // ═══════════════════════════════════════════════
-
-// Находит tileset + terrainType по { tsFirstgid, terrName }.
-// Возвращает { ts, tsIdx, terrIdx, terrType } или null.
 function resolveClassicAnchor() {
   if (!activeClassicTerrain || !mapModel) return null;
   const a = activeClassicTerrain;
@@ -187,6 +225,8 @@ const TOOLS = [
   { sep: true },
   { id: 'autotile', label: 'AUTO', hkPos: -1, icon: 'asset/icon/auto.png', emoji: '⚙', title: 'Autotile area' }
 ];
+
+const LONG_TAP_TOOLS = new Set(['brush', 'classic', 'terrain']);
 
 function makeIconEl(t) {
   if (t.icon) {
@@ -253,6 +293,19 @@ function buildTools() {
   }
 }
 
+function checkTNSLayerWarning() {
+  if (activeTool !== 'terrain') return;
+  if (!mapModel) return;
+  if (activeLayer && activeLayer !== 'Ground') {
+    if (warnBannerTextEl) {
+      warnBannerTextEl.textContent =
+        'TYPE-инструмент рисует в Ground. Активный слой — "' + activeLayer +
+        '". Поменяй на Ground или переключи инструмент — иначе склейка карт сломается.';
+    }
+    if (warnBannerEl) warnBannerEl.classList.remove('hidden');
+  }
+}
+
 function handleToolClick(id) {
   if (pickMode) endPick();
   if (id === 'autotile') { runAutotileDialog(); return; }
@@ -264,6 +317,9 @@ function handleToolClick(id) {
   settings.activeTool = id;
   RW.Storage.saveSettings(settings);
   if (renderer) renderer.render();
+  if (brushPanel) brushPanel.build();
+  if (typeof updateMobileBrushBtn === 'function') updateMobileBrushBtn();
+  checkTNSLayerWarning();
 }
 
 // ─── Pick mode ───
@@ -383,6 +439,7 @@ function paintBrushCells(cx, cy, tileFn) {
   if (!activeLayer) return;
   const data = map.layers[activeLayer];
   const cells = brushCells(cx, cy);
+  let touchedGround = false;
   for (const c of cells) {
     const tx = c[0], ty = c[1];
     if (tx < 0 || ty < 0 || tx >= map.W || ty >= map.H) continue;
@@ -394,7 +451,9 @@ function paintBrushCells(cx, cy, tileFn) {
     recordChange(activeLayer, idx, before, v);
     renderer.invalidateCell(tx, ty);
     expandStrokeBound(tx, ty);
+    if (activeLayer === 'Ground') touchedGround = true;
   }
+  if (touchedGround) invalidateMarkersCache();
 }
 function paintTerrainCells(cx, cy) {
   const map = mapModel;
@@ -406,6 +465,7 @@ function paintTerrainCells(cx, cy) {
   }
   const data = map.layers[activeLayer];
   const cells = brushCells(cx, cy);
+  let touchedGround = false;
   for (const c of cells) {
     const tx = c[0], ty = c[1];
     if (tx < 0 || ty < 0 || tx >= map.W || ty >= map.H) continue;
@@ -417,11 +477,13 @@ function paintTerrainCells(cx, cy) {
     recordChange(activeLayer, idx, before, after);
     renderer.invalidateCell(tx, ty);
     expandStrokeBound(tx, ty);
+    if (activeLayer === 'Ground') touchedGround = true;
   }
+  if (touchedGround) invalidateMarkersCache();
 }
 
 // ═══════════════════════════════════════════════
-// CLASSIC AUTOTILE — paint
+// CLASSIC AUTOTILE
 // ═══════════════════════════════════════════════
 function buildClassicMaskIndex(tsIdx) {
   const c = classicMaskCache.get(tsIdx);
@@ -505,7 +567,6 @@ function paintClassicCell(tx, ty, anchor) {
   if (!activeLayer) return;
   const tsIdx = anchor.tsIdx;
   const terrIdx = anchor.terrIdx;
-  const ts = anchor.ts;
   const ev = findEmptyValue(tsIdx, terrIdx);
   const mask = resolveClassicMask(tx, ty, tsIdx, terrIdx, ev);
   const idx = buildClassicMaskIndex(tsIdx);
@@ -589,71 +650,6 @@ function finalizeClassicForStroke() {
   }
 }
 
-// ─── Classic select ───
-// value формата "firstgid:terrainName" — оба ключа стабильны.
-function rebuildClassicSelect() {
-  const map = mapModel;
-  if (!classicSelectEl) return;
-  classicSelectEl.innerHTML = '';
-  if (!map) return;
-  let hasAny = false;
-
-  map.tilesets.forEach(ts => {
-    if (!ts.terrainTypes || !ts.terrainTypes.length) return;
-    const g = document.createElement('optgroup');
-    g.label = ts.name + ' (firstgid ' + ts.firstgid + ')';
-    ts.terrainTypes.forEach(tt => {
-      hasAny = true;
-      const o = document.createElement('option');
-      o.value = ts.firstgid + ':' + tt.name;
-      o.textContent = tt.name + ' · local ' + tt.tile + ' · global ' + (tt.tile + ts.firstgid);
-      if (activeClassicTerrain &&
-          activeClassicTerrain.tsFirstgid === ts.firstgid &&
-          activeClassicTerrain.terrName === tt.name) {
-        o.selected = true;
-      }
-      g.appendChild(o);
-    });
-    classicSelectEl.appendChild(g);
-  });
-
-  if (!hasAny) {
-    const o = document.createElement('option');
-    o.textContent = '— no terraintypes —';
-    o.disabled = true;
-    classicSelectEl.appendChild(o);
-  }
-
-  // если активный anchor больше не разрешается — сбросить
-  if (activeClassicTerrain && !resolveClassicAnchor()) {
-    activeClassicTerrain = null;
-  }
-}
-
-if (classicSelectEl) classicSelectEl.addEventListener('change', () => {
-  const v = classicSelectEl.value;
-  if (!v) { activeClassicTerrain = null; return; }
-  const eq = v.indexOf(':');
-  const firstgid = parseInt(v.slice(0, eq), 10);
-  const terrName = v.slice(eq + 1);
-  activeClassicTerrain = { tsFirstgid: firstgid, terrName };
-
-  const anchor = resolveClassicAnchor();
-  if (!anchor) {
-    if (statusEl) statusEl.textContent = 'Classic: anchor not resolved';
-    return;
-  }
-  const ev = findEmptyValue(anchor.tsIdx, anchor.terrIdx);
-  const mc = buildClassicMaskIndex(anchor.tsIdx).size;
-  if (statusEl) statusEl.textContent = 'Classic: ' + anchor.ts.name +
-    ' (firstgid ' + anchor.ts.firstgid + ')' +
-    ' · ' + anchor.terrType.name +
-    ' (local ' + anchor.terrType.tile +
-    ' → global ' + (anchor.terrType.tile + anchor.ts.firstgid) + ')' +
-    '  (empty=' + ev + ', masks=' + mc + ')';
-});
-
-// ─── Custom autotile (TNS) ───
 function finalizeAutotileForStroke() {
   if (!generator || !strokeBound) return;
   const b = strokeBound;
@@ -678,6 +674,7 @@ function endStroke() {
   const map = mapModel;
   const layers = [];
   let total = 0;
+  const touchedLayers = [];
   for (const kv of strokeChanges) {
     const layer = kv[0], m = kv[1];
     const real = [];
@@ -687,6 +684,7 @@ function endStroke() {
     }
     if (!real.length) continue;
     layers.push({ layer, changes: real });
+    touchedLayers.push(layer);
     total += real.length;
   }
   if (layers.length) {
@@ -694,6 +692,9 @@ function endStroke() {
     if (map.undoStack.length > 50) map.undoStack.shift();
     map.redoStack.length = 0;
     if (statusEl) statusEl.textContent = total + ' cells changed';
+    if (layersPanel) {
+      for (const ln of touchedLayers) layersPanel.flash(ln);
+    }
   }
   invalidateMarkersCache();
   strokeChanges = null; strokeBound = null; lastPaintKey = null;
@@ -732,6 +733,7 @@ function floodFill(tx, ty, newTile) {
   if (map.undoStack.length > 50) map.undoStack.shift();
   map.redoStack.length = 0;
   invalidateMarkersCache();
+  if (layersPanel) layersPanel.flash(activeLayer);
   if (statusEl) statusEl.textContent = 'Fill: ' + changes.length + ' cells';
 }
 
@@ -748,6 +750,7 @@ function runFloodDominant() {
   mapModel.redoStack.length = 0;
   invalidateMarkersCache();
   renderer.render();
+  if (layersPanel) layersPanel.flash('Ground');
   if (statusEl) statusEl.textContent = 'FLOOD: ' + changes.length + ' cells';
 }
 
@@ -776,6 +779,7 @@ function applyRect(x0, y0, x1, y1, tileFn) {
   if (map.undoStack.length > 50) map.undoStack.shift();
   map.redoStack.length = 0;
   invalidateMarkersCache();
+  if (layersPanel) layersPanel.flash(activeLayer);
   if (statusEl) statusEl.textContent = 'Rect: ' + changes.length + ' cells';
 }
 
@@ -818,6 +822,7 @@ function runAutotileDialog() {
   mapModel.redoStack.length = 0;
   invalidateMarkersCache();
   renderer.render();
+  if (layersPanel) layersPanel.flash('Items0');
   if (statusEl) statusEl.textContent = 'Autotile: ' + changes.length + ' cells';
 }
 
@@ -828,7 +833,7 @@ function doUndo() {
   if (entry.type === 'resize') {
     renderer.invalidate();
     renderer.fitView();
-    if (zoomVal) zoomVal.textContent = renderer.view.zoom.toFixed(2);
+    updateZoomLabels();
     if (layersPanel) layersPanel.build();
   } else invalidateEntry(entry);
   renderer.render();
@@ -841,7 +846,7 @@ function doRedo() {
   if (entry.type === 'resize') {
     renderer.invalidate();
     renderer.fitView();
-    if (zoomVal) zoomVal.textContent = renderer.view.zoom.toFixed(2);
+    updateZoomLabels();
     if (layersPanel) layersPanel.build();
   } else invalidateEntry(entry);
   renderer.render();
@@ -860,6 +865,307 @@ function invalidateEntry(entry) {
       renderer.chunkCache.delete(Math.floor(x/32) + ',' + Math.floor(y/32));
     }
   }
+}
+
+// ═══════════════════════════════════════════════
+// POINTER / TOUCH STATE
+// ═══════════════════════════════════════════════
+const pointers = new Map();
+let drawingPointerId = null;
+let longTapTimer = null;
+let longTapFired = false;
+let longTapStart = { x: 0, y: 0 };
+let multiPointerActive = false;
+let lastPinchDist = 0;
+let lastPinchMidX = 0;
+let lastPinchMidY = 0;
+
+function cancelLongTap() {
+  if (longTapTimer) { clearTimeout(longTapTimer); longTapTimer = null; }
+}
+
+function startLongTapTimer() {
+  cancelLongTap();
+  longTapFired = false;
+  if (!LONG_TAP_TOOLS.has(activeTool)) return;
+  longTapTimer = setTimeout(() => {
+    longTapTimer = null;
+    longTapFired = true;
+    triggerLongTap();
+  }, 500);
+}
+
+function triggerLongTap() {
+  if (!renderer || !mapModel || !activeLayer) return;
+  const pos = renderer.screenToTile(longTapStart.x, longTapStart.y);
+  const tx = pos.tx, ty = pos.ty;
+  if (tx < 0 || ty < 0 || tx >= mapModel.W || ty >= mapModel.H) return;
+  strokeChanges = null;
+  paintBrushCells(tx, ty, () => 0);
+  endStroke();
+  painting = false;
+  rectStart = null; rectCurrent = null;
+  renderer.rectStart = null; renderer.rectCurrent = null;
+  renderer.render();
+  if (statusEl) statusEl.textContent = 'Long-tap erase @ ' + tx + ',' + ty;
+}
+
+function beginMultiTouch() {
+  if (painting) {
+    painting = false;
+    if (activeTool === 'terrain') finalizeAutotileForStroke();
+    if (activeTool === 'classic') finalizeClassicForStroke();
+    endStroke();
+    renderer.rectStart = null; renderer.rectCurrent = null;
+    renderer.render();
+  }
+  drag.active = false;
+  if (cv) cv.classList.remove('drag');
+  cancelLongTap();
+
+  const arr = Array.from(pointers.values());
+  if (arr.length >= 2) {
+    lastPinchDist = Math.hypot(arr[0].x - arr[1].x, arr[0].y - arr[1].y);
+    lastPinchMidX = (arr[0].x + arr[1].x) / 2;
+    lastPinchMidY = (arr[0].y + arr[1].y) / 2;
+  }
+  multiPointerActive = true;
+}
+
+// ═══════════════════════════════════════════════
+// CANVAS POINTER HANDLERS
+// ═══════════════════════════════════════════════
+if (cv) cv.addEventListener('pointerdown', (e) => {
+  if (!renderer) return;
+  if (e.pointerType === 'touch') e.preventDefault();
+  if (e.button === 2) return;
+
+  const isTouch = e.pointerType === 'touch';
+  const isMiddle = e.button === 1;
+  pointers.set(e.pointerId, { x: e.clientX, y: e.clientY, isTouch });
+  try { cv.setPointerCapture(e.pointerId); } catch (_) {}
+
+  if (pointers.size >= 2) { beginMultiTouch(); return; }
+
+  if (activeTool === 'pan' || isMiddle) {
+    drag.active = true;
+    drag.x = e.clientX; drag.y = e.clientY;
+    if (!isTouch) cv.classList.add('drag');
+    return;
+  }
+
+  if (!mapModel) return;
+  if (!activeLayer) { if (statusEl) statusEl.textContent = 'Select active layer'; return; }
+
+  drawingPointerId = e.pointerId;
+
+  const pos = renderer.screenToTile(e.clientX, e.clientY);
+  const tx = pos.tx, ty = pos.ty;
+
+  longTapStart.x = e.clientX;
+  longTapStart.y = e.clientY;
+  startLongTapTimer();
+
+  if (activeTool === 'brush') {
+    if (!brushGroup.length) { if (statusEl) statusEl.textContent = 'Brush empty'; return; }
+    painting = true; strokeChanges = null;
+    paintBrushCells(tx, ty, pickWeightedTile);
+    lastPaintKey = tx + ',' + ty;
+    renderer.render();
+  } else if (activeTool === 'terrain') {
+    painting = true; strokeChanges = null;
+    paintTerrainCells(tx, ty);
+    lastPaintKey = tx + ',' + ty;
+    renderer.render();
+  } else if (activeTool === 'classic') {
+    if (!resolveClassicAnchor()) {
+      if (statusEl) statusEl.textContent = 'Classic: выбери terrain в BRUSH панели';
+      return;
+    }
+    painting = true; strokeChanges = null;
+    paintClassicCells(tx, ty);
+    lastPaintKey = tx + ',' + ty;
+    renderer.render();
+  } else if (activeTool === 'eraser') {
+    painting = true; strokeChanges = null;
+    paintBrushCells(tx, ty, () => 0);
+    lastPaintKey = tx + ',' + ty;
+    renderer.render();
+  } else if (activeTool === 'rect') {
+    painting = true;
+    rectStart = { x: tx, y: ty }; rectCurrent = { x: tx, y: ty };
+    renderer.rectStart = rectStart; renderer.rectCurrent = rectCurrent;
+    renderer.render();
+  } else if (activeTool === 'fill') {
+    if (!brushGroup.length) { if (statusEl) statusEl.textContent = 'Brush empty'; return; }
+    floodFill(tx, ty, pickWeightedTile());
+    renderer.render();
+    cancelLongTap();
+  } else if (activeTool === 'picker') {
+    pickerAt(tx, ty);
+    renderer.render();
+    cancelLongTap();
+  }
+});
+
+if (cv) cv.addEventListener('pointermove', (e) => {
+  if (!renderer) return;
+
+  if (!pointers.has(e.pointerId)) {
+    if (e.pointerType === 'mouse' && mapModel) {
+      const pos = renderer.screenToTile(e.clientX, e.clientY);
+      renderer.hoverTile = { tx: pos.tx, ty: pos.ty };
+      renderer.render();
+      updateInfo(pos.tx, pos.ty);
+    }
+    return;
+  }
+
+  const prev = pointers.get(e.pointerId);
+  const dx = e.clientX - prev.x;
+  const dy = e.clientY - prev.y;
+  prev.x = e.clientX;
+  prev.y = e.clientY;
+
+  if (longTapTimer && (Math.abs(e.clientX - longTapStart.x) > 6 ||
+                       Math.abs(e.clientY - longTapStart.y) > 6)) {
+    cancelLongTap();
+  }
+
+  if (pointers.size >= 2) {
+    const arr = Array.from(pointers.values());
+    const d = Math.hypot(arr[0].x - arr[1].x, arr[0].y - arr[1].y);
+    const mx = (arr[0].x + arr[1].x) / 2;
+    const my = (arr[0].y + arr[1].y) / 2;
+
+    renderer.view.x += (mx - lastPinchMidX);
+    renderer.view.y += (my - lastPinchMidY);
+
+    if (lastPinchDist > 8 && d > 8) {
+      const k = d / lastPinchDist;
+      if (Math.abs(k - 1) > 0.002) {
+        const r = wrap.getBoundingClientRect();
+        renderer.zoomAt(mx - r.left, my - r.top, k);
+      }
+    }
+
+    lastPinchDist = d;
+    lastPinchMidX = mx;
+    lastPinchMidY = my;
+    renderer.render();
+    updateZoomLabels();
+    return;
+  }
+
+  if (drag.active) {
+    renderer.view.x += dx;
+    renderer.view.y += dy;
+    renderer.render();
+    return;
+  }
+
+  if (painting) {
+    const pos = renderer.screenToTile(e.clientX, e.clientY);
+    renderer.hoverTile = { tx: pos.tx, ty: pos.ty };
+    const key = pos.tx + ',' + pos.ty;
+    if (key !== lastPaintKey) {
+      lastPaintKey = key;
+      if (activeTool === 'brush' || activeTool === 'eraser') {
+        const fn = activeTool === 'eraser' ? () => 0 : pickWeightedTile;
+        paintBrushCells(pos.tx, pos.ty, fn);
+      } else if (activeTool === 'terrain') {
+        paintTerrainCells(pos.tx, pos.ty);
+      } else if (activeTool === 'classic') {
+        paintClassicCells(pos.tx, pos.ty);
+      } else if (activeTool === 'rect' && rectStart) {
+        rectCurrent = { x: pos.tx, y: pos.ty };
+        renderer.rectCurrent = rectCurrent;
+      }
+    }
+    renderer.render();
+    updateInfo(pos.tx, pos.ty);
+  }
+});
+
+if (cv) cv.addEventListener('pointerup', (e) => {
+  if (!renderer) return;
+  const wasDrawing = (drawingPointerId === e.pointerId);
+  pointers.delete(e.pointerId);
+  cancelLongTap();
+
+  if (longTapFired) {
+    longTapFired = false;
+    if (pointers.size === 0) {
+      multiPointerActive = false;
+      drag.active = false;
+      drawingPointerId = null;
+    }
+    return;
+  }
+
+  if (pointers.size === 0) {
+    multiPointerActive = false;
+
+    if (drag.active) {
+      drag.active = false;
+      if (cv) cv.classList.remove('drag');
+    }
+
+    if (painting) {
+      if (activeTool === 'rect' && rectStart && rectCurrent && brushGroup.length) {
+        applyRect(rectStart.x, rectStart.y, rectCurrent.x, rectCurrent.y, pickWeightedTile);
+      } else {
+        if (activeTool === 'terrain') finalizeAutotileForStroke();
+        if (activeTool === 'classic') finalizeClassicForStroke();
+        endStroke();
+      }
+      painting = false;
+      rectStart = null; rectCurrent = null;
+      renderer.rectStart = null; renderer.rectCurrent = null;
+      renderer.render();
+    }
+    drawingPointerId = null;
+  } else if (pointers.size === 1 && multiPointerActive) {
+    const rem = Array.from(pointers.values())[0];
+    drag.active = true;
+    drag.x = rem.x;
+    drag.y = rem.y;
+  }
+});
+
+if (cv) cv.addEventListener('pointercancel', (e) => {
+  pointers.delete(e.pointerId);
+  cancelLongTap();
+  if (pointers.size === 0) {
+    if (painting) { painting = false; endStroke(); }
+    drag.active = false;
+    multiPointerActive = false;
+    drawingPointerId = null;
+    if (renderer) renderer.render();
+  }
+});
+
+if (cv) cv.addEventListener('pointerleave', (e) => {
+  if (e.pointerType === 'mouse' && !pointers.has(e.pointerId)) {
+    if (renderer) {
+      renderer.hoverTile = null;
+      renderer.render();
+    }
+  }
+});
+
+if (cv) cv.addEventListener('contextmenu', (e) => e.preventDefault());
+
+function updateInfo(tx, ty) {
+  if (!infoEl) return;
+  if (!mapModel) { infoEl.textContent = '—'; return; }
+  if (tx < 0 || ty < 0 || tx >= mapModel.W || ty >= mapModel.H) { infoEl.textContent = '—'; return; }
+  let out = 'Tile: <b>' + tx + ', ' + ty + '</b>';
+  for (const n of mapModel.layerOrder) {
+    const id = mapModel.layers[n][ty * mapModel.W + tx];
+    if (id) out += ' · ' + n + '=<b>' + id + '</b>';
+  }
+  infoEl.innerHTML = out;
 }
 
 // ─── WASD pan ───
@@ -887,139 +1193,13 @@ function panTick() {
   if (panKeys.size) panRaf = requestAnimationFrame(panTick);
 }
 
-// ─── Mouse ───
-if (cv) cv.addEventListener('mousedown', (e) => {
-  if (!renderer) return;
-  if (e.button !== 0 && e.button !== 1) return;
-  if (activeTool === 'pan' || e.button === 1) {
-    drag.active = true; drag.x = e.clientX; drag.y = e.clientY;
-    cv.classList.add('drag');
-    return;
-  }
-  if (!mapModel) return;
-  if (!activeLayer) { if (statusEl) statusEl.textContent = 'Select active layer'; return; }
-  const pos = renderer.screenToTile(e.clientX, e.clientY);
-  const tx = pos.tx, ty = pos.ty;
-
-  if (activeTool === 'brush') {
-    if (!brushGroup.length) { if (statusEl) statusEl.textContent = 'Brush empty'; return; }
-    painting = true; strokeChanges = null;
-    paintBrushCells(tx, ty, pickWeightedTile);
-    lastPaintKey = tx + ',' + ty;
-    renderer.render();
-  } else if (activeTool === 'terrain') {
-    painting = true; strokeChanges = null;
-    paintTerrainCells(tx, ty);
-    lastPaintKey = tx + ',' + ty;
-    renderer.render();
-  } else if (activeTool === 'classic') {
-    if (!resolveClassicAnchor()) { if (statusEl) statusEl.textContent = 'Classic: select terrain in BRUSH panel'; return; }
-    painting = true; strokeChanges = null;
-    paintClassicCells(tx, ty);
-    lastPaintKey = tx + ',' + ty;
-    renderer.render();
-  } else if (activeTool === 'eraser') {
-    painting = true; strokeChanges = null;
-    paintBrushCells(tx, ty, () => 0);
-    lastPaintKey = tx + ',' + ty;
-    renderer.render();
-  } else if (activeTool === 'rect') {
-    painting = true;
-    rectStart = { x: tx, y: ty }; rectCurrent = { x: tx, y: ty };
-    renderer.rectStart = rectStart; renderer.rectCurrent = rectCurrent;
-    renderer.render();
-  } else if (activeTool === 'fill') {
-    if (!brushGroup.length) { if (statusEl) statusEl.textContent = 'Brush empty'; return; }
-    floodFill(tx, ty, pickWeightedTile());
-    renderer.render();
-  } else if (activeTool === 'picker') {
-    pickerAt(tx, ty);
-    renderer.render();
-  }
-});
-
-window.addEventListener('mousemove', (e) => {
-  if (!renderer) return;
-  if (drag.active) {
-    const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
-    drag.x = e.clientX; drag.y = e.clientY;
-    renderer.view.x += dx; renderer.view.y += dy;
-    renderer.render();
-    return;
-  }
-  if (!mapModel) { if (infoEl) infoEl.textContent = '—'; return; }
-  const pos = renderer.screenToTile(e.clientX, e.clientY);
-  renderer.hoverTile = { tx: pos.tx, ty: pos.ty };
-  const leftHeld = (e.buttons & 1) !== 0;
-  if (painting && leftHeld) {
-    const key = pos.tx + ',' + pos.ty;
-    if (key !== lastPaintKey) {
-      lastPaintKey = key;
-      if (activeTool === 'brush' || activeTool === 'eraser') {
-        const fn = activeTool === 'eraser' ? () => 0 : pickWeightedTile;
-        paintBrushCells(pos.tx, pos.ty, fn);
-      } else if (activeTool === 'terrain') {
-        paintTerrainCells(pos.tx, pos.ty);
-      } else if (activeTool === 'classic') {
-        paintClassicCells(pos.tx, pos.ty);
-      } else if (activeTool === 'rect' && rectStart) {
-        rectCurrent = { x: pos.tx, y: pos.ty };
-        renderer.rectCurrent = rectCurrent;
-      }
-    }
-  } else if (painting && !leftHeld) {
-    painting = false;
-    if (activeTool === 'terrain') finalizeAutotileForStroke();
-    if (activeTool === 'classic') finalizeClassicForStroke();
-    endStroke();
-    renderer.rectStart = null; renderer.rectCurrent = null;
-  }
-  renderer.render();
-  updateInfo(pos.tx, pos.ty);
-});
-
-window.addEventListener('mouseup', () => {
-  if (!renderer) return;
-  if (drag.active) { drag.active = false; if (cv) cv.classList.remove('drag'); return; }
-  if (painting) {
-    if (activeTool === 'rect' && rectStart && rectCurrent && brushGroup.length) {
-      applyRect(rectStart.x, rectStart.y, rectCurrent.x, rectCurrent.y, pickWeightedTile);
-    } else {
-      if (activeTool === 'terrain') finalizeAutotileForStroke();
-      if (activeTool === 'classic') finalizeClassicForStroke();
-      endStroke();
-    }
-    painting = false; rectStart = null; rectCurrent = null;
-    renderer.rectStart = null; renderer.rectCurrent = null;
-    renderer.render();
-  }
-});
-
-if (cv) cv.addEventListener('mouseleave', () => {
-  if (!renderer) return;
-  renderer.hoverTile = null;
-  renderer.render();
-});
-
-function updateInfo(tx, ty) {
-  if (!infoEl) return;
-  if (!mapModel) { infoEl.textContent = '—'; return; }
-  if (tx < 0 || ty < 0 || tx >= mapModel.W || ty >= mapModel.H) { infoEl.textContent = '—'; return; }
-  let out = 'Tile: <b>' + tx + ', ' + ty + '</b>';
-  for (const n of mapModel.layerOrder) {
-    const id = mapModel.layers[n][ty * mapModel.W + tx];
-    if (id) out += ' · ' + n + '=<b>' + id + '</b>';
-  }
-  infoEl.innerHTML = out;
-}
-
 if (wrap) wrap.addEventListener('wheel', (e) => {
   if (!mapModel || !renderer) return;
   e.preventDefault();
   const r = wrap.getBoundingClientRect();
   const f = e.deltaY < 0 ? 1.15 : 1 / 1.15;
   renderer.zoomAt(e.clientX - r.left, e.clientY - r.top, f);
-  if (zoomVal) zoomVal.textContent = renderer.view.zoom.toFixed(2);
+  updateZoomLabels();
 }, { passive: false });
 
 // ─── Hotkeys ───
@@ -1094,6 +1274,11 @@ async function initFromParsed(parsed, filename) {
   renderer.markerScale = settings.markerScale || 1;
   renderer.setBg(settings.canvasBg || '#0a0a0a');
 
+  // Reference
+  renderer.setReference(refImage);
+  renderer.setReferenceOpacity(settings.reference.opacity);
+  renderer.setReferenceMode(settings.reference.mode);
+
   activeLayer = mapModel.layerOrder[0] || null;
   brushGroup = [];
   pickMode = null;
@@ -1122,12 +1307,40 @@ async function initFromParsed(parsed, filename) {
     setActiveLayer: (n) => { activeLayer = n; }
   });
 
-  brushPanel = new RW.BrushPanel(brushListEl, brushTotalEl, brushSettingsEl, {
-    getBrush: () => brushGroup,
-    getRenderer: () => renderer,
-    getBrushSettings: () => brushSettings,
-    onBrushChanged: () => { if (tilesetTabs) tilesetTabs.refreshSelection(); },
-    onBrushSettingsChanged: () => {}
+  brushPanel = new RW.BrushPanel({
+    listEl: brushListEl,
+    totalEl: brushTotalEl,
+    settingsEl: brushSettingsEl,
+    classicListEl: classicListEl,
+    tnsListEl: tnsListEl,
+    classicPanelEl: classicPanelEl,
+    tnsPanelEl: tnsPanelEl,
+    ctx: {
+      getMap: () => mapModel,
+      getRenderer: () => renderer,
+      getBrush: () => brushGroup,
+      getBrushSettings: () => brushSettings,
+      getActiveTool: () => activeTool,
+      getTypesModel: () => typesModel,
+      getActiveType: () => activeTypeId,
+      setActiveType: (id) => { activeTypeId = id; },
+      getActiveClassicTerrain: () => activeClassicTerrain,
+      setActiveClassicTerrain: (anchor) => {
+        activeClassicTerrain = anchor;
+        if (statusEl) {
+          const a = resolveClassicAnchor();
+          if (a) statusEl.textContent = 'Classic: ' + a.ts.name +
+            ' · ' + a.terrType.name +
+            ' (local ' + a.terrType.tile +
+            ' → global ' + (a.terrType.tile + a.ts.firstgid) + ')';
+        }
+      },
+      onBrushChanged: () => {
+        if (tilesetTabs) tilesetTabs.refreshSelection();
+      },
+      onBrushSettingsChanged: () => {},
+      findTileset: (id) => renderer.findTileset(id)
+    }
   });
 
   tilesetTabs = new RW.TilesetTabs(tsTabsListEl, tsBodyEl, bottomEl, {
@@ -1149,7 +1362,7 @@ async function initFromParsed(parsed, filename) {
     startPick: (mode) => startPick(mode),
     endPick: () => endPick(),
     findTileset: (id) => renderer.findTileset(id),
-    onChanged: () => { typesPanel.build(); },
+    onChanged: () => { typesPanel.build(); if (brushPanel) brushPanel.build(); },
     onImportMiniTNS: () => startMiniTNSImport(),
     onOpenLibrary: () => openMiniTNSLibrary()
   });
@@ -1159,12 +1372,16 @@ async function initFromParsed(parsed, filename) {
   tilesetTabs.build();
   typesPanel.build();
   buildTools();
-  rebuildClassicSelect();
+  // rebuildClassicSelect больше нет — auto-select делается в brushPanel.buildClassicList()
 
-  if (mapNameEl) mapNameEl.value = filename || parsed._restoredFilename || 'map.tmx';
+  if (mapNameEl) {
+    const n = filename || parsed._restoredFilename || 'map.tmx';
+    mapNameEl.value = n;
+    const m = el('mapNameMobile'); if (m) m.value = n;
+  }
 
   renderer.fitView();
-  if (zoomVal) zoomVal.textContent = renderer.view.zoom.toFixed(2);
+  updateZoomLabels();
 
   if (RW.HMApp) {
     RW.HMApp.onMapReady({
@@ -1181,19 +1398,23 @@ on('btnSave', 'click', saveMap);
 function saveMap() {
   if (!mapModel) { if (statusEl) statusEl.textContent = 'No map'; return; }
   try {
+    // sync mobile → desktop
+    const mob = el('mapNameMobile');
+    if (mob && mapNameEl && mob.value) mapNameEl.value = mob.value;
     const xml = RW.TMX.save(mapModel, typesModel);
     let filename = (mapNameEl && mapNameEl.value || '').trim() || 'map.tmx';
     if (!filename.toLowerCase().endsWith('.tmx')) filename += '.tmx';
     U.download(filename, xml, 'application/xml');
     if (statusEl) statusEl.textContent = 'Saved: ' + filename;
     mapModel.rawXml = xml;
+    if (typeof closeMapModal === 'function') closeMapModal();
   } catch (err) {
     console.error(err);
     if (statusEl) statusEl.textContent = 'Save error: ' + err.message;
   }
 }
 
-on('btnResize', 'click', () => {
+function doResize() {
   if (!mapModel) { if (statusEl) statusEl.textContent = 'No map'; return; }
   const nw = parseInt(prompt('New width (' + mapModel.W + '):', String(mapModel.W)), 10);
   if (isNaN(nw) || nw < 1 || nw > 4096) return;
@@ -1203,13 +1424,13 @@ on('btnResize', 'click', () => {
   if (!entry) return;
   renderer.invalidate();
   renderer.fitView();
-  if (zoomVal) zoomVal.textContent = renderer.view.zoom.toFixed(2);
+  updateZoomLabels();
   if (layersPanel) layersPanel.build();
   renderer.render();
   if (statusEl) statusEl.textContent = 'Size: ' + nw + '×' + nh;
-});
+}
 
-on('btnMerge', 'click', () => {
+function doMerge() {
   if (!RW.MergeUI) return;
   RW.MergeUI.open({
     onMerge: async (merged) => {
@@ -1220,8 +1441,10 @@ on('btnMerge', 'click', () => {
         ' · layers: ' + merged.layerOrder.length;
     }
   });
-});
+}
 
+on('btnResize', 'click', doResize);
+on('btnMerge', 'click', doMerge);
 on('btnExportMap', 'click', exportMapPNG);
 
 on('tilesetInput', 'change', async (e) => {
@@ -1265,7 +1488,7 @@ on('tilesetInput', 'change', async (e) => {
       tilesetTabs.activeIdx = mapModel.tilesets.indexOf(ts);
       tilesetTabs.build();
     }
-    rebuildClassicSelect();
+    if (brushPanel) brushPanel.build();
     invalidateMarkersCache();
     if (statusEl) statusEl.textContent = 'Tileset added: ' + name +
       ' (' + cols + '×' + rows + ', firstgid=' + firstgid + ')';
@@ -1275,7 +1498,6 @@ on('tilesetInput', 'change', async (e) => {
   }
 });
 
-// ─── MiniTNS import (local file) ───
 function startMiniTNSImport() {
   if (!mapModel) { if (statusEl) statusEl.textContent = 'Open a map first'; return; }
   const inp = document.createElement('input');
@@ -1329,7 +1551,6 @@ async function importMiniTNS(file) {
     tilesetTabs.activeIdx = mapModel.tilesets.indexOf(ts);
     tilesetTabs.build();
   }
-  rebuildClassicSelect();
   const typeName = prompt('Type name:', defName) || defName;
   const t = typesModel.add(typeName, typesModel.types.length);
   const g = (local) => firstgid + local;
@@ -1363,11 +1584,11 @@ async function importMiniTNS(file) {
   t.edges.SWi = g(12); t.edges.SEi = g(13);
   activeTypeId = t.id;
   if (typesPanel) typesPanel.build();
+  if (brushPanel) brushPanel.build();
   invalidateMarkersCache();
   if (statusEl) statusEl.textContent = 'MiniTNS: tileset "' + name + '" + type "' + typeName + '"';
 }
 
-// ─── Markers cache ───
 let _markersCache = null;
 function getMarkersCached() {
   if (!mapModel) return { starts: [], respools: [] };
@@ -1377,7 +1598,6 @@ function getMarkersCached() {
 }
 function invalidateMarkersCache() { _markersCache = null; }
 
-// ─── Export _map ───
 function findTsForId(tilesets, id) {
   let f = null;
   for (const ts of tilesets) { if (id >= ts.firstgid) f = ts; else break; }
@@ -1470,7 +1690,207 @@ function exportMapPNG() {
   }
 }
 
-// ─── Settings modal ───
+// ═══════════════════════════════════════════════
+// REFERENCE
+// ═══════════════════════════════════════════════
+const REF_DB_NAME = 'webtiled_ref';
+const REF_STORE = 'handles';
+
+function refOpenDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(REF_DB_NAME, 1);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains(REF_STORE)) db.createObjectStore(REF_STORE);
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function refSaveHandle(handle) {
+  try {
+    const db = await refOpenDB();
+    return new Promise((res, rej) => {
+      const tx = db.transaction(REF_STORE, 'readwrite');
+      tx.objectStore(REF_STORE).put(handle, 'ref');
+      tx.oncomplete = () => res();
+      tx.onerror = () => rej(tx.error);
+    });
+  } catch (e) { console.warn('IDB save failed', e); }
+}
+async function refGetHandle() {
+  try {
+    const db = await refOpenDB();
+    return new Promise((res, rej) => {
+      const tx = db.transaction(REF_STORE, 'readonly');
+      const r = tx.objectStore(REF_STORE).get('ref');
+      r.onsuccess = () => res(r.result || null);
+      r.onerror = () => rej(r.error);
+    });
+  } catch (e) { return null; }
+}
+async function refClearHandle() {
+  try {
+    const db = await refOpenDB();
+    return new Promise((res, rej) => {
+      const tx = db.transaction(REF_STORE, 'readwrite');
+      tx.objectStore(REF_STORE).delete('ref');
+      tx.oncomplete = () => res();
+      tx.onerror = () => rej(tx.error);
+    });
+  } catch (e) {}
+}
+
+async function refLoadImage(handle) {
+  const f = await handle.getFile();
+  const url = URL.createObjectURL(f);
+  try {
+    const img = await new Promise((res, rej) => {
+      const i = new Image();
+      i.onload = () => res(i);
+      i.onerror = () => rej(new Error('image decode failed'));
+      i.src = url;
+    });
+    return img;
+  } finally { URL.revokeObjectURL(url); }
+}
+
+function updateRefStatus(txt) {
+  const el = document.getElementById('refStatusText');
+  if (el) el.textContent = txt != null ? txt : (settings.reference.path || 'не выбран');
+}
+
+function applyReferenceToRenderer() {
+  if (!renderer) return;
+  renderer.setReference(refImage);
+  renderer.setReferenceOpacity(settings.reference.opacity);
+  renderer.setReferenceMode(settings.reference.mode);
+}
+
+async function pickReference() {
+  // Modern API — Chrome/Edge
+  if (window.showOpenFilePicker) {
+    try {
+      const [handle] = await window.showOpenFilePicker({
+        types: [{
+          description: 'Images',
+          accept: { 'image/*': ['.png', '.jpg', '.jpeg', '.webp', '.bmp'] }
+        }]
+      });
+      if (!handle) return;
+      refHandle = handle;
+      await refSaveHandle(handle);
+      refImage = await refLoadImage(handle);
+      settings.reference.path = handle.name;
+      RW.Storage.saveSettings(settings);
+      applyReferenceToRenderer();
+      updateRefStatus();
+      if (statusEl) statusEl.textContent = 'Reference: ' + handle.name;
+    } catch (e) {
+      if (e.name !== 'AbortError') {
+        console.warn('ref pick failed', e);
+        if (statusEl) statusEl.textContent = 'Reference error: ' + e.message;
+      }
+    }
+    return;
+  }
+  // Fallback — <input type=file>
+  const inp = document.createElement('input');
+  inp.type = 'file';
+  inp.accept = 'image/*';
+  inp.onchange = async () => {
+    const f = inp.files && inp.files[0];
+    if (!f) return;
+    const url = URL.createObjectURL(f);
+    try {
+      refImage = await new Promise((res, rej) => {
+        const i = new Image();
+        i.onload = () => res(i);
+        i.onerror = () => rej(new Error('image decode failed'));
+        i.src = url;
+      });
+    } catch (e) {
+      if (statusEl) statusEl.textContent = 'Reference error: ' + e.message;
+      URL.revokeObjectURL(url);
+      return;
+    }
+    URL.revokeObjectURL(url);
+    settings.reference.path = f.name;
+    RW.Storage.saveSettings(settings);
+    applyReferenceToRenderer();
+    updateRefStatus();
+    if (statusEl) statusEl.textContent = 'Reference: ' + f.name + ' (не сохранится между сессиями)';
+  };
+  inp.click();
+}
+
+async function tryRestoreReference() {
+  if (!settings.reference.path) { updateRefStatus(); return; }
+  if (!window.showOpenFilePicker) {
+    updateRefStatus('Firefox/Safari — выбери файл заново');
+    return;
+  }
+  try {
+    const handle = await refGetHandle();
+    if (!handle) { updateRefStatus('Выбери файл заново'); return; }
+    const perm = await handle.queryPermission({ mode: 'read' });
+    if (perm !== 'granted') {
+      updateRefStatus('Нужен доступ — выбери файл заново');
+      return;
+    }
+    refHandle = handle;
+    refImage = await refLoadImage(handle);
+    applyReferenceToRenderer();
+    updateRefStatus();
+  } catch (e) {
+    console.warn('ref restore failed', e);
+    updateRefStatus('Выбери файл заново');
+  }
+}
+
+async function clearReference() {
+  refImage = null;
+  refHandle = null;
+  settings.reference.path = '';
+  RW.Storage.saveSettings(settings);
+  await refClearHandle();
+  applyReferenceToRenderer();
+  updateRefStatus('Удалён');
+  if (statusEl) statusEl.textContent = 'Reference cleared';
+}
+
+function bindRefControls() {
+  const op = el('refOpacity');
+  const opv = el('refOpacityVal');
+  const un = el('refUnderlay');
+  if (op && !op._bound) {
+    op._bound = true;
+    op.value = settings.reference.opacity;
+    if (opv) opv.textContent = (+settings.reference.opacity).toFixed(2);
+    op.addEventListener('input', () => {
+      const v = parseFloat(op.value) || 0;
+      settings.reference.opacity = v;
+      if (opv) opv.textContent = v.toFixed(2);
+      RW.Storage.saveSettings(settings);
+      if (renderer) renderer.setReferenceOpacity(v);
+    });
+  }
+  if (un && !un._bound) {
+    un._bound = true;
+    un.checked = (settings.reference.mode === 'underlay');
+    un.addEventListener('change', () => {
+      settings.reference.mode = un.checked ? 'underlay' : 'overlay';
+      RW.Storage.saveSettings(settings);
+      if (renderer) renderer.setReferenceMode(settings.reference.mode);
+    });
+  }
+  on('refPickBtn', 'click', pickReference);
+  on('refClearBtn', 'click', clearReference);
+}
+
+// ═══════════════════════════════════════════════
+// SETTINGS MODAL
+// ═══════════════════════════════════════════════
 let settingsModalEl = null;
 let settingsSnapshot = null;
 
@@ -1487,9 +1907,7 @@ function openSettings() {
       if (wrap) wrap.style.background = e.target.value;
       if (renderer) renderer.render();
     });
-    on('settingsAtlasBg', 'input', (e) => {
-      applyAtlasBg(e.target.value);
-    });
+    on('settingsAtlasBg', 'input', (e) => { applyAtlasBg(e.target.value); });
     on('settingsMarkerScale', 'input', (e) => {
       const v = parseFloat(e.target.value);
       const valEl = el('settingsMarkerScaleVal');
@@ -1499,10 +1917,8 @@ function openSettings() {
   }
 
   settingsSnapshot = {
-    canvasBg: settings.canvasBg,
-    atlasBg: settings.atlasBg,
-    showMarkers: settings.showMarkers,
-    markerScale: settings.markerScale,
+    canvasBg: settings.canvasBg, atlasBg: settings.atlasBg,
+    showMarkers: settings.showMarkers, markerScale: settings.markerScale,
     lang: settings.lang
   };
 
@@ -1575,7 +1991,6 @@ on('settingsLangEn', 'click', () => pickLang('en'));
 on('settingsLangRu', 'click', () => pickLang('ru'));
 on('btnDocs', 'click', () => window.open('WebTiledDoc.html', '_blank', 'noopener'));
 
-// ─── Bottom section toggles ───
 on('btnAtlasesTab', 'click', () => {
   const b = el('btnAtlasesTab'); if (!b) return;
   const a = b.classList.toggle('active');
@@ -1588,8 +2003,13 @@ on('btnTypesTab', 'click', () => {
   if (bottomEl) bottomEl.classList.toggle('types-hidden', !a);
   if (a && typesPanel) typesPanel.build();
 });
+
+// ─── GUARD: mobile vs desktop toggle ───
 on('btnToggleBottom', 'click', (e) => {
   if (!bottomEl) return;
+  if (typeof mobile !== 'undefined' && mobile.isMobile() && mobile.bottomOpen) {
+    return; // mobile-логика в capture-фазе
+  }
   const isCollapsed = bottomEl.classList.contains('collapsed');
   if (!isCollapsed) {
     const h = bottomEl.getBoundingClientRect().height;
@@ -1637,18 +2057,26 @@ on('btnToggleBottom', 'click', (e) => {
   });
 })();
 
-on('btnFit', 'click', () => {
-  if (renderer) { renderer.fitView(); if (zoomVal) zoomVal.textContent = renderer.view.zoom.toFixed(2); }
-});
-on('btnReset', 'click', () => {
-  if (renderer) { renderer.resetView(); if (zoomVal) zoomVal.textContent = renderer.view.zoom.toFixed(2); }
-});
+function doFit() {
+  if (renderer) {
+    renderer.fitView();
+    updateZoomLabels();
+  }
+}
+function doReset() {
+  if (renderer) {
+    renderer.resetView();
+    updateZoomLabels();
+  }
+}
+on('btnFit', 'click', doFit);
+on('btnReset', 'click', doReset);
 on('btnHelp', 'click', () => alert(
   'M — Move, B — Brush, Y — Type/Solid, T — Terrain (CLS)\n' +
   'E — Erase, R — Rect, F — Fill, K — Picker\n' +
   'WASD — pan · Middle-mouse — pan (editor & atlas)\n' +
-  'Ctrl+Z / Ctrl+Y — Undo / Redo, Ctrl+S — Save\n' +
-  'Esc — cancel pick mode'
+  'Touch: 1 finger draw · 2 fingers pan/pinch · long-tap erase\n' +
+  'Ctrl+Z / Ctrl+Y — Undo / Redo, Ctrl+S — Save'
 ));
 on('btnAddEmpty', 'click', addEmptyToBrush);
 on('btnFlood', 'click', runFloodDominant);
@@ -1657,10 +2085,17 @@ on('btnClearBrush', 'click', () => {
   if (brushPanel) brushPanel.build();
   if (tilesetTabs) tilesetTabs.refreshSelection();
 });
-if (mapNameEl) mapNameEl.addEventListener('input', () => {});
+if (mapNameEl) {
+  mapNameEl.addEventListener('input', () => {
+    const m = el('mapNameMobile');
+    if (m) m.value = mapNameEl.value;
+  });
+}
 on('btnPickCancel', 'click', () => endPick());
+on('btnWarnClose', 'click', () => {
+  if (warnBannerEl) warnBannerEl.classList.add('hidden');
+});
 
-// ─── MiniTNS Library ───
 function openMiniTNSLibrary() {
   if (!mapModel) { if (statusEl) statusEl.textContent = 'Open a map first'; return; }
   if (!RW.MiniTNSLib) { if (statusEl) statusEl.textContent = 'MiniTNSLib not loaded'; return; }
@@ -1706,7 +2141,6 @@ async function addMiniTNSFromEntry(entry) {
     tilesetTabs.activeIdx = mapModel.tilesets.indexOf(ts);
     tilesetTabs.build();
   }
-  rebuildClassicSelect();
   let typeName = entry.name;
   if (typesModel.types.find(t => t.name === typeName)) {
     let i = 2;
@@ -1755,11 +2189,11 @@ async function addMiniTNSFromEntry(entry) {
 
   activeTypeId = t.id;
   if (typesPanel) typesPanel.build();
+  if (brushPanel) brushPanel.build();
   invalidateMarkersCache();
   if (statusEl) statusEl.textContent = 'MiniTNS "' + entry.name + '" added (P' + entry.priority + ')';
 }
 
-// ─── Topbar icons fallback ───
 function setupTopbarIcons() {
   document.querySelectorAll('#topbar img.btn-ic').forEach(img => {
     img.addEventListener('error', () => {
@@ -1774,6 +2208,233 @@ function setupTopbarIcons() {
 }
 
 // ═══════════════════════════════════════════════
+// MOBILE UI
+// ═══════════════════════════════════════════════
+const mobile = {
+  isMobile: () => window.matchMedia('(max-width: 820px), ((max-width: 1024px) and (pointer: coarse))').matches,
+  rightOpen: false,
+  bottomOpen: false
+};
+
+function updateMobileBrushBtn() {
+  const btn = el('btnMobileBrush');
+  if (!btn) return;
+  const cur = TOOLS.find(t => t.id === activeTool);
+  if (!cur) return;
+  const icEl = btn.querySelector('.mtool-icon');
+  const lblEl = btn.querySelector('.mtool-label');
+  if (icEl) {
+    let html = cur.emoji || '?';
+    if (cur.icon) {
+      html = '<img src="' + cur.icon + '" alt="" ' +
+        'style="width:20px;height:20px;image-rendering:pixelated;vertical-align:-4px" ' +
+        'onerror="this.outerHTML=\'' + (cur.emoji || '?') + '\'">';
+    }
+    icEl.innerHTML = html;
+  }
+  if (lblEl) lblEl.textContent = cur.label || cur.id.toUpperCase();
+}
+
+function openToolPicker() {
+  const modal = el('toolPickerModal');
+  const grid = el('toolPickerGrid');
+  if (!modal || !grid) return;
+
+  grid.innerHTML = '';
+  for (const t of TOOLS) {
+    if (t.sep) continue;
+    const cell = document.createElement('div');
+    cell.className = 'tool-picker-cell' + (t.id === activeTool ? ' active' : '');
+    cell.dataset.tool = t.id;
+
+    const ic = document.createElement('div');
+    ic.className = 'tp-ic';
+    if (t.icon) {
+      const img = document.createElement('img');
+      img.src = t.icon;
+      img.alt = '';
+      img.onerror = () => { ic.innerHTML = ''; ic.textContent = t.emoji || '?'; };
+      ic.appendChild(img);
+    } else {
+      ic.textContent = t.emoji || '?';
+    }
+    cell.appendChild(ic);
+
+    const lbl = document.createElement('div');
+    lbl.className = 'tp-lbl';
+    lbl.textContent = t.label || t.id.toUpperCase();
+    cell.appendChild(lbl);
+
+    cell.addEventListener('click', () => {
+      handleToolClick(t.id);
+      closeToolPicker();
+    });
+
+    grid.appendChild(cell);
+  }
+
+  modal.classList.remove('hidden');
+}
+
+function closeToolPicker() {
+  const modal = el('toolPickerModal');
+  if (modal) modal.classList.add('hidden');
+}
+
+function openMapModal() {
+  const m = el('mapModal');
+  if (!m) return;
+  const mob = el('mapNameMobile');
+  if (mob && mapNameEl) mob.value = mapNameEl.value;
+  m.classList.remove('hidden');
+}
+function closeMapModal() {
+  const m = el('mapModal');
+  if (m) m.classList.add('hidden');
+}
+
+function openUtilityModal() {
+  const m = el('utilityModal');
+  if (!m) return;
+  const uv = el('utilZoomVal');
+  if (uv && renderer) uv.textContent = renderer.view.zoom.toFixed(2);
+  m.classList.remove('hidden');
+}
+function closeUtilityModal() {
+  const m = el('utilityModal');
+  if (m) m.classList.add('hidden');
+}
+
+function openRefModal() {
+  const m = el('refModal');
+  if (!m) return;
+  bindRefControls();
+  const op = el('refOpacity');
+  if (op) op.value = settings.reference.opacity;
+  const opv = el('refOpacityVal');
+  if (opv) opv.textContent = (+settings.reference.opacity).toFixed(2);
+  const un = el('refUnderlay');
+  if (un) un.checked = (settings.reference.mode === 'underlay');
+  updateRefStatus();
+  m.classList.remove('hidden');
+}
+function closeRefModal() {
+  const m = el('refModal');
+  if (m) m.classList.add('hidden');
+}
+
+function toggleRightPanel() {
+  if (mobile.rightOpen) closeRightPanel();
+  else openRightPanel();
+}
+function openRightPanel() {
+  const panel = el('rightPanel');
+  const back = el('rightBackdrop');
+  if (!panel || !back) return;
+  panel.classList.add('open');
+  back.classList.remove('hidden');
+  void back.offsetWidth;
+  back.classList.add('show');
+  mobile.rightOpen = true;
+}
+function closeRightPanel() {
+  const panel = el('rightPanel');
+  const back = el('rightBackdrop');
+  if (!panel || !back) return;
+  panel.classList.remove('open');
+  back.classList.remove('show');
+  mobile.rightOpen = false;
+  setTimeout(() => {
+    if (!mobile.rightOpen) back.classList.add('hidden');
+  }, 250);
+}
+function openBottomMobile() {
+  const b = el('bottom');
+  const bar = el('mobileBottomBar');
+  if (!b) return;
+  b.classList.add('mobile-open');
+  b.classList.remove('collapsed');
+  if (bar) bar.classList.add('hidden');
+  mobile.bottomOpen = true;
+  if (renderer) setTimeout(() => renderer.resize(), 240);
+}
+function closeBottomMobile() {
+  const b = el('bottom');
+  const bar = el('mobileBottomBar');
+  if (!b) return;
+  b.classList.remove('mobile-open');
+  if (bar) bar.classList.remove('hidden');
+  mobile.bottomOpen = false;
+  if (renderer) setTimeout(() => renderer.resize(), 240);
+}
+
+function setupMobileUI() {
+  updateMobileBrushBtn();
+
+  on('btnMobileBrush', 'click', openToolPicker);
+  on('btnMobileMap', 'click', openMapModal);
+  on('btnMobileUtility', 'click', openUtilityModal);
+  on('btnMobileRightPanel', 'click', toggleRightPanel);
+
+  on('toolPickerClose', 'click', closeToolPicker);
+  on('mapModalClose', 'click', closeMapModal);
+  on('utilityModalClose', 'click', closeUtilityModal);
+  on('refClose', 'click', closeRefModal);
+
+  // Map modal actions
+  on('mapOpenBtn', 'click', () => { closeMapModal(); const f = el('fileInput'); if (f) f.click(); });
+  on('mapSaveBtn', 'click', saveMap);
+  on('mapResizeBtn', 'click', () => { closeMapModal(); doResize(); });
+  on('mapMergeBtn', 'click', () => { closeMapModal(); doMerge(); });
+
+  // Utility modal actions
+  on('utilSavePreview', 'click', () => { closeUtilityModal(); exportMapPNG(); });
+  on('utilFit', 'click', () => { doFit(); closeUtilityModal(); });
+  on('utilReset', 'click', () => { doReset(); closeUtilityModal(); });
+  on('utilRef', 'click', () => { closeUtilityModal(); openRefModal(); });
+
+  const tpModal = el('toolPickerModal');
+  if (tpModal) tpModal.addEventListener('click', (e) => { if (e.target === tpModal) closeToolPicker(); });
+  const mm = el('mapModal');
+  if (mm) mm.addEventListener('click', (e) => { if (e.target === mm) closeMapModal(); });
+  const um = el('utilityModal');
+  if (um) um.addEventListener('click', (e) => { if (e.target === um) closeUtilityModal(); });
+  const rm = el('refModal');
+  if (rm) rm.addEventListener('click', (e) => { if (e.target === rm) closeRefModal(); });
+
+  on('rightPanelClose', 'click', closeRightPanel);
+  on('rightBackdrop', 'click', closeRightPanel);
+
+  on('btnMobileBottom', 'click', openBottomMobile);
+  on('btnMobileBottomOpen', 'click', openBottomMobile);
+
+  const toggleBtn = el('btnToggleBottom');
+  if (toggleBtn) {
+    toggleBtn.addEventListener('click', (e) => {
+      if (mobile.isMobile() && mobile.bottomOpen) {
+        e.preventDefault();
+        e.stopPropagation();
+        closeBottomMobile();
+      }
+    }, true);
+  }
+
+  window.addEventListener('resize', () => {
+    if (!mobile.isMobile()) {
+      closeRightPanel();
+      const b = el('bottom');
+      if (b) b.classList.remove('mobile-open');
+      const bar = el('mobileBottomBar');
+      if (bar) bar.classList.remove('hidden');
+      mobile.bottomOpen = false;
+    }
+  });
+}
+
+// Desktop REF button
+on('btnRef', 'click', openRefModal);
+
+// ═══════════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════════
 window.addEventListener('DOMContentLoaded', () => {
@@ -1783,10 +2444,16 @@ window.addEventListener('DOMContentLoaded', () => {
   RW.I18N.apply();
   buildTools();
   setupTopbarIcons();
+  setupMobileUI();
+  bindRefControls();
+  tryRestoreReference();
 });
 
 RW.I18N.apply();
 buildTools();
 applyAtlasBg(settings.atlasBg);
 setupTopbarIcons();
+setupMobileUI();
+bindRefControls();
+tryRestoreReference();
 })(window.RWEditor = window.RWEditor || {});
