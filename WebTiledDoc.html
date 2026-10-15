@@ -335,7 +335,6 @@ hr.doc-sep{
     <li><a href="#en-s9">Merge</a></li>
     <li><a href="#en-s10">Settings</a></li>
     <li><a href="#en-s11">Markers</a></li>
-    <li><a href="#en-s11b">Reference</a></li>
     <li><a href="#en-s12">Layers</a></li>
     <li><a href="#en-s13">Tilesets</a></li>
     <li><a href="#en-s14">PNG export</a></li>
@@ -362,7 +361,6 @@ hr.doc-sep{
     <li><a href="#ru-s9">Склейка</a></li>
     <li><a href="#ru-s10">Настройки</a></li>
     <li><a href="#ru-s11">Маркеры</a></li>
-    <li><a href="#ru-s11b">Референс</a></li>
     <li><a href="#ru-s12">Слои</a></li>
     <li><a href="#ru-s13">Tileset'ы</a></li>
     <li><a href="#ru-s14">Экспорт PNG</a></li>
@@ -383,7 +381,7 @@ hr.doc-sep{
 <div class="lang-content active" data-lang="en">
 
 <h1>WEBTILED</h1>
-<p class="subtitle">Map editor for <strong>Rusted Warfare</strong> · <code>.tmx</code> format · <b style="color:#8cf">Beta 0.4</b></p>
+<p class="subtitle">Map editor for <strong>Rusted Warfare</strong> · <code>.tmx</code> format</p>
 
 <!-- 1 -->
 <section id="en-s1">
@@ -406,8 +404,7 @@ hr.doc-sep{
 <tr><td><b>💾 Save</b></td><td>Save as <code>.tmx</code> (name from the field to the right)</td></tr>
 <tr><td><b>⤢ Size</b></td><td>Resize the map (W×H)</td></tr>
 <tr><td><b>⌘ Merge</b></td><td>Merge several maps (opens a modal window)</td></tr>
-<tr><td><b>📷 Save Preview</b></td><td>Export the map to PNG <b>500×500</b> (keeps aspect ratio, empty space is black). Reference layer is <b>not</b> included.</td></tr>
-<tr><td><b>🖼 REF</b></td><td>Reference image (overlay / underlay + opacity). Not saved in .tmx.</td></tr>
+<tr><td><b>📷 _map</b></td><td>Export the map to PNG <b>500×500</b> (keeps aspect ratio, empty space is black)</td></tr>
 <tr><td><b>Fit</b></td><td>Fit the view to the window</td></tr>
 <tr><td><b>1:1</b></td><td>Zoom 100%</td></tr>
 <tr><td><b>Zoom</b></td><td>Current zoom level</td></tr>
@@ -769,23 +766,6 @@ BR = E.BL  &amp;&amp; SE.TL &amp;&amp; S.TR</code></pre>
 <p>When exporting a 500×500 PNG, the markers are stored in a <b>readable</b> form. On a reference map (500 px on the long side) start circles are ≈ 30 px, respool dots ≈ 16 px.</p>
 </section>
 
-<!-- 11b REFERENCE -->
-<section id="en-s11b">
-<h2>11b. Reference image</h2>
-<p>Overlay / underlay image for tracing your map.</p>
-<h3>How to use</h3>
-<ul>
-<li><b>🖼 REF</b> button in the top bar (desktop) or in the UTILITY menu (mobile).</li>
-<li><b>Choose file</b> — load a PNG/JPG. On Chrome / Edge the path is remembered between sessions (File System Access API). On Firefox / Safari you re-pick the file each session.</li>
-<li><b>Opacity</b> slider — 0.00 to 1.00.</li>
-<li><b>Place under map</b> checkbox — reference goes behind all layers instead of on top.</li>
-<li><b>Remove</b> — clears the reference and forgets the path.</li>
-</ul>
-<div class="callout warn">
-Reference is <b>not</b> saved into .tmx and <b>not</b> included in the Save Preview PNG. It is a helper for authoring only.
-</div>
-</section>
-
 <!-- 12 -->
 <section id="en-s12">
 <h2>12. Working with layers</h2>
@@ -867,7 +847,7 @@ C D 5     SWi SEi ·</code></pre>
 
 <!-- 14 -->
 <section id="en-s14">
-<h2>14. Exporting the map to PNG (<code>📷 Save Preview</code>)</h2>
+<h2>14. Exporting the map to PNG (<code>📷 _map</code>)</h2>
 <p><b>What it does:</b></p>
 <ol>
 <li>Renders the whole map at <b>native resolution</b> (W×H × tileW/H).</li>
@@ -896,9 +876,6 @@ C D 5     SWi SEi ·</code></pre>
 <tr><td><span class="kbd">Ctrl+Z</span> / <span class="kbd">Ctrl+Y</span></td><td>Undo / Redo</td></tr>
 <tr><td><span class="kbd">Ctrl+S</span></td><td>Save</td></tr>
 <tr><td><span class="kbd">Esc</span></td><td>Cancel pick mode</td></tr>
-<tr><td colspan="2" style="color:#888;font-size:11px;padding-top:12px">
-Mobile: top bar buttons — <b>BRUSH</b> (tool picker) · <b>MAP</b> (open / save / name / resize / merge) · <b>UTILITY</b> (save preview / zoom / reference).
-</td></tr>
 </tbody>
 </table>
 </section>
@@ -972,6 +949,7 @@ Mobile: top bar buttons — <b>BRUSH</b> (tool picker) · <b>MAP</b> (open / sav
 <li><b>Merge replaces the current map without undo.</b> The confirm warns about this.</li>
 <li><b>There is no undo stack for tileset operations.</b></li>
 <li><b>Renaming <code>Ground</code> / <code>Units</code> / <code>Items</code></b> is allowed, but breaks the generator and the RW order.</li>
+<li><b>PNG export is always 500×500</b> with black fill for empty space.</li>
 </ul>
 </section>
 
@@ -997,7 +975,7 @@ Mobile: top bar buttons — <b>BRUSH</b> (tool picker) · <b>MAP</b> (open / sav
 <div class="lang-content" data-lang="ru">
 
 <h1>WEBTILED</h1>
-<p class="subtitle">Редактор карт для <strong>Rusted Warfare</strong> · формат <code>.tmx</code> · <b style="color:#8cf">Beta 0.4</b></p>
+<p class="subtitle">Редактор карт для <strong>Rusted Warfare</strong> · формат <code>.tmx</code></p>
 
 <!-- 1 -->
 <section id="ru-s1">
@@ -1020,8 +998,7 @@ Mobile: top bar buttons — <b>BRUSH</b> (tool picker) · <b>MAP</b> (open / sav
 <tr><td><b>💾 Save</b></td><td>Сохранить как <code>.tmx</code> (имя из поля правее)</td></tr>
 <tr><td><b>⤢ Size</b></td><td>Изменить размер карты (W×H)</td></tr>
 <tr><td><b>⌘ Merge</b></td><td>Склеить несколько карт (открывает модальное окно)</td></tr>
-<tr><td><b>📷 Скриншот</b></td><td>Экспорт карты в PNG <b>500×500</b> (сохраняет пропорции, пустота — чёрная). Reference-слой в эскиз <b>не</b> попадает.</td></tr>
-<tr><td><b>🖼 REF</b></td><td>Референс-картинка (overlay / underlay + прозрачность). Не сохраняется в .tmx.</td></tr>
+<tr><td><b>📷 _map</b></td><td>Экспорт карты в PNG <b>500×500</b> (сохраняет пропорции, пустота — чёрная)</td></tr>
 <tr><td><b>Fit</b></td><td>Подогнать вид под окно</td></tr>
 <tr><td><b>1:1</b></td><td>Масштаб 100%</td></tr>
 <tr><td><b>Zoom</b></td><td>Текущий масштаб</td></tr>
@@ -1383,23 +1360,6 @@ BR = E.BL &amp;&amp; SE.TL &amp;&amp; S.TR</code></pre>
 <p>При экспорте PNG 500×500 маркеры сохраняются в <b>читаемом</b> виде. На карте-эталоне (500px длинная сторона) круги стартов ≈ 30px, respool-точки ≈ 16px.</p>
 </section>
 
-<!-- 11b REFERENCE -->
-<section id="ru-s11b">
-<h2>11b. Референс-картинка</h2>
-<p>Overlay / underlay изображение для обводки карты.</p>
-<h3>Как пользоваться</h3>
-<ul>
-<li>Кнопка <b>🖼 REF</b> в топбаре (десктоп) или в меню UTILITY (мобила).</li>
-<li><b>Выбрать файл</b> — загрузить PNG/JPG. В Chrome / Edge путь запоминается между сессиями (File System Access API). В Firefox / Safari — выбираешь файл каждый раз.</li>
-<li>Ползунок <b>Прозрачность</b> — от 0.00 до 1.00.</li>
-<li>Чекбокс <b>Под карту</b> — референс уходит под все слои, иначе поверх.</li>
-<li><b>Удалить</b> — очищает референс и забывает путь.</li>
-</ul>
-<div class="callout warn">
-Референс <b>не</b> сохраняется в .tmx и <b>не</b> попадает в Скриншот (Save Preview). Это вспомогательный слой для авторинга.
-</div>
-</section>
-
 <!-- 12 -->
 <section id="ru-s12">
 <h2>12. Работа со слоями</h2>
@@ -1481,7 +1441,7 @@ C D 5     SWi SEi ·</code></pre>
 
 <!-- 14 -->
 <section id="ru-s14">
-<h2>14. Экспорт карты в PNG (<code>📷 Скриншот</code>)</h2>
+<h2>14. Экспорт карты в PNG (<code>📷 _map</code>)</h2>
 <p><b>Что делает:</b></p>
 <ol>
 <li>Рендерит всю карту в <b>нативном разрешении</b> (W×H × tileW/H).</li>
@@ -1510,9 +1470,6 @@ C D 5     SWi SEi ·</code></pre>
 <tr><td><span class="kbd">Ctrl+Z</span> / <span class="kbd">Ctrl+Y</span></td><td>Undo / Redo</td></tr>
 <tr><td><span class="kbd">Ctrl+S</span></td><td>Save</td></tr>
 <tr><td><span class="kbd">Esc</span></td><td>Отмена режима pick</td></tr>
-<tr><td colspan="2" style="color:#888;font-size:11px;padding-top:12px">
-Мобильный топбар: <b>BRUSH</b> (выбор инструмента) · <b>MAP</b> (открыть / сохранить / имя / размер / склейка) · <b>UTILITY</b> (скриншот / зум / референс).
-</td></tr>
 </tbody>
 </table>
 </section>
@@ -1586,6 +1543,7 @@ C D 5     SWi SEi ·</code></pre>
 <li><b>Merge заменяет текущую карту без undo.</b> Confirm предупреждает.</li>
 <li><b>Undo стека для операций с tileset'ами нет.</b></li>
 <li><b>Переименование <code>Ground</code> / <code>Units</code> / <code>Items</code></b> разрешено, но ломает генератор и RW-порядок.</li>
+<li><b>Экспорт PNG всегда 500×500</b> с чёрной заливкой пустоты.</li>
 </ul>
 </section>
 

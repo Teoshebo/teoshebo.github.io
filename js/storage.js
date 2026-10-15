@@ -5,6 +5,7 @@ const KEY_SETTINGS = 'rweditor.settings';
 const KEY_AUTOSAVE = 'rweditor.autosave';
 
 class Storage {
+  // ——— Settings
   static loadSettings() {
     try {
       const s = localStorage.getItem(KEY_SETTINGS);
@@ -15,6 +16,7 @@ class Storage {
     try { localStorage.setItem(KEY_SETTINGS, JSON.stringify(obj)); } catch (_) {}
   }
 
+  // ——— Autosave
   static hasAutosave() {
     try { return !!localStorage.getItem(KEY_AUTOSAVE); } catch (_) { return false; }
   }
@@ -40,6 +42,7 @@ class Storage {
     if (!mapModel) return false;
     const U = RW.Utils;
 
+    // layers → base64
     const layersB64 = {};
     for (const name of mapModel.layerOrder) {
       const arr = mapModel.layers[name];
@@ -68,6 +71,7 @@ class Storage {
       return true;
     } catch (e) {
       console.warn('Autosave failed:', e.message);
+      // попытка освободить место
       try { localStorage.removeItem(KEY_AUTOSAVE); } catch (_) {}
       return false;
     }
@@ -79,7 +83,11 @@ class Storage {
       if (!s) return null;
       const obj = JSON.parse(s);
       const U = RW.Utils;
+
+      // Восстанавливаем из rawXml — это проще и надёжнее
       const parsed = RW.TMX.parse(obj.rawXml);
+
+      // заменяем данные слоёв на сохранённые из base64
       for (const name of obj.layerOrder) {
         const b64 = obj.layersB64[name];
         if (!b64) continue;

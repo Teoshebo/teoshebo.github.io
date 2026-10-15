@@ -25,11 +25,6 @@ class Renderer {
     this.markerScale = 1;
     this.getMarkers = null;
 
-    // ─── REFERENCE ───
-    this.referenceImage = null;    // Image объект
-    this.referenceOpacity = 0.5;
-    this.referenceMode = 'overlay'; // 'overlay' | 'underlay'
-
     this.bgColor = '#0a0a0a';
 
     this._fps = { frames: 0, last: performance.now() };
@@ -41,19 +36,6 @@ class Renderer {
 
   setBg(color) {
     this.bgColor = color || '#0a0a0a';
-    this.render();
-  }
-
-  setReference(img) {
-    this.referenceImage = img || null;
-    this.render();
-  }
-  setReferenceOpacity(v) {
-    this.referenceOpacity = Math.max(0, Math.min(1, v));
-    this.render();
-  }
-  setReferenceMode(mode) {
-    this.referenceMode = (mode === 'underlay') ? 'underlay' : 'overlay';
     this.render();
   }
 
@@ -187,18 +169,6 @@ class Renderer {
     return c;
   }
 
-  // ─── REFERENCE ───
-  _drawReference(ctx, map) {
-    if (!this.referenceImage) return;
-    const w = map.W * map.tw;
-    const h = map.H * map.th;
-    ctx.save();
-    ctx.globalAlpha = this.referenceOpacity;
-    ctx.imageSmoothingEnabled = true;
-    ctx.drawImage(this.referenceImage, 0, 0, w, h);
-    ctx.restore();
-  }
-
   render() {
     const map = this.getMap();
     const r = this.wrap.getBoundingClientRect();
@@ -215,11 +185,6 @@ class Renderer {
     ctx.translate(this.view.x, this.view.y);
     ctx.scale(this.view.zoom, this.view.zoom);
     ctx.imageSmoothingEnabled = false;
-
-    // ─── UNDERLAY ───
-    if (this.referenceMode === 'underlay') {
-      this._drawReference(ctx, map);
-    }
 
     const tw = map.tw, th = map.th;
     const chunksX = Math.ceil(map.W / CHUNK);
@@ -261,11 +226,6 @@ class Renderer {
       ctx.stroke();
     }
 
-    // ─── OVERLAY (до маркеров) ───
-    if (this.referenceMode === 'overlay') {
-      this._drawReference(ctx, map);
-    }
-
     // ─── MARKERS ───
     if (this.showMarkers && this.getMarkers) {
       const m = this.getMarkers();
@@ -300,12 +260,16 @@ class Renderer {
     this._tickFps();
   }
 
+  // ─── MARKERS ───
+  // Круг: чёрный alpha 50%. Цифра: цвет игрока, Arial Black.
+  // Радиусы в тайлах (см. RW.Markers.RADIUS_TILES), userScale = this.markerScale.
   _drawMarkers(ctx, map, markers, tw, th) {
     const scale = this.markerScale || 1;
     const tile = Math.min(tw, th);
     const scaleInv = 1 / this.view.zoom;
     const M = RW.Markers;
 
+    // ─── ResPools: жёлтые точки ───
     const dotR = M.DOT_RADIUS_TILES * tile * scale;
     for (const p of markers.respools) {
       const cx = p.x * tw + tw / 2;
@@ -319,6 +283,7 @@ class Renderer {
       ctx.stroke();
     }
 
+    // ─── Starts: чёрный полупрозрачный круг + цифра ───
     const circR = M.RADIUS_TILES * tile * scale;
     const fontPx = circR * 2 * M.FONT_RATIO;
 
@@ -327,19 +292,23 @@ class Renderer {
       const cy = s.y * th + th / 2;
       const color = M.colorFor(s.team);
 
+      // чёрный круг alpha 50%
       ctx.beginPath();
       ctx.arc(cx, cy, circR, 0, Math.PI * 2);
       ctx.fillStyle = 'rgba(0,0,0,0.5)';
       ctx.fill();
 
+      // обводка тонкая, тоже полупрозрачная
       ctx.strokeStyle = 'rgba(0,0,0,0.7)';
       ctx.lineWidth = Math.max(1, circR * 0.06);
       ctx.stroke();
 
+      // цифра
       ctx.font = 'bold ' + fontPx + 'px "Arial Black", Arial, sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillStyle = color;
+      // небольшая чёрная тень для контраста на любом фоне
       ctx.shadowColor = 'rgba(0,0,0,0.9)';
       ctx.shadowBlur = fontPx * 0.15;
       ctx.fillText(String(s.team + 1), cx, cy);
