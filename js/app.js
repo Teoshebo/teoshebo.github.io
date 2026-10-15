@@ -24,7 +24,7 @@ let activeLayer = null;
 let brushGroup = [];
 let brushSettings = { size: 0, shape: 'square' };
 
-let activeClassicTerrain = null; // { tsFirstgid, terrName }
+let activeClassicTerrain = null;
 let classicMaskCache = new Map();
 let classicEmptyCache = new Map();
 
@@ -153,7 +153,7 @@ RW.I18N = {
 };
 
 // ═══════════════════════════════════════════════
-// CLASSIC AUTOTILE — stable anchor (firstgid + name)
+// CLASSIC AUTOTILE — stable anchor
 // ═══════════════════════════════════════════════
 function resolveClassicAnchor() {
   if (!activeClassicTerrain || !mapModel) return null;
@@ -182,6 +182,8 @@ const TOOLS = [
   { sep: true },
   { id: 'autotile', label: 'AUTO', hkPos: -1, icon: 'asset/icon/auto.png', emoji: '⚙', title: 'Autotile area' }
 ];
+
+const LONG_TAP_TOOLS = new Set(['brush', 'classic', 'terrain']);
 
 function makeIconEl(t) {
   if (t.icon) {
@@ -851,44 +853,117 @@ function invalidateEntry(entry) {
   }
 }
 
-// ─── WASD pan ───
-const panKeys = new Set();
-let panRaf = null;
-function startPanKey(code) {
-  panKeys.add(code);
-  if (!panRaf) panRaf = requestAnimationFrame(panTick);
-}
-function stopPanKey(code) { panKeys.delete(code); }
-function panTick() {
-  panRaf = null;
-  if (!renderer || !panKeys.size) return;
-  const speed = 12 / renderer.view.zoom;
-  let dx = 0, dy = 0;
-  if (panKeys.has('KeyW')) dy -= 1;
-  if (panKeys.has('KeyS')) dy += 1;
-  if (panKeys.has('KeyA')) dx -= 1;
-  if (panKeys.has('KeyD')) dx += 1;
-  if (dx || dy) {
-    renderer.view.x -= dx * speed;
-    renderer.view.y -= dy * speed;
-    renderer.render();
+// ═══════════════════════════════════════════════
+// POINTER / TOUCH STATE
+// ═══════════════════════════════════════════════
+const pointers = new Map();        // pointerId → { x, y, isTouch }
+let drawingPointerId = null;
+let longTapTimer = null;
+let longTapFired = false;
+let longTapStart = { x: 0, y: 0 };
+let multiPointerActive = false;
+let lastPinchDist = 0;
+let lastPinchMidX = 0;
+let lastPinchMidY = 0;
+
+function cancelLongTap() {
+  if (longTapTimer) {
+    clearTimeout(longTapTimer);
+    longTapTimer = null;
   }
-  if (panKeys.size) panRaf = requestAnimationFrame(panTick);
 }
 
-// ─── Mouse ───
-if (cv) cv.addEventListener('mousedown', (e) => {
+function startLongTapTimer() {
+  cancelLongTap();
+  longTapFired = false;
+  if (!LONG_TAP_TOOLS.has(activeTool)) return;
+  longTapTimer = setTimeout(() => {
+    longTapTimer = null;
+    longTapFired = true;
+    triggerLongTap();
+  }, 500);
+}
+
+function triggerLongTap() {
+  if (!renderer || !mapModel || !activeLayer) return;
+  const pos = renderer.screenToTile(longTapStart.x, longTapStart.y);
+  const tx = pos.tx, ty = pos.ty;
+  if (tx < 0 || ty < 0 || tx >= mapModel.W || ty >= mapModel.H) return;
+
+  // Стираем все клетки кисти в этой точке
+  strokeChanges = null;
+  paintBrushCells(tx, ty, () => 0);
+  endStroke();
+  painting = false;
+  rectStart = null; rectCurrent = null;
+  renderer.rectStart = null; renderer.rectCurrent = null;
+  renderer.render();
+  if (statusEl) statusEl.textContent = 'Long-tap erase @ ' + tx + ',' + ty;
+}
+
+function beginMultiTouch() {
+  // Отменяем текущий штрих
+  if (painting) {
+    painting = false;
+    if (activeTool === 'terrain') finalizeAutotileForStroke();
+    if (activeTool === 'classic') finalizeClassicForStroke();
+    endStroke();
+    renderer.rectStart = null; renderer.rectCurrent = null;
+    renderer.render();
+  }
+  drag.active = false;
+  if (cv) cv.classList.remove('drag');
+  cancelLongTap();
+
+  const arr = Array.from(pointers.values());
+  if (arr.length >= 2) {
+    lastPinchDist = Math.hypot(arr[0].x - arr[1].x, arr[0].y - arr[1].y);
+    lastPinchMidX = (arr[0].x + arr[1].x) / 2;
+    lastPinchMidY = (arr[0].y + arr[1].y) / 2;
+  }
+  multiPointerActive = true;
+}
+
+// ═══════════════════════════════════════════════
+// CANVAS POINTER HANDLERS
+// ═══════════════════════════════════════════════
+if (cv) cv.addEventListener('pointerdown', (e) => {
   if (!renderer) return;
-  if (e.button !== 0 && e.button !== 1) return;
-  if (activeTool === 'pan' || e.button === 1) {
-    drag.active = true; drag.x = e.clientX; drag.y = e.clientY;
-    cv.classList.add('drag');
+  if (e.pointerType === 'touch') e.preventDefault();
+  if (e.button === 2) return;
+
+  const isTouch = e.pointerType === 'touch';
+  const isMiddle = e.button === 1;
+  pointers.set(e.pointerId, { x: e.clientX, y: e.clientY, isTouch });
+
+  try { cv.setPointerCapture(e.pointerId); } catch (_) {}
+
+  // Второй палец → pinch / pan
+  if (pointers.size >= 2) {
+    beginMultiTouch();
     return;
   }
+
+  // Первый указатель
+  if (activeTool === 'pan' || isMiddle) {
+    drag.active = true;
+    drag.x = e.clientX; drag.y = e.clientY;
+    if (!isTouch) cv.classList.add('drag');
+    return;
+  }
+
   if (!mapModel) return;
   if (!activeLayer) { if (statusEl) statusEl.textContent = 'Select active layer'; return; }
+
+  drawingPointerId = e.pointerId;
+
   const pos = renderer.screenToTile(e.clientX, e.clientY);
   const tx = pos.tx, ty = pos.ty;
+
+  // Long-tap
+  longTapStart.x = e.clientX;
+  longTapStart.y = e.clientY;
+  startLongTapTimer();
 
   if (activeTool === 'brush') {
     if (!brushGroup.length) { if (statusEl) statusEl.textContent = 'Brush empty'; return; }
@@ -921,26 +996,80 @@ if (cv) cv.addEventListener('mousedown', (e) => {
     if (!brushGroup.length) { if (statusEl) statusEl.textContent = 'Brush empty'; return; }
     floodFill(tx, ty, pickWeightedTile());
     renderer.render();
+    cancelLongTap();
   } else if (activeTool === 'picker') {
     pickerAt(tx, ty);
     renderer.render();
+    cancelLongTap();
   }
 });
 
-window.addEventListener('mousemove', (e) => {
+if (cv) cv.addEventListener('pointermove', (e) => {
   if (!renderer) return;
+
+  // Hover (мышь без кнопки) — трекаем только мышь
+  if (!pointers.has(e.pointerId)) {
+    if (e.pointerType === 'mouse' && mapModel) {
+      const pos = renderer.screenToTile(e.clientX, e.clientY);
+      renderer.hoverTile = { tx: pos.tx, ty: pos.ty };
+      renderer.render();
+      updateInfo(pos.tx, pos.ty);
+    }
+    return;
+  }
+
+  const prev = pointers.get(e.pointerId);
+  const dx = e.clientX - prev.x;
+  const dy = e.clientY - prev.y;
+  prev.x = e.clientX;
+  prev.y = e.clientY;
+
+  // Cancel long-tap при сдвиге
+  if (longTapTimer && (Math.abs(e.clientX - longTapStart.x) > 6 ||
+                       Math.abs(e.clientY - longTapStart.y) > 6)) {
+    cancelLongTap();
+  }
+
+  // Multi-touch: pinch + pan
+  if (pointers.size >= 2) {
+    const arr = Array.from(pointers.values());
+    const d = Math.hypot(arr[0].x - arr[1].x, arr[0].y - arr[1].y);
+    const mx = (arr[0].x + arr[1].x) / 2;
+    const my = (arr[0].y + arr[1].y) / 2;
+
+    // Pan по сдвигу midpoint
+    renderer.view.x += (mx - lastPinchMidX);
+    renderer.view.y += (my - lastPinchMidY);
+
+    // Zoom по изменению distance
+    if (lastPinchDist > 8 && d > 8) {
+      const k = d / lastPinchDist;
+      if (Math.abs(k - 1) > 0.002) {
+        const r = wrap.getBoundingClientRect();
+        renderer.zoomAt(mx - r.left, my - r.top, k);
+      }
+    }
+
+    lastPinchDist = d;
+    lastPinchMidX = mx;
+    lastPinchMidY = my;
+    renderer.render();
+    if (zoomVal) zoomVal.textContent = renderer.view.zoom.toFixed(2);
+    return;
+  }
+
+  // Один указатель — pan (при drag.active или pan-tool)
   if (drag.active) {
-    const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
-    drag.x = e.clientX; drag.y = e.clientY;
-    renderer.view.x += dx; renderer.view.y += dy;
+    renderer.view.x += dx;
+    renderer.view.y += dy;
     renderer.render();
     return;
   }
-  if (!mapModel) { if (infoEl) infoEl.textContent = '—'; return; }
-  const pos = renderer.screenToTile(e.clientX, e.clientY);
-  renderer.hoverTile = { tx: pos.tx, ty: pos.ty };
-  const leftHeld = (e.buttons & 1) !== 0;
-  if (painting && leftHeld) {
+
+  // Один указатель — рисование
+  if (painting) {
+    const pos = renderer.screenToTile(e.clientX, e.clientY);
+    renderer.hoverTile = { tx: pos.tx, ty: pos.ty };
     const key = pos.tx + ',' + pos.ty;
     if (key !== lastPaintKey) {
       lastPaintKey = key;
@@ -956,39 +1085,85 @@ window.addEventListener('mousemove', (e) => {
         renderer.rectCurrent = rectCurrent;
       }
     }
-  } else if (painting && !leftHeld) {
-    painting = false;
-    if (activeTool === 'terrain') finalizeAutotileForStroke();
-    if (activeTool === 'classic') finalizeClassicForStroke();
-    endStroke();
-    renderer.rectStart = null; renderer.rectCurrent = null;
+    renderer.render();
+    updateInfo(pos.tx, pos.ty);
   }
-  renderer.render();
-  updateInfo(pos.tx, pos.ty);
 });
 
-window.addEventListener('mouseup', () => {
+if (cv) cv.addEventListener('pointerup', (e) => {
   if (!renderer) return;
-  if (drag.active) { drag.active = false; if (cv) cv.classList.remove('drag'); return; }
-  if (painting) {
-    if (activeTool === 'rect' && rectStart && rectCurrent && brushGroup.length) {
-      applyRect(rectStart.x, rectStart.y, rectCurrent.x, rectCurrent.y, pickWeightedTile);
-    } else {
-      if (activeTool === 'terrain') finalizeAutotileForStroke();
-      if (activeTool === 'classic') finalizeClassicForStroke();
+  const wasDrawing = (drawingPointerId === e.pointerId);
+  pointers.delete(e.pointerId);
+  cancelLongTap();
+
+  // Если long-tap уже сработал — не продолжаем
+  if (longTapFired) {
+    longTapFired = false;
+    if (pointers.size === 0) {
+      multiPointerActive = false;
+      drag.active = false;
+      drawingPointerId = null;
+    }
+    return;
+  }
+
+  if (pointers.size === 0) {
+    multiPointerActive = false;
+
+    if (drag.active) {
+      drag.active = false;
+      if (cv) cv.classList.remove('drag');
+    }
+
+    if (painting) {
+      if (activeTool === 'rect' && rectStart && rectCurrent && brushGroup.length) {
+        applyRect(rectStart.x, rectStart.y, rectCurrent.x, rectCurrent.y, pickWeightedTile);
+      } else {
+        if (activeTool === 'terrain') finalizeAutotileForStroke();
+        if (activeTool === 'classic') finalizeClassicForStroke();
+        endStroke();
+      }
+      painting = false;
+      rectStart = null; rectCurrent = null;
+      renderer.rectStart = null; renderer.rectCurrent = null;
+      renderer.render();
+    }
+    drawingPointerId = null;
+  } else if (pointers.size === 1 && multiPointerActive) {
+    // Остался один палец после pinch → pan
+    const rem = Array.from(pointers.values())[0];
+    drag.active = true;
+    drag.x = rem.x;
+    drag.y = rem.y;
+  }
+});
+
+if (cv) cv.addEventListener('pointercancel', (e) => {
+  pointers.delete(e.pointerId);
+  cancelLongTap();
+  if (pointers.size === 0) {
+    if (painting) {
+      painting = false;
       endStroke();
     }
-    painting = false; rectStart = null; rectCurrent = null;
-    renderer.rectStart = null; renderer.rectCurrent = null;
-    renderer.render();
+    drag.active = false;
+    multiPointerActive = false;
+    drawingPointerId = null;
+    if (renderer) renderer.render();
   }
 });
 
-if (cv) cv.addEventListener('mouseleave', () => {
-  if (!renderer) return;
-  renderer.hoverTile = null;
-  renderer.render();
+if (cv) cv.addEventListener('pointerleave', (e) => {
+  if (e.pointerType === 'mouse' && !pointers.has(e.pointerId)) {
+    if (renderer) {
+      renderer.hoverTile = null;
+      renderer.render();
+    }
+  }
 });
+
+// Отключаем контекстное меню (long-press на Android)
+if (cv) cv.addEventListener('contextmenu', (e) => e.preventDefault());
 
 function updateInfo(tx, ty) {
   if (!infoEl) return;
@@ -1000,6 +1175,31 @@ function updateInfo(tx, ty) {
     if (id) out += ' · ' + n + '=<b>' + id + '</b>';
   }
   infoEl.innerHTML = out;
+}
+
+// ─── WASD pan ───
+const panKeys = new Set();
+let panRaf = null;
+function startPanKey(code) {
+  panKeys.add(code);
+  if (!panRaf) panRaf = requestAnimationFrame(panTick);
+}
+function stopPanKey(code) { panKeys.delete(code); }
+function panTick() {
+  panRaf = null;
+  if (!renderer || !panKeys.size) return;
+  const speed = 12 / renderer.view.zoom;
+  let dx = 0, dy = 0;
+  if (panKeys.has('KeyW')) dy -= 1;
+  if (panKeys.has('KeyS')) dy += 1;
+  if (panKeys.has('KeyA')) dx -= 1;
+  if (panKeys.has('KeyD')) dx += 1;
+  if (dx || dy) {
+    renderer.view.x -= dx * speed;
+    renderer.view.y -= dy * speed;
+    renderer.render();
+  }
+  if (panKeys.size) panRaf = requestAnimationFrame(panTick);
 }
 
 if (wrap) wrap.addEventListener('wheel', (e) => {
@@ -1264,7 +1464,6 @@ on('tilesetInput', 'change', async (e) => {
   }
 });
 
-// ─── MiniTNS import (local file) ───
 function startMiniTNSImport() {
   if (!mapModel) { if (statusEl) statusEl.textContent = 'Open a map first'; return; }
   const inp = document.createElement('input');
@@ -1356,7 +1555,6 @@ async function importMiniTNS(file) {
   if (statusEl) statusEl.textContent = 'MiniTNS: tileset "' + name + '" + type "' + typeName + '"';
 }
 
-// ─── Markers cache ───
 let _markersCache = null;
 function getMarkersCached() {
   if (!mapModel) return { starts: [], respools: [] };
@@ -1366,7 +1564,6 @@ function getMarkersCached() {
 }
 function invalidateMarkersCache() { _markersCache = null; }
 
-// ─── Export _map ───
 function findTsForId(tilesets, id) {
   let f = null;
   for (const ts of tilesets) { if (id >= ts.firstgid) f = ts; else break; }
@@ -1459,7 +1656,6 @@ function exportMapPNG() {
   }
 }
 
-// ─── Settings modal ───
 let settingsModalEl = null;
 let settingsSnapshot = null;
 
@@ -1564,7 +1760,6 @@ on('settingsLangEn', 'click', () => pickLang('en'));
 on('settingsLangRu', 'click', () => pickLang('ru'));
 on('btnDocs', 'click', () => window.open('WebTiledDoc.html', '_blank', 'noopener'));
 
-// ─── Bottom section toggles ───
 on('btnAtlasesTab', 'click', () => {
   const b = el('btnAtlasesTab'); if (!b) return;
   const a = b.classList.toggle('active');
@@ -1636,8 +1831,8 @@ on('btnHelp', 'click', () => alert(
   'M — Move, B — Brush, Y — Type/Solid, T — Terrain (CLS)\n' +
   'E — Erase, R — Rect, F — Fill, K — Picker\n' +
   'WASD — pan · Middle-mouse — pan (editor & atlas)\n' +
-  'Ctrl+Z / Ctrl+Y — Undo / Redo, Ctrl+S — Save\n' +
-  'Esc — cancel pick mode'
+  'Touch: 1 finger draw · 2 fingers pan/pinch · long-tap erase\n' +
+  'Ctrl+Z / Ctrl+Y — Undo / Redo, Ctrl+S — Save'
 ));
 on('btnAddEmpty', 'click', addEmptyToBrush);
 on('btnFlood', 'click', runFloodDominant);
@@ -1649,7 +1844,6 @@ on('btnClearBrush', 'click', () => {
 if (mapNameEl) mapNameEl.addEventListener('input', () => {});
 on('btnPickCancel', 'click', () => endPick());
 
-// ─── MiniTNS Library ───
 function openMiniTNSLibrary() {
   if (!mapModel) { if (statusEl) statusEl.textContent = 'Open a map first'; return; }
   if (!RW.MiniTNSLib) { if (statusEl) statusEl.textContent = 'MiniTNSLib not loaded'; return; }
@@ -1748,7 +1942,6 @@ async function addMiniTNSFromEntry(entry) {
   if (statusEl) statusEl.textContent = 'MiniTNS "' + entry.name + '" added (P' + entry.priority + ')';
 }
 
-// ─── Topbar icons fallback ───
 function setupTopbarIcons() {
   document.querySelectorAll('#topbar img.btn-ic').forEach(img => {
     img.addEventListener('error', () => {
@@ -1859,7 +2052,6 @@ function closeRightPanel() {
   if (!panel || !back) return;
   panel.classList.remove('open');
   back.classList.remove('show');
-  const wasOpen = mobile.rightOpen;
   mobile.rightOpen = false;
   setTimeout(() => {
     if (!mobile.rightOpen) back.classList.add('hidden');
@@ -1905,7 +2097,6 @@ function setupMobileUI() {
   on('btnMobileBottom', 'click', openBottomMobile);
   on('btnMobileBottomOpen', 'click', openBottomMobile);
 
-  // на мобиле btnToggleBottom внутри bottom закрывает fullscreen-режим
   const toggleBtn = el('btnToggleBottom');
   if (toggleBtn) {
     toggleBtn.addEventListener('click', (e) => {
