@@ -2,6 +2,24 @@
 'use strict';
 const U = RW.Utils;
 
+// ═══════════════════════════════════════════════
+// [PATCH 1] FORCE MOBILE — читаем ?mobile=1 / sessionStorage
+// и ставим класс на <html>. Делается ДО всех обработчиков,
+// чтобы media-queries в style.css сработали корректно.
+// ═══════════════════════════════════════════════
+(function applyForceMode() {
+  try {
+    var params = new URLSearchParams(location.search);
+    var fm = params.get('mobile') === '1';
+    var fd = params.get('mobile') === '0';
+    if (!fm && !fd) {
+      if (sessionStorage.getItem('webtiled.isMobile') === '1') fm = true;
+    }
+    if (fm) document.documentElement.classList.add('force-mobile');
+    if (fd) document.documentElement.classList.add('force-desktop');
+  } catch (e) {}
+})();
+
 function on(id, event, handler) {
   const e = document.getElementById(id);
   if (e) e.addEventListener(event, handler);
@@ -228,6 +246,48 @@ const TOOLS = [
 
 const LONG_TAP_TOOLS = new Set(['brush', 'classic', 'terrain']);
 
+// ═══════════════════════════════════════════════
+// [PATCH 2] TOOL → BOTTOM TAB AUTO-SWITCH
+// TERRAIN → TYPES
+// BRUSH / CLASSIC / ERASE / RECT / FILL / PICK → ATLASES
+// PAN / AUTO → не трогаем
+// ═══════════════════════════════════════════════
+const TOOL_TO_TAB = {
+  brush:   'btnAtlasesTab',
+  classic: 'btnAtlasesTab',
+  eraser:  'btnAtlasesTab',
+  rect:    'btnAtlasesTab',
+  fill:    'btnAtlasesTab',
+  picker:  'btnAtlasesTab',
+  terrain: 'btnTypesTab'
+};
+
+function autoSwitchBottomTabForTool(toolId) {
+  const tabId = TOOL_TO_TAB[toolId];
+  if (!tabId) return;
+
+  const bottom = document.getElementById('bottom');
+  if (!bottom) return;
+
+  // Развернуть нижнюю панель, если она свёрнута
+  if (bottom.classList.contains('collapsed')) {
+    const tg = document.getElementById('btnToggleBottom');
+    if (tg) tg.click();
+  }
+
+  const target = document.getElementById(tabId);
+  if (!target) return;
+  if (target.classList.contains('active')) return;
+
+  // Переключаемся ТОЛЬКО между ATLASES и TYPES,
+  // чтобы не сбить GENERATOR / 3D если они открыты вручную.
+  const otherId = (tabId === 'btnAtlasesTab') ? 'btnTypesTab' : 'btnAtlasesTab';
+  const other = document.getElementById(otherId);
+  if (other && other.classList.contains('active')) other.click();
+
+  target.click();
+}
+
 function makeIconEl(t) {
   if (t.icon) {
     const img = document.createElement('img');
@@ -320,6 +380,9 @@ function handleToolClick(id) {
   if (brushPanel) brushPanel.build();
   if (typeof updateMobileBrushBtn === 'function') updateMobileBrushBtn();
   checkTNSLayerWarning();
+
+  // [PATCH 2] — авто-переключение вкладки нижней панели
+  autoSwitchBottomTabForTool(id);
 }
 
 // ─── Pick mode ───
@@ -1372,7 +1435,6 @@ async function initFromParsed(parsed, filename) {
   tilesetTabs.build();
   typesPanel.build();
   buildTools();
-  // rebuildClassicSelect больше нет — auto-select делается в brushPanel.buildClassicList()
 
   if (mapNameEl) {
     const n = filename || parsed._restoredFilename || 'map.tmx';
@@ -1398,7 +1460,6 @@ on('btnSave', 'click', saveMap);
 function saveMap() {
   if (!mapModel) { if (statusEl) statusEl.textContent = 'No map'; return; }
   try {
-    // sync mobile → desktop
     const mob = el('mapNameMobile');
     if (mob && mapNameEl && mob.value) mapNameEl.value = mob.value;
     const xml = RW.TMX.save(mapModel, typesModel);
@@ -1768,7 +1829,6 @@ function applyReferenceToRenderer() {
 }
 
 async function pickReference() {
-  // Modern API — Chrome/Edge
   if (window.showOpenFilePicker) {
     try {
       const [handle] = await window.showOpenFilePicker({
@@ -1794,7 +1854,6 @@ async function pickReference() {
     }
     return;
   }
-  // Fallback — <input type=file>
   const inp = document.createElement('input');
   inp.type = 'file';
   inp.accept = 'image/*';
@@ -2008,7 +2067,7 @@ on('btnTypesTab', 'click', () => {
 on('btnToggleBottom', 'click', (e) => {
   if (!bottomEl) return;
   if (typeof mobile !== 'undefined' && mobile.isMobile() && mobile.bottomOpen) {
-    return; // mobile-логика в capture-фазе
+    return;
   }
   const isCollapsed = bottomEl.classList.contains('collapsed');
   if (!isCollapsed) {
@@ -2208,10 +2267,16 @@ function setupTopbarIcons() {
 }
 
 // ═══════════════════════════════════════════════
-// MOBILE UI
+// [PATCH 3] MOBILE UI — детект переписан
 // ═══════════════════════════════════════════════
 const mobile = {
-  isMobile: () => window.matchMedia('(max-width: 820px), ((max-width: 1024px) and (pointer: coarse))').matches,
+  isMobile: () => {
+    const root = document.documentElement;
+    if (root.classList.contains('force-mobile')) return true;
+    if (root.classList.contains('force-desktop')) return false;
+    return window.matchMedia('(pointer: coarse)').matches ||
+           window.matchMedia('(max-width: 500px)').matches;
+  },
   rightOpen: false,
   bottomOpen: false
 };
@@ -2381,13 +2446,11 @@ function setupMobileUI() {
   on('utilityModalClose', 'click', closeUtilityModal);
   on('refClose', 'click', closeRefModal);
 
-  // Map modal actions
   on('mapOpenBtn', 'click', () => { closeMapModal(); const f = el('fileInput'); if (f) f.click(); });
   on('mapSaveBtn', 'click', saveMap);
   on('mapResizeBtn', 'click', () => { closeMapModal(); doResize(); });
   on('mapMergeBtn', 'click', () => { closeMapModal(); doMerge(); });
 
-  // Utility modal actions
   on('utilSavePreview', 'click', () => { closeUtilityModal(); exportMapPNG(); });
   on('utilFit', 'click', () => { doFit(); closeUtilityModal(); });
   on('utilReset', 'click', () => { doReset(); closeUtilityModal(); });
