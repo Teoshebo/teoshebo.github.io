@@ -86,7 +86,9 @@ html,body{margin:0;height:100%;overflow:hidden;background:#111;color:#ddd;
 
 /* CANVAS */
 #wrap{flex:1;position:relative;overflow:hidden;background:#0a0a0a}
-canvas#cv{display:block;cursor:grab;image-rendering:pixelated}
+canvas#cv{display:block;cursor:grab;image-rendering:pixelated;
+  touch-action:none;user-select:none;-webkit-user-select:none;
+  -webkit-touch-callout:none}
 canvas#cv.drag{cursor:grabbing}
 canvas#cv.crosshair{cursor:crosshair}
 #fps{position:absolute;left:10px;top:10px;background:rgba(0,0,0,.85);
