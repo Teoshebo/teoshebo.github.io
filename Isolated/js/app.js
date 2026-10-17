@@ -106,6 +106,8 @@ const I18N = {
     'btn.fit': 'Fit',
     'btn.reset': '1:1',
     'btn.ref': 'REF',
+    'btn.fullscreen': 'Fullscreen',
+    'btn.exitFullscreen': 'Exit Fullscreen',
     'field.filename': 'Filename',
     'field.zoom': 'Zoom',
     'status.idle': 'Load .tmx file',
@@ -144,6 +146,8 @@ const I18N = {
     'btn.fit': 'Fit',
     'btn.reset': '1:1',
     'btn.ref': 'REF',
+    'btn.fullscreen': 'На весь экран',
+    'btn.exitFullscreen': 'Выйти',
     'field.filename': 'Имя файла',
     'field.zoom': 'Зум',
     'status.idle': 'Загрузи .tmx файл',
@@ -194,6 +198,7 @@ RW.I18N = {
     RW.Storage.saveSettings(settings);
     this.apply();
     if (typeof updateMobileBrushBtn === 'function') updateMobileBrushBtn();
+    if (typeof updateFullscreenBtn === 'function') updateFullscreenBtn();
   }
 };
 
@@ -1393,7 +1398,6 @@ async function initFromParsed(parsed, filename) {
   tilesetTabs.build();
   typesPanel.build();
   buildTools();
-  // rebuildClassicSelect больше нет — auto-select делается в brushPanel.buildClassicList()
 
   if (mapNameEl) {
     const n = filename || parsed._restoredFilename || 'map.tmx';
@@ -1419,7 +1423,6 @@ on('btnSave', 'click', saveMap);
 function saveMap() {
   if (!mapModel) { if (statusEl) statusEl.textContent = 'No map'; return; }
   try {
-    // sync mobile → desktop
     const mob = el('mapNameMobile');
     if (mob && mapNameEl && mob.value) mapNameEl.value = mob.value;
     const xml = RW.TMX.save(mapModel, typesModel);
@@ -1908,6 +1911,54 @@ function bindRefControls() {
 }
 
 // ═══════════════════════════════════════════════
+// FULLSCREEN API
+// ═══════════════════════════════════════════════
+function toggleFullscreen() {
+  const doc = window.document;
+  const docEl = doc.documentElement;
+
+  const requestFullScreen = docEl.requestFullscreen || docEl.mozRequestFullScreen || docEl.webkitRequestFullScreen || docEl.msRequestFullscreen;
+  const cancelFullScreen = doc.exitFullscreen || doc.mozCancelFullScreen || doc.webkitExitFullscreen || doc.msExitFullscreen;
+
+  if (!doc.fullscreenElement && !doc.mozFullScreenElement && !doc.webkitFullscreenElement && !doc.msFullscreenElement) {
+    if (requestFullScreen) {
+      requestFullScreen.call(docEl).catch(err => {
+        if (statusEl) statusEl.textContent = 'Fullscreen error: ' + err.message;
+      });
+    } else {
+      if (statusEl) statusEl.textContent = 'Fullscreen не поддерживается на этом устройстве (iOS Safari)';
+    }
+  } else {
+    if (cancelFullScreen) {
+      cancelFullScreen.call(doc);
+    }
+  }
+}
+
+function updateFullscreenBtn() {
+  const isFull = document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement;
+  const btnTop = el('btnMobileFullscreen');
+  const btnUtil = el('utilFullscreen');
+  
+  if (btnTop) btnTop.textContent = isFull ? '⛶' : '⛶'; 
+  if (btnUtil) {
+    const lbl = btnUtil.querySelector('.ma-lbl');
+    if (lbl) lbl.textContent = RW.I18N.t(isFull ? 'btn.exitFullscreen' : 'btn.fullscreen');
+    const ic = btnUtil.querySelector('.ma-ic');
+    if (ic) ic.textContent = isFull ? '🗗' : '⛶';
+  }
+  
+  setTimeout(() => {
+    if (renderer) renderer.resize();
+  }, 200);
+}
+
+document.addEventListener('fullscreenchange', updateFullscreenBtn);
+document.addEventListener('webkitfullscreenchange', updateFullscreenBtn);
+document.addEventListener('mozfullscreenchange', updateFullscreenBtn);
+document.addEventListener('MSFullscreenChange', updateFullscreenBtn);
+
+// ═══════════════════════════════════════════════
 // SETTINGS MODAL
 // ═══════════════════════════════════════════════
 let settingsModalEl = null;
@@ -2394,6 +2445,8 @@ function setupMobileUI() {
   on('btnMobileMap', 'click', openMapModal);
   on('btnMobileUtility', 'click', openUtilityModal);
   on('btnMobileRightPanel', 'click', toggleRightPanel);
+  on('btnMobileFullscreen', 'click', toggleFullscreen);
+  on('utilFullscreen', 'click', () => { closeUtilityModal(); toggleFullscreen(); });
 
   on('toolPickerClose', 'click', closeToolPicker);
   on('mapModalClose', 'click', closeMapModal);
