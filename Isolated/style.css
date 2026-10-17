@@ -1472,3 +1472,40 @@ canvas#cv.crosshair{cursor:crosshair}
   .ref-field input[type=checkbox]{width:22px;height:22px}
   .ref-field-check > span{font-size:14px}
 }
+/* ═══════════════════════════════════════════════
+   MOBILE FULLSCREEN BUTTON
+   ═══════════════════════════════════════════════ */
+@media (pointer: coarse), (max-width: 500px) {
+  #btnMobileFullscreen {
+    background: #225;
+    border-color: #44a;
+    color: #cff;
+    font-size: 20px;
+    line-height: 1;
+    padding: 0;
+    min-width: 44px;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+}
+
+/* Очень узкие экраны (портрет) */
+@media (max-width: 480px) {
+  #topbar button {
+    padding: 6px 8px;
+    font-size: 12px;
+  }
+  #btnMobileBrush .mtool-label,
+  #btnMobileMap .mtool-label,
+  #btnMobileUtility .mtool-label { display: inline; font-size: 10px; }
+  #btnMobileBrush .mtool-icon,
+  #btnMobileMap .mtool-icon,
+  #btnMobileUtility .mtool-icon { font-size: 14px; }
+  #btnMobileFullscreen, #btnMobileRightPanel {
+    font-size: 16px;
+    min-width: 38px;
+    min-height: 38px;
+  }
+}
