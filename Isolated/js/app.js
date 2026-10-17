@@ -1290,6 +1290,14 @@ async function initFromParsed(parsed, filename) {
   _markersCache = null;
 
   renderer = new RW.Renderer(cv, () => mapModel);
+  
+  // ─── FPS LOCK ───
+  if (typeof mobile !== 'undefined' && mobile.isMobile()) {
+    renderer.targetFps = 60; // На мобилках ограничиваем 60 FPS (экономия батареи)
+  } else {
+    renderer.targetFps = 0;  // На десктопе без ограничений
+  }
+
   renderer.layerVisibility = {};
   for (const n of mapModel.layerOrder) renderer.layerVisibility[n] = true;
   renderer.onFps = (fps, chunks) => {
