@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Атлас → PNG 60×100</title>
+<style>
+  :root{
+    --bg:#1b1c1f; --panel:#24262a; --panel2:#2c2e33; --border:#3a3d43;
+    --text:#e4e6ea; --muted:#8b909a; --accent:#4b8ef7;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; display:flex; flex-direction:column;
+    background:var(--bg); color:var(--text);
+    font:13px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
+  }
+  .topbar{
+    flex:0 0 auto; display:flex; align-items:center; gap:12px; flex-wrap:wrap;
+    padding:10px 14px; background:var(--panel); border-bottom:1px solid var(--border);
+  }
+  .btn{
+    display:inline-flex; align-items:center; gap:6px;
+    padding:7px 14px; border-radius:6px; cursor:pointer; user-select:none;
+    border:1px solid var(--border); background:var(--panel2); color:var(--text);
+    font-size:13px; font-family:inherit;
+  }
+  .btn:hover{border-color:var(--accent)}
+  .btn.primary{background:var(--accent); border-color:var(--accent); color:#fff; font-weight:600}
+  .btn.primary:disabled{opacity:.45; cursor:not-allowed; background:var(--panel2); border-color:var(--border); color:var(--muted)}
+  .info{color:var(--muted); font-size:12px}
+  .spacer{flex:1 1 auto}
+  .content{flex:1 1 auto; overflow:auto}
+  table{width:100%; table-layout:fixed; border-collapse:collapse}
+  thead th{
+    position:sticky; top:0; z-index:5;
+    background:var(--panel2); border-bottom:1px solid var(--border);
+    padding:9px 8px; text-align:left;
+    font-size:11px; font-weight:600; letter-spacing:.06em; text-transform:uppercase;
+    color:var(--muted);
+  }
+  tbody td{padding:4px 8px; border-bottom:1px solid #2a2c30; vertical-align:middle}
+  tbody tr:hover{background:#212327}
+  tbody tr:last-child td{border-bottom:none}
+  .thumb{
+    display:block; width:60px; height:100px; image-rendering:pixelated;
+    border:1px solid #44474d; border-radius:3px;
+    background:
+      conic-gradient(#2a2b2f 0 25%, #35373c 0 50%, #2a2b2f 0 75%, #35373c 0) 0 0/16px 16px;
+  }
+  .pos{color:var(--muted); font-size:11px; font-variant-numeric:tabular-nums}
+  input[type=text], select{
+    width:100%; padding:6px 8px; font-size:12px; font-family:inherit;
+    background:#17181b; color:var(--text); border:1px solid #3a3b40; border-radius:4px;
+  }
+  select{
+    appearance:none; -webkit-appearance:none; padding-right:22px; cursor:pointer;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path fill='%238b909a' d='M0 0l5 6 5-6z'/></svg>");
+    background-repeat:no-repeat; background-position:right 8px center;
+  }
+  input[type=text]::placeholder{color:#5a5e66}
+  input[type=text]:focus, select:focus{outline:none; border-color:var(--accent); background:#121316}
+  .empty{padding:40px 20px; text-align:center; color:var(--muted)}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <label class="btn">
+    📂 Загрузить атлас
+    <input type="file" id="fileInput" accept="image/png,image/*" hidden>
+  </label>
+  <span class="info" id="info">Атлас не загружен</span>
+  <span class="spacer"></span>
+  <button class="btn primary" id="exportBtn" disabled>⬇ Скачать ZIP</button>
+</div>
+
+<div class="content">
+  <table>
+    <colgroup>
+      <col style="width:78px">
+      <col style="width:56px">
+      <col>
+      <col style="width:92px">
+      <col>
+      <col style="width:170px">
+    </colgroup>
+    <thead>
+      <tr>
+        <th>Превью</th>
+        <th>X,Y</th>
+        <th>name</th>
+        <th>priority</th>
+        <th>tag</th>
+        <th>properties</th>
+      </tr>
+    </thead>
+    <tbody id="tbody">
+      <tr><td colspan="6" class="empty">Загрузите PNG-атлас (или перетащите файл сюда).<br>Каждый тайл 60×100 будет вырезан автоматически.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<script>
+(() => {
+"use strict";
+
+/* ==================== КОНСТАНТЫ ==================== */
+const TILE_W = 60;
+const TILE_H = 100;
+const INI_NAME = "atlas.ini";
+const ZIP_NAME = "atlas.zip";
+
+/* Список допустимых значений для свойства "properties" */
+const ALLOWED_PROPS = [
+  "water",
+  "water-bridge",
+  "large-cliff",
+  "large-rock",
+  "lava"
+];
+
+/* ==================== СОСТОЯНИЕ ==================== */
+let tiles = [];
+
+const fileInput = document.getElementById("fileInput");
+const exportBtn = document.getElementById("exportBtn");
+const infoEl    = document.getElementById("info");
+const tbody     = document.getElementById("tbody");
+
+/* ==================== ЗАГРУЗКА ФАЙЛА ==================== */
+fileInput.addEventListener("change", e => {
+  const f = e.target.files && e.target.files[0];
+  if (f) loadFile(f);
+  fileInput.value = "";
+});
+
+["dragover","drop"].forEach(ev =>
+  document.addEventListener(ev, e => e.preventDefault())
+);
+document.addEventListener("drop", e => {
+  const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+  if (f && f.type.startsWith("image/")) loadFile(f);
+});
+
+function loadFile(file) {
+  const url = URL.createObjectURL(file);
+  const img = new Image();
+  img.onload = () => {
+    URL.revokeObjectURL(url);
+    buildTiles(img);
+  };
+  img.onerror = () => {
+    URL.revokeObjectURL(url);
+    alert("Не удалось прочитать изображение.");
+  };
+  img.src = url;
+}
+
+/* ==================== НАРЕЗКА ==================== */
+function buildTiles(img) {
+  const W = img.naturalWidth;
+  const H = img.naturalHeight;
+
+  const cols = Math.floor(W / TILE_W);
+  const rows = Math.floor(H / TILE_H);
+
+  if (cols < 1 || rows < 1) {
+    alert(`Изображение ${W}×${H} меньше одного тайла ${TILE_W}×${TILE_H}.`);
+    return;
+  }
+
+  const canvas = document.createElement("canvas");
+  canvas.width  = TILE_W;
+  canvas.height = TILE_H;
+  const ctx = canvas.getContext("2d");
+
+  tiles = [];
+
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      ctx.clearRect(0, 0, TILE_W, TILE_H);
+      ctx.drawImage(
+        img,
+        c * TILE_W, r * TILE_H, TILE_W, TILE_H,
+        0, 0, TILE_W, TILE_H
+      );
+      tiles.push({
+        col: c,
+        row: r,
+        dataUrl: canvas.toDataURL("image/png"),
+        name: "",
+        priority: "1",
+        tag: "",
+        props: ""   // пусто = без свойства
+      });
+    }
+  }
+
+  const tailW = W - cols * TILE_W;
+  const tailH = H - rows * TILE_H;
+
+  let msg = `Тайлов: ${tiles.length} (${cols}×${rows}) • изображение ${W}×${H}`;
+  if (tailW || tailH) msg += ` • остаток ${tailW}×${tailH} отброшен`;
+  infoEl.textContent = msg;
+
+  exportBtn.disabled = false;
+  renderRows();
+}
+
+/* ==================== ОТРИСОВКА ТАБЛИЦЫ ==================== */
+function renderRows() {
+  tbody.innerHTML = "";
+  const frag = document.createDocumentFragment();
+
+  for (const t of tiles) {
+    const tr = document.createElement("tr");
+
+    // превью
+    const tdImg = document.createElement("td");
+    const img = document.createElement("img");
+    img.className = "thumb";
+    img.src = t.dataUrl;
+    img.draggable = false;
+    img.alt = `${t.col},${t.row}`;
+    tdImg.appendChild(img);
+    tr.appendChild(tdImg);
+
+    // координаты
+    const tdPos = document.createElement("td");
+    tdPos.className = "pos";
+    tdPos.textContent = `${t.col},${t.row}`;
+    tr.appendChild(tdPos);
+
+    // 4 параметра
+    tr.appendChild(inputCell(t, "name",     "Например: Dirt"));
+    tr.appendChild(inputCell(t, "priority", "5"));
+    tr.appendChild(inputCell(t, "tag",      "rock,ground"));
+    tr.appendChild(selectCell(t, "props"));
+
+    frag.appendChild(tr);
+  }
+
+  tbody.appendChild(frag);
+}
+
+function inputCell(tile, key, placeholder) {
+  const td = document.createElement("td");
+  const input = document.createElement("input");
+  input.type = "text";
+  input.value = tile[key];
+  input.placeholder = placeholder;
+  input.spellcheck = false;
+  input.addEventListener("input", () => { tile[key] = input.value; });
+  td.appendChild(input);
+  return td;
+}
+
+function selectCell(tile, key) {
+  const td = document.createElement("td");
+  const sel = document.createElement("select");
+
+  // пустой вариант
+  const empty = document.createElement("option");
+  empty.value = "";
+  empty.textContent = "—";
+  sel.appendChild(empty);
+
+  for (const val of ALLOWED_PROPS) {
+    const opt = document.createElement("option");
+    opt.value = val;
+    opt.textContent = val;
+    sel.appendChild(opt);
+  }
+
+  sel.value = tile[key] || "";
+  sel.addEventListener("change", () => { tile[key] = sel.value; });
+
+  td.appendChild(sel);
+  return td;
+}
+
+/* ==================== ЭКСПОРТ ==================== */
+exportBtn.addEventListener("click", exportZip);
+
+function exportZip() {
+  const list = tiles.filter(t => t.name.trim() !== "");
+
+  if (!list.length) {
+    alert("Не задано ни одного имени (name). Нечего сохранять.");
+    return;
+  }
+
+  // валидация имён
+  const seen = new Set();
+  for (const t of list) {
+    const n = t.name.trim();
+    if (/[\\/:*?"<>|\x00-\x1f]/.test(n)) {
+      alert(`Недопустимые символы в имени файла:\n"${n}"`);
+      return;
+    }
+    const key = n.toLowerCase();
+    if (seen.has(key)) {
+      alert(`Имя повторяется:\n"${n}"`);
+      return;
+    }
+    seen.add(key);
+  }
+
+  try {
+    const files = [];
+
+    for (const t of list) {
+      files.push({
+        name: t.name.trim() + ".png",
+        data: dataUrlToBytes(t.dataUrl)
+      });
+    }
+
+    files.push({
+      name: INI_NAME,
+      data: new TextEncoder().encode(buildIni(list))
+    });
+
+    const zipBytes = createZip(files);
+    const blob = new Blob([zipBytes], { type: "application/zip" });
+
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = ZIP_NAME;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+
+  } catch (err) {
+    alert("Ошибка при создании ZIP: " + err.message);
+  }
+}
+
+/* ---- содержимое .ini ---- */
+function buildIni(list) {
+  const rows = list.map(t => [
+    t.name.trim(),
+    String(t.priority).trim(),
+    t.tag.trim(),
+    (t.props || "").trim()
+  ]);
+
+  const w = [0, 0, 0];
+  for (const r of rows) {
+    for (let i = 0; i < 3; i++) {
+      if (r[i].length > w[i]) w[i] = r[i].length;
+    }
+  }
+
+  const lines = rows.map(r => {
+    const parts = [r[0].padEnd(w[0]), r[1].padEnd(w[1])];
+    if (r[2] || r[3]) parts.push(r[2].padEnd(w[2]));
+    if (r[3]) parts.push(r[3]);
+    return parts.join(" ").replace(/\s+$/, "");
+  });
+
+  return lines.join("\n") + "\n";
+}
+
+/* ---- base64 dataURL -> Uint8Array ---- */
+function dataUrlToBytes(dataUrl) {
+  const base64 = dataUrl.slice(dataUrl.indexOf(",") + 1);
+  const bin = atob(base64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes;
+}
+
+/* ==================== ZIP (без сжатия) ==================== */
+const CRC_TABLE = (() => {
+  const t = new Uint32Array(256);
+  for (let n = 0; n < 256; n++) {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+    t[n] = c >>> 0;
+  }
+  return t;
+})();
+
+function crc32(buf) {
+  let c = 0xFFFFFFFF;
+  for (let i = 0; i < buf.length; i++) {
+    c = CRC_TABLE[(c ^ buf[i]) & 0xFF] ^ (c >>> 8);
+  }
+  return (c ^ 0xFFFFFFFF) >>> 0;
+}
+
+function createZip(files) {
+  const enc = new TextEncoder();
+
+  const now = new Date();
+  const dosTime = ((now.getHours() << 11) | (now.getMinutes() << 5) | (now.getSeconds() >> 1)) & 0xFFFF;
+  const dosDate = (((now.getFullYear() - 1980) << 9) | ((now.getMonth() + 1) << 5) | now.getDate()) & 0xFFFF;
+
+  const localParts = [];
+  const centralParts = [];
+  let offset = 0;
+
+  for (const f of files) {
+    const nameBytes = enc.encode(f.name);
+    const data = (f.data instanceof Uint8Array) ? f.data : new Uint8Array(f.data);
+    const crc = crc32(data);
+
+    // --- Local File Header ---
+    const lh = new Uint8Array(30 + nameBytes.length);
+    const dv = new DataView(lh.buffer);
+    dv.setUint32(0,  0x04034b50, true);
+    dv.setUint16(4,  20, true);
+    dv.setUint16(6,  0x0800, true);   // UTF-8
+    dv.setUint16(8,  0, true);        // stored
+    dv.setUint16(10, dosTime, true);
+    dv.setUint16(12, dosDate, true);
+    dv.setUint32(14, crc, true);
+    dv.setUint32(18, data.length, true);
+    dv.setUint32(22, data.length, true);
+    dv.setUint16(26, nameBytes.length, true);
+    dv.setUint16(28, 0, true);
+    lh.set(nameBytes, 30);
+
+    localParts.push(lh, data);
+
+    // --- Central Directory Header ---
+    const ch = new Uint8Array(46 + nameBytes.length);
+    const cv = new DataView(ch.buffer);
+    cv.setUint32(0,  0x02014b50, true);
+    cv.setUint16(4,  20, true);
+    cv.setUint16(6,  20, true);
+    cv.setUint16(8,  0x0800, true);
+    cv.setUint16(10, 0, true);
+    cv.setUint16(12, dosTime, true);
+    cv.setUint16(14, dosDate, true);
+    cv.setUint32(16, crc, true);
+    cv.setUint32(20, data.length, true);
+    cv.setUint32(24, data.length, true);
+    cv.setUint16(28, nameBytes.length, true);
+    cv.setUint16(30, 0, true);
+    cv.setUint16(32, 0, true);
+    cv.setUint16(34, 0, true);
+    cv.setUint16(36, 0, true);
+    cv.setUint32(38, 0, true);
+    cv.setUint32(42, offset, true);
+    ch.set(nameBytes, 46);
+
+    centralParts.push(ch);
+
+    offset += lh.length + data.length;
+  }
+
+  const centralSize = centralParts.reduce((s, c) => s + c.length, 0);
+  const centralOffset = offset;
+
+  // --- End Of Central Directory ---
+  const eocd = new Uint8Array(22);
+  const ev = new DataView(eocd.buffer);
+  ev.setUint32(0,  0x06054b50, true);
+  ev.setUint16(4,  0, true);
+  ev.setUint16(6,  0, true);
+  ev.setUint16(8,  files.length, true);
+  ev.setUint16(10, files.length, true);
+  ev.setUint32(12, centralSize, true);
+  ev.setUint32(16, centralOffset, true);
+  ev.setUint16(20, 0, true);
+
+  const all = localParts.concat(centralParts, [eocd]);
+  const total = all.reduce((s, a) => s + a.length, 0);
+  const out = new Uint8Array(total);
+
+  let p = 0;
+  for (const a of all) { out.set(a, p); p += a.length; }
+
+  return out;
+}
+
+})();
+</script>
+</body>
+</html>
