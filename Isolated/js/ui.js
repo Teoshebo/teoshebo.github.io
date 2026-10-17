@@ -352,9 +352,14 @@ class BrushPanel {
     const isTNS = (tool === 'terrain');
     const isDefault = !isClassic && !isTNS;
 
-    if (this.settingsEl) this.settingsEl.style.display = isDefault ? '' : 'none';
+    // ─── FIX: Size и Shape видны ВСЕГДА ───
+    if (this.settingsEl) this.settingsEl.style.display = '';
+
+    // Список тайлов (скрин 2) — только для обычных кистей
     if (this.listEl) this.listEl.style.display = isDefault ? '' : 'none';
     if (this.totalEl) this.totalEl.style.display = isDefault ? '' : 'none';
+
+    // Панели Classic и TNS
     if (this.classicPanelEl) this.classicPanelEl.style.display = isClassic ? '' : 'none';
     if (this.tnsPanelEl) this.tnsPanelEl.style.display = isTNS ? '' : 'none';
   }
