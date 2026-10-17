@@ -282,13 +282,123 @@ hr.doc-sep{
 ::-webkit-scrollbar-thumb:hover{background:#3a3a3a}
 
 /* ===== MOBILE ===== */
-@media (max-width:820px){
-  #toc{display:none}
-  #content{padding:24px 18px 80px}
-  #content h1{font-size:20px;letter-spacing:2px}
-  #content h2{font-size:15px}
-  #topbar{padding:8px 12px}
-  #topbar .logo{font-size:13px}
+.mobile-only { display: none !important; }
+
+@media (max-width: 820px) {
+  .mobile-only { display: block !important; }
+
+  html { scroll-behavior: smooth; }
+
+  /* Topbar */
+  #topbar {
+    flex-wrap: nowrap;
+    padding: 8px 12px;
+    gap: 8px;
+  }
+  #topbar .logo {
+    font-size: 13px;
+    flex: 1;
+    margin-right: 0;
+  }
+  #topbar .spacer { display: none; }
+  
+  #btnMobileToc {
+    background: #222;
+    color: #ddd;
+    border: 1px solid #444;
+    padding: 6px 10px;
+    font-size: 18px;
+    line-height: 1;
+    border-radius: 3px;
+    cursor: pointer;
+    font-family: inherit;
+    margin-right: 8px;
+  }
+  #btnMobileToc:active { background: #333; }
+
+  .discord-btn {
+    padding: 6px;
+  }
+  .discord-btn .dtext { display: none; }
+  
+  .lang-switch button {
+    padding: 6px 12px;
+    font-size: 10px;
+  }
+
+  /* TOC Drawer */
+  #toc {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: 280px;
+    max-height: 100vh;
+    z-index: 1000;
+    background: #131313;
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+    border-right: 1px solid #2a2a2a;
+    padding-top: 20px;
+    padding-bottom: 40px;
+    display: block !important;
+    box-shadow: 2px 0 10px rgba(0,0,0,0.5);
+  }
+  #toc.open {
+    transform: translateX(0);
+  }
+  
+  #toc a {
+    font-size: 12px;
+    padding: 8px 12px;
+  }
+  
+  #tocBackdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.6);
+    z-index: 999;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s ease;
+  }
+  #tocBackdrop.show {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  /* Content */
+  #content {
+    padding: 24px 16px 80px;
+  }
+  #content h1 {
+    font-size: 22px;
+    letter-spacing: 2px;
+  }
+  #content h2 {
+    font-size: 16px;
+    margin-top: 36px;
+  }
+  #content h3 {
+    font-size: 13px;
+  }
+
+  /* Tables */
+  #content table {
+    display: block;
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    white-space: nowrap;
+  }
+
+  /* Pre */
+  #content pre {
+    padding: 12px;
+    font-size: 11px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
 }
 </style>
 </head>
@@ -296,6 +406,7 @@ hr.doc-sep{
 
 <!-- ===== TOP BAR ===== -->
 <header id="topbar">
+  <button id="btnMobileToc" class="mobile-only" title="Menu">☰</button>
   <div class="logo">WEBTILED<span>DOCS</span></div>
   <div class="spacer"></div>
 
@@ -317,6 +428,8 @@ hr.doc-sep{
     <button type="button" data-set-lang="ru">RU</button>
   </div>
 </header>
+
+<div id="tocBackdrop" class="mobile-only"></div>
 
 <div id="app">
 
@@ -1498,182 +1611,4 @@ C D 5     SWi SEi ·</code></pre>
 <h2>15. Горячие клавиши</h2>
 <table>
 <thead><tr><th>Клавиша</th><th>Действие</th></tr></thead>
-<tbody>
-<tr><td><span class="kbd">B</span></td><td>Brush</td></tr>
-<tr><td><span class="kbd">T</span></td><td>Terrain</td></tr>
-<tr><td><span class="kbd">C</span></td><td>Classic autotile</td></tr>
-<tr><td><span class="kbd">E</span></td><td>Eraser</td></tr>
-<tr><td><span class="kbd">R</span></td><td>Rect</td></tr>
-<tr><td><span class="kbd">F</span></td><td>Fill</td></tr>
-<tr><td><span class="kbd">I</span></td><td>Picker</td></tr>
-<tr><td><span class="kbd">P</span></td><td>Pan</td></tr>
-<tr><td><span class="kbd">Ctrl+Z</span> / <span class="kbd">Ctrl+Y</span></td><td>Undo / Redo</td></tr>
-<tr><td><span class="kbd">Ctrl+S</span></td><td>Save</td></tr>
-<tr><td><span class="kbd">Esc</span></td><td>Отмена режима pick</td></tr>
-<tr><td colspan="2" style="color:#888;font-size:11px;padding-top:12px">
-Мобильный топбар: <b>BRUSH</b> (выбор инструмента) · <b>MAP</b> (открыть / сохранить / имя / размер / склейка) · <b>UTILITY</b> (скриншот / зум / референс).
-</td></tr>
-</tbody>
-</table>
-</section>
-
-<!-- 16 -->
-<section id="ru-s16">
-<h2>16. Undo / Redo</h2>
-<ul>
-<li>Стек на 50 действий.</li>
-<li>Кисти <b>TERRAIN</b> и <b>CLS</b> пишут <b>одной транзакцией</b> (и Ground, и Items0) — один Ctrl+Z откатывает весь штрих.</li>
-<li>Все изменения пишутся в undo, включая:
-<ul>
-<li>Рисование любой кистью</li>
-<li>Flood fill, Rect</li>
-<li>Tileset delete (стирание тайлов)</li>
-<li>Resize карты</li>
-</ul>
-</li>
-<li><b>Не отменяется:</b>
-<ul>
-<li>Merge карт (заменяет mapModel)</li>
-<li>Add tileset</li>
-<li>Import MiniTNS</li>
-<li>Rename / add / remove layer</li>
-</ul>
-</li>
-</ul>
-</section>
-
-<!-- 17 -->
-<section id="ru-s17">
-<h2>17. Формат карты</h2>
-
-<h3>Структура слоёв (жёстко)</h3>
-<pre><code>Ground, Items0, Units, Items1, Items2, Items, (+ Items3+ если есть)</code></pre>
-<ul>
-<li><code>Ground</code> — обязателен, 1 штука, первый</li>
-<li><code>Units</code> — 3-й слой, 1 штука</li>
-<li><code>Items</code> — последний, 1 штука (горы + респулы + старты, всё с коллизией)</li>
-<li><code>Items0/1/2/3</code> — промежуточные слои (переходы, стыки, декор)</li>
-</ul>
-
-<h3>Формат данных</h3>
-<p>base64 → zlib → Uint32Array Little Endian.</p>
-<p>Пустой слой = <code>eJxjYA==</code> (16 байт: 4 нулевых uint32).</p>
-
-<h3>Tileset в .tmx</h3>
-<ul>
-<li><code>&lt;properties&gt;&lt;property name="embedded_png"&gt;base64&lt;/property&gt;&lt;/properties&gt;</code> — атлас зашит</li>
-<li><code>&lt;terraintypes&gt;</code> — список типов</li>
-<li><code>&lt;tile id="N" terrain="A,B,C,D"&gt;</code> — terrain маска (порядок TL, TR, BL, BR!)</li>
-<li><code>&lt;properties&gt;</code> на тайле — флаги (<code>water</code>, <code>res_pool</code>, <code>large-rock</code>, <code>team</code> + <code>unit</code>)</li>
-</ul>
-
-<h3>Флаги тайлов</h3>
-<ul>
-<li><code>large-rock</code> — непроходимо вообще</li>
-<li><code>large-cliff</code> — проходимо только мехам/экспам</li>
-<li><code>water</code>, <code>water-bridge</code> — вода</li>
-<li><code>res_pool</code> — точка респула</li>
-<li><code>team</code> + <code>unit="commandCenter"</code> — старт игрока (team 0–49)</li>
-</ul>
-</section>
-
-<!-- 18 -->
-<section id="ru-s18">
-<h2>18. Ограничения и известные особенности</h2>
-<ul>
-<li><b>Слои не переставляются в XML при сохранении</b> — порядок из <code>layerOrder</code>.</li>
-<li><b>Autosave отключён.</b> Несохранённые правки теряются при перезагрузке.</li>
-<li><b>Merge заменяет текущую карту без undo.</b> Confirm предупреждает.</li>
-<li><b>Undo стека для операций с tileset'ами нет.</b></li>
-<li><b>Переименование <code>Ground</code> / <code>Units</code> / <code>Items</code></b> разрешено, но ломает генератор и RW-порядок.</li>
-</ul>
-</section>
-
-<!-- 19 -->
-<section id="ru-s19">
-<h2>19. Сохранение</h2>
-<p><span class="kbd">Ctrl+S</span> или кнопка <b>💾 Save</b>. Имя берётся из поля справа от <code>Save</code>. Если расширение не <code>.tmx</code> — добавляется автоматически.</p>
-<p>Файл сохраняется через браузерный download. Карта содержит:</p>
-<ul>
-<li>Все слои в порядке <code>layerOrder</code></li>
-<li>Все tileset'ы (нетронутые — как были, изменённые — пересобраны)</li>
-<li><code>types_config</code> в properties карты (JSON со всеми типами)</li>
-</ul>
-<p>Открывается в <b>Rusted Warfare</b> или <b>Tiled</b>.</p>
-</section>
-
-</div><!-- /lang ru -->
-
-</main>
-</div><!-- /app -->
-
-<script>
-(function(){
-  var buttons = document.querySelectorAll('[data-set-lang]');
-  var contents = document.querySelectorAll('.lang-content');
-  var tocs = {
-    en: document.querySelector('.toc-en'),
-    ru: document.querySelector('.toc-ru')
-  };
-
-  function setLang(lang) {
-    buttons.forEach(function(b){
-      b.classList.toggle('active', b.getAttribute('data-set-lang') === lang);
-    });
-    contents.forEach(function(c){
-      c.classList.toggle('active', c.getAttribute('data-lang') === lang);
-    });
-    if (tocs.en) tocs.en.style.display = (lang === 'en') ? 'block' : 'none';
-    if (tocs.ru) tocs.ru.style.display = (lang === 'ru') ? 'block' : 'none';
-    document.documentElement.lang = lang;
-  }
-
-  buttons.forEach(function(b){
-    b.addEventListener('click', function(){
-      setLang(b.getAttribute('data-set-lang'));
-    });
-  });
-
-  // ===== TOC active highlighting =====
-  var tocLinks = document.querySelectorAll('#toc a');
-  var sections = document.querySelectorAll('section[id]');
-
-  function updateActiveToc() {
-    var scrollPos = window.scrollY || document.documentElement.scrollTop;
-    var currentId = null;
-
-    for (var i = sections.length - 1; i >= 0; i--) {
-      var sec = sections[i];
-      // only consider sections in the currently visible language
-      if (!sec.closest('.lang-content').classList.contains('active')) continue;
-      if (sec.offsetTop - 80 <= scrollPos) {
-        currentId = sec.id;
-        break;
-      }
-    }
-
-    tocLinks.forEach(function(link){
-      var href = link.getAttribute('href');
-      if (href && href.substring(1) === currentId) {
-        link.classList.add('active');
-      } else {
-        link.classList.remove('active');
-      }
-    });
-  }
-
-  window.addEventListener('scroll', updateActiveToc, { passive: true });
-  window.addEventListener('resize', updateActiveToc);
-  window.addEventListener('load', updateActiveToc);
-  buttons.forEach(function(b){
-    b.addEventListener('click', function(){
-      setTimeout(updateActiveToc, 50);
-    });
-  });
-
-  setLang('en');
-  updateActiveToc();
-})();
-</script>
-</body>
-</html>
+<tbody
