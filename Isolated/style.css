@@ -246,7 +246,6 @@ canvas#cv.crosshair{cursor:crosshair}
 #hmGenBody{flex:1;overflow:auto;padding:10px;background:#0f0f0f;min-width:0}
 #hmV3Body{flex:1;overflow:auto;padding:10px;background:#0b0d11;min-width:0}
 
-/* ─── FIX: .hidden работает для ВСЕХ четырёх секций ─── */
 #bottomBody #tsBody.hidden,
 #bottomBody #typesBody.hidden,
 #bottomBody #hmGenBody.hidden,
@@ -860,6 +859,7 @@ canvas#cv.crosshair{cursor:crosshair}
   #btnMobileMap     { order: -9; }
   #btnMobileUtility { order: -8; }
   #btnMobileRightPanel { order: -7; }
+  #btnMobileFullscreen { order: -6; }
 
   #topbar button {
     min-height: 40px;
@@ -903,6 +903,12 @@ canvas#cv.crosshair{cursor:crosshair}
     background: #225; border-color: #44a;
     font-size: 18px; line-height: 1;
     padding: 0; min-width: 44px; min-height: 44px;
+  }
+  #btnMobileFullscreen {
+    background: #225; border-color: #44a; color: #cff;
+    font-size: 20px; line-height: 1;
+    padding: 0; min-width: 44px; min-height: 44px;
+    display: flex; align-items: center; justify-content: center;
   }
 
   /* ── TOOLS (левая панель) — скрываем ── */
@@ -1053,15 +1059,28 @@ canvas#cv.crosshair{cursor:crosshair}
   }
   .settings-body,
   .mini-lib-body { padding: 12px !important; }
+  
+  /* ─── 6 тайлов в ряд ─── */
   .mini-lib-grid {
-    grid-template-columns: repeat(2, 1fr) !important;
-    gap: 8px !important;
+    grid-template-columns: repeat(6, 1fr) !important;
+    gap: 4px !important;
+  }
+  .mini-lib-item {
+    padding: 4px 2px !important;
   }
   .mini-lib-preview-wrap {
     width: 100% !important; height: auto !important;
     aspect-ratio: 3 / 5;
   }
   .mini-lib-preview { width: 100% !important; height: 100% !important; }
+  
+  /* Текст мелкий, чтобы влез */
+  .mini-lib-name { font-size: 9px !important; margin-top: 2px !important; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .mini-lib-prio { font-size: 8px !important; }
+  
+  /* Скрываем теги и пропсы */
+  .mini-lib-item-tags, .mini-lib-item-props { display: none !important; }
+
   .mini-lib-pathbar,
   .mini-lib-filterbar { padding: 8px 12px !important; flex-wrap: wrap; }
 
@@ -1140,14 +1159,7 @@ canvas#cv.crosshair{cursor:crosshair}
   .mini-lib-filterbar { padding: 10px 12px !important; gap: 8px !important; }
   .mini-lib-search { padding: 10px 12px !important; font-size: 13px !important; min-height: 44px; }
   .mini-lib-sort { padding: 10px 14px !important; font-size: 12px !important; min-height: 44px; min-width: 100px; }
-  .mini-lib-body { padding: 12px !important; }
-  .mini-lib-grid { grid-template-columns: repeat(2, 1fr) !important; gap: 10px !important; }
-  .mini-lib-item { padding: 10px !important; }
-  .mini-lib-preview-wrap { width: 100% !important; height: auto !important; aspect-ratio: 3 / 5; }
-  .mini-lib-preview { width: 100% !important; height: 100% !important; }
-  .mini-lib-name { font-size: 12px !important; margin-top: 8px !important; }
-  .mini-lib-prio { font-size: 11px !important; }
-  .mini-lib-item-tag, .mini-lib-item-prop { font-size: 10px !important; padding: 2px 6px !important; }
+  .mini-lib-body { padding: 8px !important; }
   .mini-lib-tagsbar { padding: 10px 12px !important; gap: 8px !important; }
   .mini-lib-tag { padding: 6px 12px !important; font-size: 12px !important; min-height: 36px; }
   .mini-lib-tag-clear { padding: 6px 12px !important; font-size: 12px !important; min-height: 36px; }
@@ -1471,41 +1483,4 @@ canvas#cv.crosshair{cursor:crosshair}
   .ref-field input[type=range]{height:32px}
   .ref-field input[type=checkbox]{width:22px;height:22px}
   .ref-field-check > span{font-size:14px}
-}
-/* ═══════════════════════════════════════════════
-   MOBILE FULLSCREEN BUTTON
-   ═══════════════════════════════════════════════ */
-@media (pointer: coarse), (max-width: 500px) {
-  #btnMobileFullscreen {
-    background: #225;
-    border-color: #44a;
-    color: #cff;
-    font-size: 20px;
-    line-height: 1;
-    padding: 0;
-    min-width: 44px;
-    min-height: 44px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-}
-
-/* Очень узкие экраны (портрет) */
-@media (max-width: 480px) {
-  #topbar button {
-    padding: 6px 8px;
-    font-size: 12px;
-  }
-  #btnMobileBrush .mtool-label,
-  #btnMobileMap .mtool-label,
-  #btnMobileUtility .mtool-label { display: inline; font-size: 10px; }
-  #btnMobileBrush .mtool-icon,
-  #btnMobileMap .mtool-icon,
-  #btnMobileUtility .mtool-icon { font-size: 14px; }
-  #btnMobileFullscreen, #btnMobileRightPanel {
-    font-size: 16px;
-    min-width: 38px;
-    min-height: 38px;
-  }
 }
