@@ -16,6 +16,10 @@
     <input type="file" id="tilesetInput" accept="image/png,image/*" hidden>
 
     <!-- ═══ DESKTOP: file ops ═══ -->
+    <button id="btnNew" class="primary desktop-only" title="New empty map">
+      <img class="btn-ic" src="asset/icon/new.png" data-emoji="📄" alt="">
+      <span data-i18n="btn.new">New</span>
+    </button>
     <button id="btnOpen" class="primary desktop-only">
       <img class="btn-ic" src="asset/icon/open.png" data-emoji="📂" alt="">
       <span data-i18n="btn.open">Open</span>
@@ -175,6 +179,10 @@
       <button id="mapModalClose">×</button>
     </div>
     <div class="mobile-modal-body">
+      <button id="mapNewBtn" class="mobile-action-btn primary">
+        <span class="ma-ic">📄</span>
+        <span class="ma-lbl" data-i18n="btn.new">New</span>
+      </button>
       <button id="mapOpenBtn" class="mobile-action-btn primary">
         <span class="ma-ic">📂</span>
         <span class="ma-lbl" data-i18n="btn.open">Open</span>
@@ -360,229 +368,5 @@
 <script src="js/merge_ui.js"></script>
 <script src="js/minitns_lib.js"></script>
 <script src="js/app.js"></script>
-
-<!-- ═══════════════════════════════════════════════════════════
-     RUNTIME FIXES (после всех js/*.js)
-     1) Форс мобильного режима через ?mobile=1 / sessionStorage
-     2) Fallback переводов для отсутствующих ключей i18n
-     3) Авто-переключение нижней вкладки при смене инструмента
-     4) Гарантия «только одна вкладка нижней панели видна»
-     ═══════════════════════════════════════════════════════════ -->
-<script>
-(function () {
-  'use strict';
-
-  /* ─────────── 1. FORCE MODE ─────────── */
-  var params       = new URLSearchParams(location.search);
-  var forceMobile  = params.get('mobile') === '1';
-  var forceDesktop = params.get('mobile') === '0';
-
-  if (!forceMobile && !forceDesktop) {
-    try {
-      if (sessionStorage.getItem('webtiled.isMobile') === '1') forceMobile = true;
-    } catch (e) {}
-  }
-  // Автодетект по UA — подстраховка для старых браузеров без pointer:coarse
-  if (!forceMobile && !forceDesktop) {
-    var ua = navigator.userAgent || '';
-    if (/Android|iPhone|iPad|iPod|Mobile|webOS|BlackBerry|IEMobile|Opera Mini/i.test(ua)) {
-      forceMobile = true;
-    }
-  }
-
-  if (forceMobile) {
-    document.documentElement.classList.add('force-mobile');
-    window.WEBTILED_FORCE_MOBILE = true;
-  }
-  if (forceDesktop) {
-    document.documentElement.classList.add('force-desktop');
-    window.WEBTILED_FORCE_DESKTOP = true;
-  }
-
-  /* ─────────── 2. i18n FALLBACK ───────────
-     ui.js не знает ключи btn.savePreview и btn.ref → выводит их как текст.
-     Ловим это и подменяем. */
-  var EXTRA_I18N = {
-    en: { 'btn.savePreview': 'Save Preview', 'btn.ref': 'REF' },
-    ru: { 'btn.savePreview': 'Скриншот',     'btn.ref': 'REF' }
-  };
-  function lang() {
-    var l = (document.documentElement.lang || '').toLowerCase();
-    if (l.indexOf('ru') === 0) return 'ru';
-    if (l.indexOf('en') === 0) return 'en';
-    var nav = (navigator.language || '').toLowerCase();
-    return nav.indexOf('ru') === 0 ? 'ru' : 'en';
-  }
-  function fixI18n() {
-    var dict = EXTRA_I18N[lang()] || EXTRA_I18N.en;
-    var nodes = document.querySelectorAll('[data-i18n]');
-    for (var i = 0; i < nodes.length; i++) {
-      var el = nodes[i];
-      var key = el.getAttribute('data-i18n');
-      if (dict[key] && el.textContent.trim() === key) {
-        el.textContent = dict[key];
-      }
-    }
-  }
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', function () { setTimeout(fixI18n, 0); });
-  } else {
-    setTimeout(fixI18n, 0);
-  }
-  window.addEventListener('load', function () { setTimeout(fixI18n, 0); });
-  try {
-    new MutationObserver(fixI18n).observe(document.body, {
-      childList: true, subtree: true, characterData: true
-    });
-  } catch (e) {}
-
-  /* ─────────── 3. BOTTOM TABS SYNC ───────────
-     Гарантирует, что видна ровно одна секция нижней панели. */
-  var TAB_PAIRS = [
-    ['btnAtlasesTab', 'tsBody'],
-    ['btnTypesTab',   'typesBody'],
-    ['btnGenTab',     'hmGenBody'],
-    ['btnV3Tab',      'hmV3Body']
-  ];
-  function syncBottomTabs() {
-    TAB_PAIRS.forEach(function (p) {
-      var btn  = document.getElementById(p[0]);
-      var body = document.getElementById(p[1]);
-      if (!btn || !body) return;
-      if (btn.classList.contains('active')) {
-        body.classList.remove('hidden');
-        body.style.display = '';
-      } else {
-        body.classList.add('hidden');
-        body.style.display = 'none';
-      }
-    });
-  }
-  window.addEventListener('load', function () {
-    setTimeout(syncBottomTabs, 0);
-    var tabs = document.getElementById('tsTabs');
-    if (tabs) {
-      new MutationObserver(syncBottomTabs).observe(tabs, {
-        attributes: true, attributeFilter: ['class'], subtree: true
-      });
-      tabs.addEventListener('click', function () {
-        setTimeout(syncBottomTabs, 0);
-      });
-    }
-  });
-
-  /* ─────────── 4. TOOL → TAB AUTO-SWITCH ───────────
-     TERRAIN / AUTO → TYPES
-     BRUSH / CLS / ERASE / RECT / FILL / PICK → ATLASES
-     PAN → не трогаем */
-  var TAB_FOR_TOOL = {
-    terrain: 'btnTypesTab',
-    auto:    'btnTypesTab',
-    brush:   'btnAtlasesTab',
-    cls:     'btnAtlasesTab',
-    erase:   'btnAtlasesTab',
-    rect:    'btnAtlasesTab',
-    fill:    'btnAtlasesTab',
-    pick:    'btnAtlasesTab'
-  };
-  var TOOL_ALIASES = {
-    terrain: ['terrain', 'террейн', 'terr'],
-    auto:    ['auto', 'авто'],
-    cls:     ['cls', 'classic', 'классик'],
-    erase:   ['erase', 'eraser', 'стир', 'ластик'],
-    rect:    ['rect', 'прямоуг'],
-    fill:    ['fill', 'залив'],
-    pick:    ['pick', 'пипет'],
-    brush:   ['brush', 'кисть'],
-    pan:     ['pan', 'рука']
-  };
-  function guessTool(el) {
-    var hay = [
-      el.id || '',
-      el.getAttribute('data-tool') || '',
-      el.getAttribute('title') || '',
-      el.textContent || ''
-    ].join(' ').toLowerCase();
-    var order = ['terrain','auto','cls','erase','rect','fill','pick','brush','pan'];
-    for (var i = 0; i < order.length; i++) {
-      var pats = TOOL_ALIASES[order[i]];
-      for (var j = 0; j < pats.length; j++) {
-        if (hay.indexOf(pats[j]) !== -1) return order[i];
-      }
-    }
-    return null;
-  }
-  function currentTool() {
-    var root = document.getElementById('tools');
-    if (!root) return null;
-    var cands = root.querySelectorAll('button, [data-tool], .tool');
-    for (var i = 0; i < cands.length; i++) {
-      var el = cands[i];
-      if (el.classList.contains('active') ||
-          el.classList.contains('selected') ||
-          el.getAttribute('aria-pressed') === 'true') {
-        var t = guessTool(el);
-        if (t) return t;
-      }
-    }
-    return null;
-  }
-  function activateTab(id) {
-    var btn = document.getElementById(id);
-    if (btn && !btn.classList.contains('active')) btn.click();
-  }
-  function applyToolToTabs() {
-    var tool = currentTool();
-    if (!tool) return;
-    var tabId = TAB_FOR_TOOL[tool];
-    if (!tabId) return;
-    // раскрыть нижнюю панель, если свёрнута
-    var bottom = document.getElementById('bottom');
-    if (bottom && bottom.classList.contains('collapsed')) {
-      var t = document.getElementById('btnToggleBottom');
-      if (t) t.click();
-    }
-    activateTab(tabId);
-  }
-  window.addEventListener('load', function () {
-    var root = document.getElementById('tools');
-    if (!root) return;
-    var last = null;
-    new MutationObserver(function () {
-      var tool = currentTool();
-      if (tool && tool !== last) {
-        last = tool;
-        applyToolToTabs();
-      }
-    }).observe(root, {
-      attributes: true,
-      attributeFilter: ['class','aria-pressed','data-active'],
-      subtree: true, childList: true
-    });
-    var t = currentTool();
-    if (t) { last = t; applyToolToTabs(); }
-  });
-
-  /* ─────────── 5. КНОПКА ☰ — fallback ───────────
-     Если ui.js её не подвязал — открываем панель сами. */
-  window.addEventListener('load', function () {
-    var mb = document.getElementById('btnMobileRightPanel');
-    if (!mb || mb.__wtBound) return;
-    mb.addEventListener('click', function () {
-      var openers = ['btnToggleRightPanel','btnRightPanel','btnShowRightPanel','btnPanelToggle'];
-      for (var i = 0; i < openers.length; i++) {
-        var b = document.getElementById(openers[i]);
-        if (b && b !== mb) { b.click(); return; }
-      }
-      var rp = document.getElementById('rightPanel');
-      var bd = document.getElementById('rightBackdrop');
-      if (rp) rp.classList.toggle('open');
-      if (bd) bd.classList.toggle('show');
-    });
-    mb.__wtBound = true;
-  });
-
-})();
-</script>
 </body>
 </html>
