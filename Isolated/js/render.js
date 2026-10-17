@@ -30,6 +30,11 @@ class Renderer {
     this.referenceOpacity = 0.5;
     this.referenceMode = 'overlay'; // 'overlay' | 'underlay'
 
+    // ─── FPS LOCK ───
+    this.targetFps = 0; // 0 = unlimited
+    this._lastRenderTime = 0;
+    this._renderTimeout = null;
+
     this.bgColor = '#0a0a0a';
 
     this._fps = { frames: 0, last: performance.now() };
@@ -200,6 +205,29 @@ class Renderer {
   }
 
   render() {
+    const now = performance.now();
+    if (this.targetFps > 0 && this.targetFps < 999) {
+      const interval = 1000 / this.targetFps;
+      if (now - this._lastRenderTime < interval) {
+        if (!this._renderTimeout) {
+          this._renderTimeout = setTimeout(() => {
+            this._renderTimeout = null;
+            this._lastRenderTime = performance.now();
+            this._doRender();
+          }, interval - (now - this._lastRenderTime));
+        }
+        return;
+      }
+    }
+    this._lastRenderTime = now;
+    if (this._renderTimeout) {
+      clearTimeout(this._renderTimeout);
+      this._renderTimeout = null;
+    }
+    this._doRender();
+  }
+
+  _doRender() {
     const map = this.getMap();
     const r = this.wrap.getBoundingClientRect();
     const dpr = window.devicePixelRatio || 1;
