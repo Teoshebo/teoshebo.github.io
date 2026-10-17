@@ -1078,7 +1078,8 @@ canvas#cv.crosshair{cursor:crosshair}
   .mini-lib-name { font-size: 9px !important; margin-top: 2px !important; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .mini-lib-prio { font-size: 8px !important; }
   
-  /* Скрываем теги и пропсы */
+  /* Скрываем панель тегов и теги/пропсы в карточках */
+  .mini-lib-tagsbar { display: none !important; }
   .mini-lib-item-tags, .mini-lib-item-props { display: none !important; }
 
   .mini-lib-pathbar,
