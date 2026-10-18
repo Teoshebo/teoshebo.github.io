@@ -371,7 +371,14 @@
   </div>
 </div>
 
+<!-- ═══════════════════════════════════════════════════════════
+     LIBRARIES
+     ═══════════════════════════════════════════════════════════ -->
 <script src="https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js"></script>
+
+<!-- ═══════════════════════════════════════════════════════════
+     CORE MODULES (без изменений, не зависят от RW.App)
+     ═══════════════════════════════════════════════════════════ -->
 <script src="js/utils.js"></script>
 <script src="js/tmx.js"></script>
 <script src="js/map.js"></script>
@@ -389,6 +396,32 @@
 <script src="js/merge.js"></script>
 <script src="js/merge_ui.js"></script>
 <script src="js/minitns_lib.js"></script>
+
+<!-- ═══════════════════════════════════════════════════════════
+     APP MODULES (порядок критичен!)
+
+     app.js         — RW.App: state (mapModel, renderer, …),
+                      I18N, helpers (on/el), initFromParsed,
+                      markers cache. Загружается первым.
+     app_tools.js   — TOOLS[], buildTools, handleToolClick,
+                      tool picker (mobile), updateMobileBrushBtn
+     app_paint.js   — brush helpers, painting, undo/redo,
+                      flood, rect, picker, classic/TNS finalize
+     app_input.js   — pointer/touch handlers, long-tap, pinch,
+                      WASD pan, wheel, hotkeys инструментов
+     app_files.js   — open/save/new/resize/merge, TMX+PNG import,
+                      export PNG, MiniTNS import
+     app_modals.js  — Settings, Reference (+IDB), Fullscreen API
+     app_ui.js      — MAP/UTILITY/REF modals, right panel,
+                      bottom panel resize, RW.App.boot() — boot
+                      вызывается здесь, поэтому этот файл последний
+     ═══════════════════════════════════════════════════════════ -->
 <script src="js/app.js"></script>
+<script src="js/app_tools.js"></script>
+<script src="js/app_paint.js"></script>
+<script src="js/app_input.js"></script>
+<script src="js/app_files.js"></script>
+<script src="js/app_modals.js"></script>
+<script src="js/app_ui.js"></script>
 </body>
 </html>
