@@ -37,6 +37,8 @@ let strokeBound = null;
 let rectStart = null, rectCurrent = null;
 let lastPaintKey = null;
 
+let _pendingImportTilesets = []; // Временное хранилище для импорта из .tmx
+
 // ─── REFERENCE ───
 let refImage = null;
 let refHandle = null;
@@ -1481,6 +1483,31 @@ on('tilesetInput', 'change', async (e) => {
   e.target.value = '';
   if (!file) return;
   if (!mapModel) { if (statusEl) statusEl.textContent = 'Open a map first'; return; }
+
+  // ─── NEW: IMPORT FROM TMX ───
+  if (file.name.toLowerCase().endsWith('.tmx')) {
+    if (statusEl) statusEl.textContent = 'Parsing .tmx for tilesets...';
+    try {
+      const text = await file.text();
+      const parsed = RW.TMX.parse(text);
+      await RW.TMX.loadImages(parsed);
+      
+      if (!parsed.tilesets || !parsed.tilesets.length) {
+        alert('В этом .tmx нет тайлсетов.');
+        if (statusEl) statusEl.textContent = 'No tilesets found in TMX';
+        return;
+      }
+
+      openTmxImportModal(parsed.tilesets);
+      if (statusEl) statusEl.textContent = 'Found ' + parsed.tilesets.length + ' tilesets';
+    } catch (err) {
+      console.error(err);
+      if (statusEl) statusEl.textContent = 'TMX Import error: ' + err.message;
+    }
+    return;
+  }
+
+  // ─── EXISTING: IMPORT IMAGE ───
   try {
     const buf = await file.arrayBuffer();
     const bytes = new Uint8Array(buf);
@@ -1525,6 +1552,124 @@ on('tilesetInput', 'change', async (e) => {
     console.error(err);
     if (statusEl) statusEl.textContent = 'Tileset error: ' + err.message;
   }
+});
+
+// ═══════════════════════════════════════════════
+// TMX TILESET IMPORT MODAL LOGIC
+// ═══════════════════════════════════════════════
+function openTmxImportModal(tilesets) {
+  _pendingImportTilesets = tilesets;
+  const modal = el('importTmxTilesetsModal');
+  const list = el('importTmxList');
+  if (!modal || !list) return;
+
+  list.innerHTML = '';
+  tilesets.forEach((ts, idx) => {
+    const row = document.createElement('label');
+    row.className = 'import-tmx-item';
+
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.checked = true;
+    cb.dataset.idx = idx;
+
+    const cnv = document.createElement('canvas');
+    cnv.width = 40; cnv.height = 40;
+    const g = cnv.getContext('2d');
+    g.imageSmoothingEnabled = false;
+    if (ts.image) {
+      g.drawImage(ts.image, 0, 0, 40, 40);
+    } else {
+      g.fillStyle = '#333';
+      g.fillRect(0, 0, 40, 40);
+    }
+
+    const info = document.createElement('div');
+    info.className = 'info';
+    const name = document.createElement('b');
+    name.textContent = ts.name;
+    const size = document.createElement('span');
+    size.textContent = ts.tilecount + ' tiles · ' + ts.tileW + '×' + ts.tileH;
+    info.append(name, size);
+
+    row.append(cb, cnv, info);
+    list.appendChild(row);
+  });
+
+  modal.classList.remove('hidden');
+}
+
+function closeTmxImportModal() {
+  const modal = el('importTmxTilesetsModal');
+  if (modal) modal.classList.add('hidden');
+  _pendingImportTilesets = [];
+}
+
+on('importTmxClose', 'click', closeTmxImportModal);
+on('importTmxCancel', 'click', closeTmxImportModal);
+
+on('importTmxAdd', 'click', () => {
+  const checkboxes = document.querySelectorAll('#importTmxList input[type=checkbox]:checked');
+  if (!checkboxes.length) { closeTmxImportModal(); return; }
+  if (!mapModel) { alert('Open a map first'); closeTmxImportModal(); return; }
+
+  let addedCount = 0;
+
+  checkboxes.forEach(cb => {
+    const idx = parseInt(cb.dataset.idx, 10);
+    const srcTs = _pendingImportTilesets[idx];
+    if (!srcTs) return;
+
+    // Find next firstgid
+    let maxEnd = 1;
+    for (const ts of mapModel.tilesets) {
+      const end = ts.firstgid + ts.tilecount;
+      if (end > maxEnd) maxEnd = end;
+    }
+
+    // Deep copy tileset
+    const newTs = {
+      firstgid: maxEnd,
+      name: srcTs.name,
+      columns: srcTs.columns,
+      tilecount: srcTs.tilecount,
+      tileW: srcTs.tileW,
+      tileH: srcTs.tileH,
+      image: srcTs.image,
+      imageDataUrl: srcTs.imageDataUrl,
+      embeddedPngB64: srcTs.embeddedPngB64,
+      imageSource: srcTs.imageSource,
+      imageW: srcTs.imageW,
+      imageH: srcTs.imageH,
+      terrainTypes: JSON.parse(JSON.stringify(srcTs.terrainTypes || [])),
+      tiles: JSON.parse(JSON.stringify(srcTs.tiles || {})),
+      xmlStr: null,
+      _dirty: true
+    };
+
+    // Resolve name conflicts
+    let finalName = newTs.name;
+    if (mapModel.tilesets.find(t => t.name === finalName)) {
+      let i = 2;
+      while (mapModel.tilesets.find(t => t.name === finalName + '_' + i)) i++;
+      newTs.name = finalName + '_' + i;
+    }
+
+    mapModel.tilesets.push(newTs);
+    addedCount++;
+  });
+
+  mapModel.tilesets.sort((a, b) => a.firstgid - b.firstgid);
+  
+  if (tilesetTabs) {
+    tilesetTabs.activeIdx = mapModel.tilesets.length - 1;
+    tilesetTabs.build();
+  }
+  if (brushPanel) brushPanel.build();
+  invalidateMarkersCache();
+  
+  closeTmxImportModal();
+  if (statusEl) statusEl.textContent = `Imported ${addedCount} tilesets from TMX.`;
 });
 
 function startMiniTNSImport() {
