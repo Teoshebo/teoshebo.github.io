@@ -230,11 +230,14 @@ App.findEmptyValue = function(tsIdx, targetTerr) {
   return best;
 };
 
-App.cellHasCorner = function(tx, ty, ci, tsIdx, targetTerr) {
+// FIX: добавлен solidTileId, чтобы принудительно считать солид-тайл солидным
+App.cellHasCorner = function(tx, ty, ci, tsIdx, targetTerr, solidTileId) {
   const map = App.mapModel;
   if (tx < 0 || ty < 0 || tx >= map.W || ty >= map.H) return false;
   const id = map.layers[App.activeLayer][ty * map.W + tx];
   if (!id) return false;
+  if (id === solidTileId) return true; // Солид всегда считается солидом
+  
   const ts = App.mapModel.tilesets[tsIdx];
   const nts = App.renderer.findTileset(id);
   if (!nts || nts !== ts) return false;
@@ -243,19 +246,19 @@ App.cellHasCorner = function(tx, ty, ci, tsIdx, targetTerr) {
   return t.terrain[ci] === targetTerr;
 };
 
-App.resolveClassicMask = function(tx, ty, tsIdx, targetTerr, emptyValue) {
-  const tlOK = App.cellHasCorner(tx-1, ty-1, 3, tsIdx, targetTerr) &&
-               App.cellHasCorner(tx, ty-1, 2, tsIdx, targetTerr) &&
-               App.cellHasCorner(tx-1, ty, 1, tsIdx, targetTerr);
-  const trOK = App.cellHasCorner(tx, ty-1, 3, tsIdx, targetTerr) &&
-               App.cellHasCorner(tx+1, ty-1, 2, tsIdx, targetTerr) &&
-               App.cellHasCorner(tx+1, ty, 0, tsIdx, targetTerr);
-  const blOK = App.cellHasCorner(tx-1, ty, 3, tsIdx, targetTerr) &&
-               App.cellHasCorner(tx-1, ty+1, 1, tsIdx, targetTerr) &&
-               App.cellHasCorner(tx, ty+1, 0, tsIdx, targetTerr);
-  const brOK = App.cellHasCorner(tx+1, ty, 2, tsIdx, targetTerr) &&
-               App.cellHasCorner(tx+1, ty+1, 0, tsIdx, targetTerr) &&
-               App.cellHasCorner(tx, ty+1, 1, tsIdx, targetTerr);
+App.resolveClassicMask = function(tx, ty, tsIdx, targetTerr, emptyValue, solidTileId) {
+  const tlOK = App.cellHasCorner(tx-1, ty-1, 3, tsIdx, targetTerr, solidTileId) &&
+               App.cellHasCorner(tx, ty-1, 2, tsIdx, targetTerr, solidTileId) &&
+               App.cellHasCorner(tx-1, ty, 1, tsIdx, targetTerr, solidTileId);
+  const trOK = App.cellHasCorner(tx, ty-1, 3, tsIdx, targetTerr, solidTileId) &&
+               App.cellHasCorner(tx+1, ty-1, 2, tsIdx, targetTerr, solidTileId) &&
+               App.cellHasCorner(tx+1, ty, 0, tsIdx, targetTerr, solidTileId);
+  const blOK = App.cellHasCorner(tx-1, ty, 3, tsIdx, targetTerr, solidTileId) &&
+               App.cellHasCorner(tx-1, ty+1, 1, tsIdx, targetTerr, solidTileId) &&
+               App.cellHasCorner(tx, ty+1, 0, tsIdx, targetTerr, solidTileId);
+  const brOK = App.cellHasCorner(tx+1, ty, 2, tsIdx, targetTerr, solidTileId) &&
+               App.cellHasCorner(tx+1, ty+1, 0, tsIdx, targetTerr, solidTileId) &&
+               App.cellHasCorner(tx, ty+1, 1, tsIdx, targetTerr, solidTileId);
   return [
     tlOK ? targetTerr : emptyValue,
     trOK ? targetTerr : emptyValue,
@@ -281,22 +284,33 @@ App.paintClassicCell = function(tx, ty, anchor) {
   if (!App.activeLayer) return;
   const tsIdx = anchor.tsIdx;
   const terrIdx = anchor.terrIdx;
+  const solidTileId = anchor.terrType.tile + anchor.ts.firstgid;
   const ev = App.findEmptyValue(tsIdx, terrIdx);
-  const mask = App.resolveClassicMask(tx, ty, tsIdx, terrIdx, ev);
-  const idx = App.buildClassicMaskIndex(tsIdx);
-  let tileID = idx.get(mask.join(','));
   
-  if (tileID === undefined) {
-    const solid = [];
-    for (let i = 0; i < 4; i++) if (mask[i] === terrIdx) solid.push(i);
-    outer:
-    for (let n = solid.length; n >= 1; n--) {
-      const combos = App.combinations(solid, n);
-      for (const combo of combos) {
-        const test = mask.slice();
-        for (const i of combo) test[i] = ev;
-        tileID = idx.get(test.join(','));
-        if (tileID !== undefined) break outer;
+  const mask = App.resolveClassicMask(tx, ty, tsIdx, terrIdx, ev, solidTileId);
+  let tileID;
+
+  if (mask[0] === terrIdx && mask[1] === terrIdx && mask[2] === terrIdx && mask[3] === terrIdx) {
+    // FIX: Если все 4 угла солидные, принудительно ставим солид-тайл
+    tileID = solidTileId;
+  } else if (mask[0] === ev && mask[1] === ev && mask[2] === ev && mask[3] === ev) {
+    // FIX: Если все 4 угла пустые, очищаем клетку
+    tileID = 0;
+  } else {
+    const idx = App.buildClassicMaskIndex(tsIdx);
+    tileID = idx.get(mask.join(','));
+    if (tileID === undefined) {
+      const solid = [];
+      for (let i = 0; i < 4; i++) if (mask[i] === terrIdx) solid.push(i);
+      outer:
+      for (let n = solid.length; n >= 1; n--) {
+        const combos = App.combinations(solid, n);
+        for (const combo of combos) {
+          const test = mask.slice();
+          for (const i of combo) test[i] = ev;
+          tileID = idx.get(test.join(','));
+          if (tileID !== undefined) break outer;
+        }
       }
     }
   }
@@ -632,7 +646,6 @@ App.fillRing = function(tx, ty, solidTile) {
       const i = y * w + x;
       if (!region.has(realIdx)) continue;
 
-      // Нечетные клетки — это кольца, четные — пустота
       let newTile = 0;
       if (dist[i] % 2 === 1) {
          newTile = solidTile;
