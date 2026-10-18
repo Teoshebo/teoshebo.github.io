@@ -13,7 +13,7 @@
   <div id="topbar">
     <span class="logo">WebTiled</span>
     <input type="file" id="fileInput" accept=".tmx,application/xml,text/xml" hidden>
-    <input type="file" id="tilesetInput" accept="image/png,image/*" hidden>
+    <input type="file" id="tilesetInput" accept="image/png,image/*,.tmx,application/xml,text/xml" hidden>
 
     <!-- ═══ DESKTOP: file ops ═══ -->
     <button id="btnNew" class="primary desktop-only" title="New empty map">
@@ -272,6 +272,23 @@
       <div class="ref-hint" data-i18n="ref.hint">
         Reference is not saved into .tmx and not included in Save Preview. Chrome/Edge remember the file path between sessions.
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ TMX TILESET IMPORT MODAL ═══ -->
+<div id="importTmxTilesetsModal" class="hidden">
+  <div class="import-tmx-dialog">
+    <div class="import-tmx-header">
+      <span>IMPORT TILESETS FROM .TMX</span>
+      <button id="importTmxClose" title="Close">×</button>
+    </div>
+    <div class="import-tmx-body" id="importTmxList">
+      <!-- Список будет заполняться динамически -->
+    </div>
+    <div class="import-tmx-footer">
+      <button id="importTmxCancel">Cancel</button>
+      <button id="importTmxAdd" class="primary">Add Selected</button>
     </div>
   </div>
 </div>
