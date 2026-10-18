@@ -230,10 +230,12 @@ App.findEmptyValue = function(tsIdx, targetTerr) {
   return best;
 };
 
-App.cellHasCorner = function(tx, ty, ci, tsIdx, targetTerr, solidTileId) {
+App.cellHasCorner = function(tx, ty, ci, tsIdx, targetTerr, solidTileId, layerData) {
   const map = App.mapModel;
   if (tx < 0 || ty < 0 || tx >= map.W || ty >= map.H) return false;
-  const id = map.layers[App.activeLayer][ty * map.W + tx];
+  const data = layerData || map.layers[App.activeLayer];
+  if (!data) return false;
+  const id = data[ty * map.W + tx];
   if (!id) return false;
   if (id === solidTileId) return true; 
   
@@ -245,19 +247,19 @@ App.cellHasCorner = function(tx, ty, ci, tsIdx, targetTerr, solidTileId) {
   return t.terrain[ci] === targetTerr;
 };
 
-App.resolveClassicMask = function(tx, ty, tsIdx, targetTerr, emptyValue, solidTileId) {
-  const tlOK = App.cellHasCorner(tx-1, ty-1, 3, tsIdx, targetTerr, solidTileId) &&
-               App.cellHasCorner(tx, ty-1, 2, tsIdx, targetTerr, solidTileId) &&
-               App.cellHasCorner(tx-1, ty, 1, tsIdx, targetTerr, solidTileId);
-  const trOK = App.cellHasCorner(tx, ty-1, 3, tsIdx, targetTerr, solidTileId) &&
-               App.cellHasCorner(tx+1, ty-1, 2, tsIdx, targetTerr, solidTileId) &&
-               App.cellHasCorner(tx+1, ty, 0, tsIdx, targetTerr, solidTileId);
-  const blOK = App.cellHasCorner(tx-1, ty, 3, tsIdx, targetTerr, solidTileId) &&
-               App.cellHasCorner(tx-1, ty+1, 1, tsIdx, targetTerr, solidTileId) &&
-               App.cellHasCorner(tx, ty+1, 0, tsIdx, targetTerr, solidTileId);
-  const brOK = App.cellHasCorner(tx+1, ty, 2, tsIdx, targetTerr, solidTileId) &&
-               App.cellHasCorner(tx+1, ty+1, 0, tsIdx, targetTerr, solidTileId) &&
-               App.cellHasCorner(tx, ty+1, 1, tsIdx, targetTerr, solidTileId);
+App.resolveClassicMask = function(tx, ty, tsIdx, targetTerr, emptyValue, solidTileId, layerData) {
+  const tlOK = App.cellHasCorner(tx-1, ty-1, 3, tsIdx, targetTerr, solidTileId, layerData) &&
+               App.cellHasCorner(tx, ty-1, 2, tsIdx, targetTerr, solidTileId, layerData) &&
+               App.cellHasCorner(tx-1, ty, 1, tsIdx, targetTerr, solidTileId, layerData);
+  const trOK = App.cellHasCorner(tx, ty-1, 3, tsIdx, targetTerr, solidTileId, layerData) &&
+               App.cellHasCorner(tx+1, ty-1, 2, tsIdx, targetTerr, solidTileId, layerData) &&
+               App.cellHasCorner(tx+1, ty, 0, tsIdx, targetTerr, solidTileId, layerData);
+  const blOK = App.cellHasCorner(tx-1, ty, 3, tsIdx, targetTerr, solidTileId, layerData) &&
+               App.cellHasCorner(tx-1, ty+1, 1, tsIdx, targetTerr, solidTileId, layerData) &&
+               App.cellHasCorner(tx, ty+1, 0, tsIdx, targetTerr, solidTileId, layerData);
+  const brOK = App.cellHasCorner(tx+1, ty, 2, tsIdx, targetTerr, solidTileId, layerData) &&
+               App.cellHasCorner(tx+1, ty+1, 0, tsIdx, targetTerr, solidTileId, layerData) &&
+               App.cellHasCorner(tx, ty+1, 1, tsIdx, targetTerr, solidTileId, layerData);
   return [
     tlOK ? targetTerr : emptyValue,
     trOK ? targetTerr : emptyValue,
@@ -276,17 +278,20 @@ App.combinations = function(arr, k) {
   return r;
 };
 
-App.paintClassicCell = function(tx, ty, anchor) {
+App.paintClassicCell = function(tx, ty, anchor, layerData) {
   if (!anchor) return;
   const map = App.mapModel;
   if (tx < 0 || ty < 0 || tx >= map.W || ty >= map.H) return;
-  if (!App.activeLayer) return;
+  const isTemp = !!layerData;
+  if (!layerData) layerData = map.layers[App.activeLayer];
+  if (!layerData) return;
+  
   const tsIdx = anchor.tsIdx;
   const terrIdx = anchor.terrIdx;
   const solidTileId = anchor.terrType.tile + anchor.ts.firstgid;
   const ev = App.findEmptyValue(tsIdx, terrIdx);
   
-  const mask = App.resolveClassicMask(tx, ty, tsIdx, terrIdx, ev, solidTileId);
+  const mask = App.resolveClassicMask(tx, ty, tsIdx, terrIdx, ev, solidTileId, layerData);
   let tileID;
 
   if (mask[0] === terrIdx && mask[1] === terrIdx && mask[2] === terrIdx && mask[3] === terrIdx) {
@@ -314,11 +319,14 @@ App.paintClassicCell = function(tx, ty, anchor) {
   
   if (tileID === undefined) return;
   const i = ty * map.W + tx;
-  const before = map.layers[App.activeLayer][i];
+  const before = layerData[i];
   if (before === tileID) return;
-  map.layers[App.activeLayer][i] = tileID;
-  App.recordChange(App.activeLayer, i, before, tileID);
-  App.renderer.invalidateCell(tx, ty);
+  layerData[i] = tileID;
+  
+  if (!isTemp) {
+    App.recordChange(App.activeLayer, i, before, tileID);
+    App.renderer.invalidateCell(tx, ty);
+  }
 };
 
 App.paintClassicCells = function(cx, cy) {
@@ -559,7 +567,7 @@ App.runAutotileDialog = function() {
 };
 
 // ═══════════════════════════════════════════════
-// CONCENTRIC RING FILL (NEW FIX)
+// CONCENTRIC RING FILL (FIXED)
 // ═══════════════════════════════════════════════
 App.fillRing = function(tx, ty, solidTile) {
   const map = App.mapModel;
@@ -650,8 +658,8 @@ App.fillRing = function(tx, ty, solidTile) {
     }
   }
 
-  // 3. Применяем кольца
-  const changes = [];
+  // 3. Применяем кольца к временному слою
+  const tempLayer = new Uint32Array(data); // Копия!
   const ringWidth = 2;
   const gapWidth = 2;
   const period = ringWidth + gapWidth;
@@ -665,12 +673,29 @@ App.fillRing = function(tx, ty, solidTile) {
 
       const m = dist[i] % period;
       let newTile = solidTile;
-      if (m > ringWidth) newTile = 0; // вырезаем дырку
+      if (m > ringWidth) newTile = 0; 
+      tempLayer[realIdx] = newTile;
+    }
+  }
 
+  // 4. Прогоняем постпроцесс на временном слое
+  for (let y = minY - 1; y <= maxY + 1; y++) {
+    for (let x = minX - 1; x <= maxX + 1; x++) {
+      App.paintClassicCell(x, y, anchor, tempLayer);
+    }
+  }
+
+  // 5. Переносим изменения с временного слоя на карту
+  const changes = [];
+  for (let y = minY - 1; y <= maxY + 1; y++) {
+    for (let x = minX - 1; x <= maxX + 1; x++) {
+      if (x < 0 || y < 0 || x >= map.W || y >= map.H) continue;
+      const realIdx = y * map.W + x;
       const before = data[realIdx];
-      if (before !== newTile) {
-        data[realIdx] = newTile;
-        changes.push({ idx: realIdx, before, after: newTile });
+      const after = tempLayer[realIdx];
+      if (before !== after) {
+        data[realIdx] = after;
+        changes.push({ idx: realIdx, before, after });
       }
     }
   }
@@ -680,13 +705,6 @@ App.fillRing = function(tx, ty, solidTile) {
     if (map.undoStack.length > 50) map.undoStack.shift();
     map.redoStack.length = 0;
     App.invalidateMarkersCache();
-
-    // Прогоняем автотайл с запасом
-    for (let y = minY - 1; y <= maxY + 1; y++) {
-      for (let x = minX - 1; x <= maxX + 1; x++) {
-        App.paintClassicCell(x, y, anchor);
-      }
-    }
     
     App.renderer.invalidateRange(minX - 1, minY - 1, maxX + 1, maxY + 1);
     if (App.statusEl) App.statusEl.textContent = 'Ring fill applied (' + changes.length + ' cells)';
