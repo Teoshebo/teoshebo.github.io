@@ -104,6 +104,17 @@ if (App.cv) App.cv.addEventListener('pointerdown', (e) => {
       if (App.statusEl) App.statusEl.textContent = 'Classic: выбери terrain в BRUSH панели';
       return;
     }
+    
+    // ─── NEW: RING FILL (Shift + Click) ───
+    if (e.shiftKey) {
+      const anchor = App.resolveClassicAnchor();
+      const solidTile = anchor.terrType.tile + anchor.ts.firstgid;
+      if (App.fillRing(tx, ty, solidTile)) {
+        App.renderer.render();
+      }
+      return; // Не начинаем обычное рисование
+    }
+
     App.painting = true; App.strokeChanges = null;
     App.paintClassicCells(tx, ty);
     App.lastPaintKey = tx + ',' + ty;
