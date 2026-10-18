@@ -579,7 +579,7 @@ App.runAutotileDialog = function() {
 };
 
 // ═══════════════════════════════════════════════
-// CONCENTRIC RING FILL (FIXED)
+// CONCENTRIC RING FILL (1-TILE GAP VERSION)
 // ═══════════════════════════════════════════════
 App.fillRing = function(tx, ty, solidTile) {
   const map = App.mapModel;
@@ -630,7 +630,7 @@ App.fillRing = function(tx, ty, solidTile) {
 
   if (region.size < 4) return false;
 
-  // 2. Считаем дистанцию до края (Distance Transform)
+  // 2. Считаем дистанцию до края (Distance Transform - Chebyshev)
   const w = maxX - minX + 1;
   const h = maxY - minY + 1;
   const dist = new Uint16Array(w * h).fill(9999);
@@ -643,7 +643,7 @@ App.fillRing = function(tx, ty, solidTile) {
     }
   }
 
-  // Chamfer 2-pass
+  // Chamfer 2-pass (Chebyshev для диагоналей)
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
       const i = y * w + x;
@@ -670,13 +670,10 @@ App.fillRing = function(tx, ty, solidTile) {
     }
   }
 
-  // 3. Применяем кольца к временному слою
-  const tempLayer = new Uint32Array(data); // Копия!
-  const forcedEmpty = new Set(); // Список клеток, которые ДОЛЖНЫ остаться пустыми
-  const ringWidth = 2;
-  const gapWidth = 2;
-  const period = ringWidth + gapWidth;
-
+  // 3. Применяем кольца (1 тайл солида, 1 тайл пустоты)
+  const tempLayer = new Uint32Array(data); 
+  const forcedEmpty = new Set(); 
+  
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
       const realX = minX + x, realY = minY + y;
@@ -684,8 +681,9 @@ App.fillRing = function(tx, ty, solidTile) {
       const i = y * w + x;
       if (!region.has(realIdx)) continue;
 
-      const m = dist[i] % period;
-      if (m > ringWidth) {
+      const d = dist[i];
+      // Нечетные дистанции (1, 3, 5) — солид. Четные (2, 4, 6) — пустота.
+      if (d % 2 === 0) {
         tempLayer[realIdx] = 0; 
         forcedEmpty.add(realIdx);
       } else {
@@ -694,14 +692,14 @@ App.fillRing = function(tx, ty, solidTile) {
     }
   }
 
-  // 4. Прогоняем постпроцесс на временном слое, передавая forcedEmpty
+  // 4. Прогоняем постпроцесс, защищая зазоры
   for (let y = minY - 1; y <= maxY + 1; y++) {
     for (let x = minX - 1; x <= maxX + 1; x++) {
       App.paintClassicCell(x, y, anchor, tempLayer, forcedEmpty);
     }
   }
 
-  // 5. Переносим изменения с временного слоя на карту
+  // 5. Применяем к основной карте
   const changes = [];
   for (let y = minY - 1; y <= maxY + 1; y++) {
     for (let x = minX - 1; x <= maxX + 1; x++) {
