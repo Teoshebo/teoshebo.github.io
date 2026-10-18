@@ -651,7 +651,7 @@ class BrushPanel {
 }
 
 // ═══════════════════════════════════════════════
-// TILESET TABS (с поддержкой мультивыбора в Edit)
+// TILESET TABS
 // ═══════════════════════════════════════════════
 class TilesetTabs {
   constructor(tabsListEl, bodyEl, bottomEl, ctx) {
@@ -671,7 +671,7 @@ class TilesetTabs {
     this.infoEl = null;
     this.activeTerrainIdx = 0;
     this._restoreViewState = null;
-    this.selectedTileIds = new Set(); // NEW: для мультивыбора
+    this.selectedTileIds = new Set();
   }
 
   get quadrantMode() { return this.editMode && this.terrainEditMode; }
@@ -680,7 +680,7 @@ class TilesetTabs {
     const map = this.ctx.getMap();
     this.tabsListEl.innerHTML = '';
     this.bodyEl.innerHTML = '';
-    this.selectedTileIds.clear(); // сбрасываем при смене таба
+    this.selectedTileIds.clear();
 
     if (!map || !map.tilesets.length) {
       this.bodyEl.innerHTML = '<div class="empty-msg">Нет tileset\'ов</div>';
@@ -1060,7 +1060,6 @@ class TilesetTabs {
           }
         }
 
-        // Brush selection
         for (let i = 0; i < ts.tilecount; i++) {
           if (!isSelected(i)) continue;
           const col = i % ts.columns;
@@ -1070,7 +1069,6 @@ class TilesetTabs {
           g.strokeRect(col * ts.tileW + 1, row * ts.tileH + 1, ts.tileW - 2, ts.tileH - 2);
         }
 
-        // Edit multi-select
         if (self.editMode) {
           self.selectedTileIds.forEach(i => {
             const col = i % ts.columns;
@@ -1281,6 +1279,7 @@ class TilesetTabs {
   openTileEditor(ts, localID, parentBlock, infoEl) {
     if (!ts.tiles[localID]) ts.tiles[localID] = { terrain: null, props: {} };
     const tile = ts.tiles[localID];
+    if (!tile.props) tile.props = {}; // <--- FIX: проверка на наличие props
 
     const ed = document.createElement('div');
     ed.className = 'ts-editor';
@@ -1328,8 +1327,7 @@ class TilesetTabs {
     ed.className = 'ts-editor';
     ed.innerHTML = '<div class="ts-editor-head">Multi-Tile Edit <span>(' + this.selectedTileIds.size + ' tiles selected)</span></div>';
 
-    // Собираем инфу о свойствах
-    const propsMap = new Map(); // key -> { count, ids: [], values: Set }
+    const propsMap = new Map();
     const selectedIds = Array.from(this.selectedTileIds);
 
     for (const localID of selectedIds) {
@@ -1344,7 +1342,6 @@ class TilesetTabs {
       }
     }
 
-    // Превращаем Map в объект для совместимости с buildPropertiesSection
     const syntheticProps = {};
     const metaInfo = {};
     for (const [k, data] of propsMap) {
@@ -1359,6 +1356,7 @@ class TilesetTabs {
       for (const localID of selectedIds) {
         if (!ts.tiles[localID]) ts.tiles[localID] = { terrain: null, props: {} };
         const t = ts.tiles[localID];
+        if (!t.props) t.props = {}; // <--- FIX
         
         if (action === 'add') {
           t.props[key] = val;
