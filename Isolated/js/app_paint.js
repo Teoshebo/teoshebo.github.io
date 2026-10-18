@@ -230,13 +230,12 @@ App.findEmptyValue = function(tsIdx, targetTerr) {
   return best;
 };
 
-// FIX: добавлен solidTileId, чтобы принудительно считать солид-тайл солидным
 App.cellHasCorner = function(tx, ty, ci, tsIdx, targetTerr, solidTileId) {
   const map = App.mapModel;
   if (tx < 0 || ty < 0 || tx >= map.W || ty >= map.H) return false;
   const id = map.layers[App.activeLayer][ty * map.W + tx];
   if (!id) return false;
-  if (id === solidTileId) return true; // Солид всегда считается солидом
+  if (id === solidTileId) return true; 
   
   const ts = App.mapModel.tilesets[tsIdx];
   const nts = App.renderer.findTileset(id);
@@ -291,10 +290,8 @@ App.paintClassicCell = function(tx, ty, anchor) {
   let tileID;
 
   if (mask[0] === terrIdx && mask[1] === terrIdx && mask[2] === terrIdx && mask[3] === terrIdx) {
-    // FIX: Если все 4 угла солидные, принудительно ставим солид-тайл
     tileID = solidTileId;
   } else if (mask[0] === ev && mask[1] === ev && mask[2] === ev && mask[3] === ev) {
-    // FIX: Если все 4 угла пустые, очищаем клетку
     tileID = 0;
   } else {
     const idx = App.buildClassicMaskIndex(tsIdx);
@@ -562,7 +559,7 @@ App.runAutotileDialog = function() {
 };
 
 // ═══════════════════════════════════════════════
-// CONCENTRIC RING FILL (NEW)
+// CONCENTRIC RING FILL (NEW FIX)
 // ═══════════════════════════════════════════════
 App.fillRing = function(tx, ty, solidTile) {
   const map = App.mapModel;
@@ -571,10 +568,25 @@ App.fillRing = function(tx, ty, solidTile) {
   if (tx < 0 || ty < 0 || tx >= map.W || ty >= map.H) return false;
   
   const target = data[ty * map.W + tx];
-  if (target === 0) {
-     if (App.statusEl) App.statusEl.textContent = 'Ring fill needs to start on a solid block';
+  if (!target) {
+     if (App.statusEl) App.statusEl.textContent = 'Ring fill needs to start on a block';
      return false;
   }
+
+  const anchor = App.resolveClassicAnchor();
+  if (!anchor) return false;
+  const terrIdx = anchor.terrIdx;
+  const ts = anchor.ts;
+
+  const isPartOfBlock = (id) => {
+    if (!id) return false;
+    if (id === solidTile) return true;
+    const nts = App.renderer.findTileset(id);
+    if (!nts || nts !== ts) return false;
+    const t = nts.tiles[id - nts.firstgid];
+    if (!t || !t.terrain) return false;
+    return t.terrain.includes(terrIdx);
+  };
 
   // 1. Находим связную область
   const region = new Set();
@@ -586,7 +598,8 @@ App.fillRing = function(tx, ty, solidTile) {
     if (cx < 0 || cy < 0 || cx >= map.W || cy >= map.H) continue;
     const idx = cy * map.W + cx;
     if (region.has(idx)) continue;
-    if (data[idx] !== target) continue;
+    const id = data[idx];
+    if (!isPartOfBlock(id)) continue;
 
     region.add(idx);
     if (cx < minX) minX = cx; if (cx > maxX) maxX = cx;
@@ -639,6 +652,10 @@ App.fillRing = function(tx, ty, solidTile) {
 
   // 3. Применяем кольца
   const changes = [];
+  const ringWidth = 2;
+  const gapWidth = 2;
+  const period = ringWidth + gapWidth;
+
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
       const realX = minX + x, realY = minY + y;
@@ -646,10 +663,9 @@ App.fillRing = function(tx, ty, solidTile) {
       const i = y * w + x;
       if (!region.has(realIdx)) continue;
 
-      let newTile = 0;
-      if (dist[i] % 2 === 1) {
-         newTile = solidTile;
-      }
+      const m = dist[i] % period;
+      let newTile = solidTile;
+      if (m > ringWidth) newTile = 0; // вырезаем дырку
 
       const before = data[realIdx];
       if (before !== newTile) {
@@ -665,14 +681,13 @@ App.fillRing = function(tx, ty, solidTile) {
     map.redoStack.length = 0;
     App.invalidateMarkersCache();
 
-    const anchor = App.resolveClassicAnchor();
-    if (anchor) {
-      for (let y = minY - 1; y <= maxY + 1; y++) {
-        for (let x = minX - 1; x <= maxX + 1; x++) {
-          App.paintClassicCell(x, y, anchor);
-        }
+    // Прогоняем автотайл с запасом
+    for (let y = minY - 1; y <= maxY + 1; y++) {
+      for (let x = minX - 1; x <= maxX + 1; x++) {
+        App.paintClassicCell(x, y, anchor);
       }
     }
+    
     App.renderer.invalidateRange(minX - 1, minY - 1, maxX + 1, maxY + 1);
     if (App.statusEl) App.statusEl.textContent = 'Ring fill applied (' + changes.length + ' cells)';
     return true;
