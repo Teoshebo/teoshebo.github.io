@@ -278,7 +278,7 @@ App.combinations = function(arr, k) {
   return r;
 };
 
-App.paintClassicCell = function(tx, ty, anchor, layerData) {
+App.paintClassicCell = function(tx, ty, anchor, layerData, forcedEmpty) {
   if (!anchor) return;
   const map = App.mapModel;
   if (tx < 0 || ty < 0 || tx >= map.W || ty >= map.H) return;
@@ -286,6 +286,19 @@ App.paintClassicCell = function(tx, ty, anchor, layerData) {
   if (!layerData) layerData = map.layers[App.activeLayer];
   if (!layerData) return;
   
+  const i = ty * map.W + tx;
+
+  if (forcedEmpty && forcedEmpty.has(i)) {
+    if (layerData[i] !== 0) {
+      layerData[i] = 0;
+      if (!isTemp) {
+        App.recordChange(App.activeLayer, i, layerData[i], 0);
+        App.renderer.invalidateCell(tx, ty);
+      }
+    }
+    return;
+  }
+
   const tsIdx = anchor.tsIdx;
   const terrIdx = anchor.terrIdx;
   const solidTileId = anchor.terrType.tile + anchor.ts.firstgid;
@@ -318,7 +331,6 @@ App.paintClassicCell = function(tx, ty, anchor, layerData) {
   }
   
   if (tileID === undefined) return;
-  const i = ty * map.W + tx;
   const before = layerData[i];
   if (before === tileID) return;
   layerData[i] = tileID;
@@ -660,6 +672,7 @@ App.fillRing = function(tx, ty, solidTile) {
 
   // 3. Применяем кольца к временному слою
   const tempLayer = new Uint32Array(data); // Копия!
+  const forcedEmpty = new Set(); // Список клеток, которые ДОЛЖНЫ остаться пустыми
   const ringWidth = 2;
   const gapWidth = 2;
   const period = ringWidth + gapWidth;
@@ -672,16 +685,19 @@ App.fillRing = function(tx, ty, solidTile) {
       if (!region.has(realIdx)) continue;
 
       const m = dist[i] % period;
-      let newTile = solidTile;
-      if (m > ringWidth) newTile = 0; 
-      tempLayer[realIdx] = newTile;
+      if (m > ringWidth) {
+        tempLayer[realIdx] = 0; 
+        forcedEmpty.add(realIdx);
+      } else {
+        tempLayer[realIdx] = solidTile;
+      }
     }
   }
 
-  // 4. Прогоняем постпроцесс на временном слое
+  // 4. Прогоняем постпроцесс на временном слое, передавая forcedEmpty
   for (let y = minY - 1; y <= maxY + 1; y++) {
     for (let x = minX - 1; x <= maxX + 1; x++) {
-      App.paintClassicCell(x, y, anchor, tempLayer);
+      App.paintClassicCell(x, y, anchor, tempLayer, forcedEmpty);
     }
   }
 
