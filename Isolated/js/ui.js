@@ -161,7 +161,6 @@ class LayersPanel {
     });
   }
 
-  // ─── FLASH ───
   flash(name) {
     if (!name) return;
     const row = this.el.querySelector('.layer[data-layer-name="' + name + '"]');
@@ -352,19 +351,13 @@ class BrushPanel {
     const isTNS = (tool === 'terrain');
     const isDefault = !isClassic && !isTNS;
 
-    // ─── FIX: Size и Shape видны ВСЕГДА ───
     if (this.settingsEl) this.settingsEl.style.display = '';
-
-    // Список тайлов (скрин 2) — только для обычных кистей
     if (this.listEl) this.listEl.style.display = isDefault ? '' : 'none';
     if (this.totalEl) this.totalEl.style.display = isDefault ? '' : 'none';
-
-    // Панели Classic и TNS
     if (this.classicPanelEl) this.classicPanelEl.style.display = isClassic ? '' : 'none';
     if (this.tnsPanelEl) this.tnsPanelEl.style.display = isTNS ? '' : 'none';
   }
 
-  // ─── DEFAULT: size/shape/brush list ───
   buildSettings() {
     if (!this.settingsEl) return;
     const st = this.ctx.getBrushSettings();
@@ -485,7 +478,6 @@ class BrushPanel {
     this.totalEl.textContent = 'Σ ' + sum.toFixed(2);
   }
 
-  // ─── CLASSIC: список террейнов ───
   buildClassicList() {
     if (!this.classicListEl) return;
     this.classicListEl.innerHTML = '';
@@ -567,10 +559,7 @@ class BrushPanel {
       return;
     }
 
-    // Auto-select first if none active — исправляет баг «пишет не выбран»
     if (!activeRow && firstRow && this.ctx.setActiveClassicTerrain) {
-      const tsFirst = parseInt(firstRow.title.split(' · ')[0].replace(/^.*? · /, ''), 10);
-      // проще: перебрать tilesets ещё раз и взять первый
       const map2 = this.ctx.getMap();
       if (map2) {
         outer:
@@ -589,7 +578,6 @@ class BrushPanel {
     }
   }
 
-  // ─── TNS: список типов ───
   buildTNSList() {
     if (!this.tnsListEl) return;
     this.tnsListEl.innerHTML = '';
@@ -654,7 +642,6 @@ class BrushPanel {
       row.addEventListener('click', () => {
         if (this.ctx.setActiveType) this.ctx.setActiveType(t.id);
         this.buildTNSList();
-        // Уведомим app о смене
         if (this.ctx.onBrushChanged) this.ctx.onBrushChanged();
       });
 
@@ -664,7 +651,7 @@ class BrushPanel {
 }
 
 // ═══════════════════════════════════════════════
-// TILESET TABS — без изменений (полный код)
+// TILESET TABS (с поддержкой мультивыбора в Edit)
 // ═══════════════════════════════════════════════
 class TilesetTabs {
   constructor(tabsListEl, bodyEl, bottomEl, ctx) {
@@ -684,6 +671,7 @@ class TilesetTabs {
     this.infoEl = null;
     this.activeTerrainIdx = 0;
     this._restoreViewState = null;
+    this.selectedTileIds = new Set(); // NEW: для мультивыбора
   }
 
   get quadrantMode() { return this.editMode && this.terrainEditMode; }
@@ -692,6 +680,8 @@ class TilesetTabs {
     const map = this.ctx.getMap();
     this.tabsListEl.innerHTML = '';
     this.bodyEl.innerHTML = '';
+    this.selectedTileIds.clear(); // сбрасываем при смене таба
+
     if (!map || !map.tilesets.length) {
       this.bodyEl.innerHTML = '<div class="empty-msg">Нет tileset\'ов</div>';
       return;
@@ -707,6 +697,7 @@ class TilesetTabs {
       btn.addEventListener('click', () => {
         this.activeIdx = i;
         this.activeTerrainIdx = 0;
+        this.selectedTileIds.clear();
         this.build();
       });
       if (i === this.activeIdx) btn.classList.add('active');
@@ -730,7 +721,7 @@ class TilesetTabs {
     const addBtn = document.createElement('button');
     addBtn.className = 'ts-tab-add';
     addBtn.textContent = '+ Tileset';
-    addBtn.title = 'Add tileset from PNG';
+    addBtn.title = 'Add tileset from PNG or TMX';
     addBtn.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
@@ -819,6 +810,7 @@ class TilesetTabs {
         this.activeIdx = Math.max(0, map.tilesets.length - 1);
       }
       this.activeTerrainIdx = 0;
+      this.selectedTileIds.clear();
 
       if (r) { r.invalidate(); r.render(); }
       this.build();
@@ -860,12 +852,13 @@ class TilesetTabs {
 
     const editLbl = document.createElement('label');
     editLbl.className = 'ts-check';
-    editLbl.title = 'Edit tile (terrain / properties)';
+    editLbl.title = 'Edit tile (terrain / properties). Shift+Click selects multiple.';
     const editCb = document.createElement('input');
     editCb.type = 'checkbox';
     editCb.checked = this.editMode;
     editCb.addEventListener('change', () => {
       this.editMode = editCb.checked;
+      if (!this.editMode) this.selectedTileIds.clear();
       this.buildWithRestore(this.build);
     });
     editLbl.append(editCb, document.createTextNode(' Edit'));
@@ -1067,6 +1060,7 @@ class TilesetTabs {
           }
         }
 
+        // Brush selection
         for (let i = 0; i < ts.tilecount; i++) {
           if (!isSelected(i)) continue;
           const col = i % ts.columns;
@@ -1075,6 +1069,18 @@ class TilesetTabs {
           g.lineWidth = 2;
           g.strokeRect(col * ts.tileW + 1, row * ts.tileH + 1, ts.tileW - 2, ts.tileH - 2);
         }
+
+        // Edit multi-select
+        if (self.editMode) {
+          self.selectedTileIds.forEach(i => {
+            const col = i % ts.columns;
+            const row = Math.floor(i / ts.columns);
+            g.strokeStyle = '#0ff'; // Cyan for edit selection
+            g.lineWidth = 2;
+            g.strokeRect(col * ts.tileW + 1, row * ts.tileH + 1, ts.tileW - 2, ts.tileH - 2);
+          });
+        }
+
         for (let i = 0; i < ts.tilecount; i++) {
           if (!isPickTarget(i)) continue;
           const col = i % ts.columns;
@@ -1128,7 +1134,7 @@ class TilesetTabs {
         if (pm) {
           info.innerHTML = '<b style="color:#e8f">Режим выбора тайла</b> · клик — применить · повторный клик — убрать';
         } else if (self.editMode) {
-          info.textContent = 'Edit: клик по тайлу — редактирование';
+          info.textContent = 'Edit: клик — редактировать · Shift+клик — выбрать несколько';
         } else {
           info.textContent = '— клик: выбрать · Shift+клик: добавить · колесо: zoom · MMB: pan —';
         }
@@ -1163,7 +1169,15 @@ class TilesetTabs {
         if (pm) { self.ctx.applyPick(globalID); return; }
 
         if (self.editMode) {
-          self.openTileEditor(ts, localID, block, info);
+          if (e.shiftKey) {
+            if (self.selectedTileIds.has(localID)) self.selectedTileIds.delete(localID);
+            else self.selectedTileIds.add(localID);
+          } else {
+            self.selectedTileIds.clear();
+            self.selectedTileIds.add(localID);
+          }
+          redraw();
+          self.buildEditor(ts, block, info);
         } else {
           self.ctx.addToBrush(globalID, e.shiftKey);
           redraw();
@@ -1217,7 +1231,7 @@ class TilesetTabs {
     } else if (pickMode) {
       info.innerHTML = '<b style="color:#e8f">Режим выбора тайла</b> · клик — применить · повторный клик — убрать';
     } else if (this.editMode) {
-      info.textContent = 'Edit: клик по тайлу — редактирование';
+      info.textContent = 'Edit: клик — редактировать · Shift+клик — выбрать несколько';
     } else {
       info.textContent = '— клик: выбрать · Shift+клик: добавить · колесо: zoom · MMB: pan —';
     }
@@ -1250,10 +1264,21 @@ class TilesetTabs {
     this.refreshCanvasOnly();
   }
 
-  openTileEditor(ts, localID, parentBlock, infoEl) {
+  buildEditor(ts, parentBlock, infoEl) {
     const old = parentBlock.querySelector('.ts-editor');
     if (old) old.remove();
 
+    if (!this.selectedTileIds.size) return;
+
+    if (this.selectedTileIds.size === 1) {
+      const localID = Array.from(this.selectedTileIds)[0];
+      this.openTileEditor(ts, localID, parentBlock, infoEl);
+    } else {
+      this.openMultiTileEditor(ts, parentBlock, infoEl);
+    }
+  }
+
+  openTileEditor(ts, localID, parentBlock, infoEl) {
     if (!ts.tiles[localID]) ts.tiles[localID] = { terrain: null, props: {} };
     const tile = ts.tiles[localID];
 
@@ -1283,6 +1308,74 @@ class TilesetTabs {
     }
     ed.appendChild(trRow);
 
+    ed.appendChild(this.buildPropertiesSection(tile.props, (action, key, val) => {
+      if (action === 'add') {
+        tile.props[key] = val;
+      } else if (action === 'del') {
+        delete tile.props[key];
+      } else if (action === 'set') {
+        tile.props[key] = val;
+      }
+      ts._dirty = true;
+      this.buildEditor(ts, parentBlock, infoEl);
+    }));
+
+    parentBlock.appendChild(ed);
+  }
+
+  openMultiTileEditor(ts, parentBlock, infoEl) {
+    const ed = document.createElement('div');
+    ed.className = 'ts-editor';
+    ed.innerHTML = '<div class="ts-editor-head">Multi-Tile Edit <span>(' + this.selectedTileIds.size + ' tiles selected)</span></div>';
+
+    // Собираем инфу о свойствах
+    const propsMap = new Map(); // key -> { count, ids: [], values: Set }
+    const selectedIds = Array.from(this.selectedTileIds);
+
+    for (const localID of selectedIds) {
+      const tile = ts.tiles[localID];
+      if (!tile || !tile.props) continue;
+      for (const k in tile.props) {
+        if (!propsMap.has(k)) propsMap.set(k, { count: 0, ids: [], values: new Set() });
+        const entry = propsMap.get(k);
+        entry.count++;
+        entry.ids.push(localID);
+        entry.values.add(tile.props[k]);
+      }
+    }
+
+    // Превращаем Map в объект для совместимости с buildPropertiesSection
+    const syntheticProps = {};
+    const metaInfo = {};
+    for (const [k, data] of propsMap) {
+      metaInfo[k] = {
+        isFull: data.count === selectedIds.length,
+        missingIds: selectedIds.filter(id => !data.ids.includes(id))
+      };
+      syntheticProps[k] = data.values.size === 1 ? Array.from(data.values)[0] : '<mixed>';
+    }
+
+    ed.appendChild(this.buildPropertiesSection(syntheticProps, (action, key, val) => {
+      for (const localID of selectedIds) {
+        if (!ts.tiles[localID]) ts.tiles[localID] = { terrain: null, props: {} };
+        const t = ts.tiles[localID];
+        
+        if (action === 'add') {
+          t.props[key] = val;
+        } else if (action === 'del') {
+          delete t.props[key];
+        } else if (action === 'set') {
+          t.props[key] = val;
+        }
+      }
+      ts._dirty = true;
+      this.buildEditor(ts, parentBlock, infoEl);
+    }, metaInfo));
+
+    parentBlock.appendChild(ed);
+  }
+
+  buildPropertiesSection(propsObj, onUpdate, metaInfo) {
     const propSec = document.createElement('div');
     propSec.className = 'form-section';
     const propTitle = document.createElement('div');
@@ -1294,51 +1387,63 @@ class TilesetTabs {
     addPropBtn.addEventListener('click', () => {
       const name = prompt('Имя свойства:');
       if (!name) return;
-      tile.props[name] = '';
-      ts._dirty = true;
-      this.openTileEditor(ts, localID, parentBlock, infoEl);
+      onUpdate('add', name, '');
     });
     propTitle.appendChild(addPropBtn);
     propSec.appendChild(propTitle);
 
     const propList = document.createElement('div');
     propList.className = 'solids-list';
-    const propKeys = Object.keys(tile.props);
+    const propKeys = Object.keys(propsObj).sort();
+    
     if (!propKeys.length) {
       const empty = document.createElement('div');
       empty.className = 'empty-inline';
       empty.textContent = '— нет —';
       propList.appendChild(empty);
     }
+    
     propKeys.forEach(k => {
       const row = document.createElement('div');
       row.className = 'solid-row';
+      
       const kEl = document.createElement('span');
       kEl.className = 'solid-id';
-      kEl.textContent = k;
+      
+      let isFull = true;
+      let missingStr = '';
+      
+      if (metaInfo && metaInfo[k]) {
+        isFull = metaInfo[k].isFull;
+        if (!isFull) {
+          missingStr = ' <span style="color:#888;font-size:10px">(' + metaInfo[k].missingIds.join(', ') + ')</span>';
+        }
+      }
+
+      kEl.innerHTML = k + missingStr;
+      kEl.style.color = isFull ? '#fd4' : '#fff';
+      
       const vInp = document.createElement('input');
       vInp.type = 'text';
-      vInp.value = tile.props[k] || '';
-      vInp.placeholder = 'value';
-      vInp.addEventListener('input', () => {
-        tile.props[k] = vInp.value;
-        ts._dirty = true;
+      vInp.value = propsObj[k] || '';
+      vInp.placeholder = propsObj[k] === '<mixed>' ? '<mixed>' : 'value';
+      
+      vInp.addEventListener('change', () => {
+        onUpdate('set', k, vInp.value);
       });
+      
       const delBtn = document.createElement('button');
       delBtn.className = 'type-del';
       delBtn.textContent = '×';
       delBtn.addEventListener('click', () => {
-        delete tile.props[k];
-        ts._dirty = true;
-        this.openTileEditor(ts, localID, parentBlock, infoEl);
+        onUpdate('del', k);
       });
+      
       row.append(kEl, vInp, delBtn);
       propList.appendChild(row);
     });
     propSec.appendChild(propList);
-    ed.appendChild(propSec);
-
-    parentBlock.appendChild(ed);
+    return propSec;
   }
 
   buildTerrainEditor(ts) {
@@ -1467,7 +1572,7 @@ function tileInfoString(ts, localID) {
         v >= 0 && ts.terrainTypes[v] ? ts.terrainTypes[v].name : v);
       s += ' · terrain=[' + names.join(', ') + ']';
     }
-    const pk = Object.keys(t.props);
+    const pk = Object.keys(t.props || {});
     if (pk.length) s += ' · ' + pk.map(k => k + '=' + (t.props[k] || '✓')).join(' · ');
   }
   return s;
