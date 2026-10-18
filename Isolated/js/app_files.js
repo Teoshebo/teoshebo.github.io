@@ -11,6 +11,7 @@ App.loadNewMap = async function() {
   try {
     const res = await fetch('new.tmx', { cache: 'no-cache' });
     if (!res.ok) throw new Error('HTTP ' + res.status + ' — проверь что new.tmx в корне');
+    
     const text = await res.text();
     
     // Защита от возврата HTML (если файл отсутствует)
@@ -21,6 +22,7 @@ App.loadNewMap = async function() {
     const parsed = RW.TMX.parse(text);
     await RW.TMX.loadImages(parsed);
     await App.initFromParsed(parsed, 'new.tmx');
+    
     if (App.statusEl) App.statusEl.textContent = 'New map: ' + App.mapModel.W + '×' + App.mapModel.H +
       ' · layers: ' + App.mapModel.layerOrder.length;
   } catch (err) {
