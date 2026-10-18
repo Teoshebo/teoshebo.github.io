@@ -285,20 +285,23 @@ App.paintClassicCell = function(tx, ty, anchor) {
   const mask = App.resolveClassicMask(tx, ty, tsIdx, terrIdx, ev);
   const idx = App.buildClassicMaskIndex(tsIdx);
   let tileID = idx.get(mask.join(','));
+  
+  // ─── ИСПРАВЛЕННЫЙ FALLBACK ───
   if (tileID === undefined) {
-    const empty = [];
-    for (let i = 0; i < 4; i++) if (mask[i] === ev) empty.push(i);
+    const solid = [];
+    for (let i = 0; i < 4; i++) if (mask[i] === terrIdx) solid.push(i);
     outer:
-    for (let n = empty.length; n >= 1; n--) {
-      const combos = App.combinations(empty, n);
+    for (let n = solid.length; n >= 1; n--) {
+      const combos = App.combinations(solid, n);
       for (const combo of combos) {
         const test = mask.slice();
-        for (const i of combo) test[i] = terrIdx;
+        for (const i of combo) test[i] = ev;
         tileID = idx.get(test.join(','));
         if (tileID !== undefined) break outer;
       }
     }
   }
+  
   if (tileID === undefined) return;
   const i = ty * map.W + tx;
   const before = map.layers[App.activeLayer][i];
