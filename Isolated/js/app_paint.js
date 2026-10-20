@@ -194,6 +194,16 @@ App.paintTerrainCells = function(cx, cy) {
 };
 
 // ─── CLASSIC AUTOTILE ───
+// Конвертация порядка углов: Tiled [TL, TR, BR, BL] -> RW [TL, TR, BL, BR]
+App.getTerrainRW = function(t, ci) {
+  if (!t.terrain) return -1;
+  if (ci === 0) return t.terrain[0]; // TL
+  if (ci === 1) return t.terrain[1]; // TR
+  if (ci === 2) return t.terrain[3]; // BL (в Tiled это индекс 3)
+  if (ci === 3) return t.terrain[2]; // BR (в Tiled это индекс 2)
+  return -1;
+};
+
 App.buildClassicMaskIndex = function(tsIdx) {
   const c = App.classicMaskCache.get(tsIdx);
   if (c) return c;
@@ -203,7 +213,8 @@ App.buildClassicMaskIndex = function(tsIdx) {
     const id = parseInt(idStr, 10);
     const t = ts.tiles[id];
     if (!t.terrain) continue;
-    const k = t.terrain.join(',');
+    // Собираем ключ в порядке RW: TL, TR, BL, BR
+    const k = [t.terrain[0], t.terrain[1], t.terrain[3], t.terrain[2]].join(',');
     if (!idx.has(k)) idx.set(k, id + ts.firstgid);
   }
   App.classicMaskCache.set(tsIdx, idx);
@@ -244,10 +255,9 @@ App.cellHasCorner = function(tx, ty, ci, tsIdx, targetTerr, solidTileId, layerDa
   if (!nts || nts !== ts) return false;
   const t = nts.tiles[id - nts.firstgid];
   if (!t || !t.terrain) return false;
-  return t.terrain[ci] === targetTerr;
+  return App.getTerrainRW(t, ci) === targetTerr;
 };
 
-// Полностью переписанный resolveClassicMask (смотрит на наличие соседей, а не на строгие углы)
 App.resolveClassicMask = function(tx, ty, tsIdx, targetTerr, emptyValue, solidTileId, layerData) {
   const up = App.cellHasCorner(tx, ty-1, 2, tsIdx, targetTerr, solidTileId, layerData);
   const down = App.cellHasCorner(tx, ty+1, 0, tsIdx, targetTerr, solidTileId, layerData);
