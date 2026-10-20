@@ -610,4 +610,241 @@ App.applyRect = function(x0, y0, x1, y1, tileFn) {
   if (map.undoStack.length > 50) map.undoStack.shift();
   map.redoStack.length = 0;
   App.invalidateMarkersCache();
-  if (App
+  if (App.layersPanel) App.layersPanel.flash(App.activeLayer);
+  if (App.statusEl) App.statusEl.textContent = 'Rect: ' + changes.length + ' cells';
+};
+
+App.pickerAt = function(tx, ty) {
+  const map = App.mapModel;
+  if (tx < 0 || ty < 0 || tx >= map.W || ty >= map.H) return;
+  for (let i = map.layerOrder.length - 1; i >= 0; i--) {
+    const name = map.layerOrder[i];
+    if (!App.renderer.isLayerVisible(name)) continue;
+    const id = map.layers[name][ty * map.W + tx];
+    if (id) {
+      App.activeLayer = name;
+      App.addToBrush(id, false);
+      if (App.layersPanel) App.layersPanel.build();
+      if (App.statusEl) App.statusEl.textContent = 'Picker: ' + name + ' #' + id;
+      return;
+    }
+  }
+  if (App.statusEl) App.statusEl.textContent = 'Picker: empty';
+};
+
+App.runAutotileDialog = function() {
+  if (!App.mapModel || !App.generator) return;
+  const x0 = parseInt(prompt('x0:', '0'), 10);
+  if (isNaN(x0)) return;
+  const y0 = parseInt(prompt('y0:', '0'), 10);
+  if (isNaN(y0)) return;
+  const x1 = parseInt(prompt('x1:', String(App.mapModel.W - 1)), 10);
+  if (isNaN(x1)) return;
+  const y1 = parseInt(prompt('y1:', String(App.mapModel.H - 1)), 10);
+  if (isNaN(y1)) return;
+  const changes = App.generator.generateRect(x0, y0, x1, y1);
+  if (!changes.length) { if (App.statusEl) App.statusEl.textContent = 'Autotile: no changes'; return; }
+  const data = App.mapModel.layers.Items0;
+  if (!data) { if (App.statusEl) App.statusEl.textContent = 'No Items0 layer'; return; }
+  for (const c of changes) data[c.idx] = c.after;
+  App.renderer.invalidateRange(x0, y0, x1, y1);
+  App.mapModel.undoStack.push({ layer: 'Items0', changes });
+  if (App.mapModel.undoStack.length > 50) App.mapModel.undoStack.shift();
+  App.mapModel.redoStack.length = 0;
+  App.invalidateMarkersCache();
+  App.renderer.render();
+  if (App.layersPanel) App.layersPanel.flash('Items0');
+  if (App.statusEl) App.statusEl.textContent = 'Autotile: ' + changes.length + ' cells';
+};
+
+// ═══════════════════════════════════════════════
+// CONCENTRIC RING FILL (PYRAMID EDITION)
+// ═══════════════════════════════════════════════
+App.fillRing = function(tx, ty, solidTile) {
+  const map = App.mapModel;
+  if (!map || !App.activeLayer) return false;
+  const data = map.layers[App.activeLayer];
+  if (tx < 0 || ty < 0 || tx >= map.W || ty >= map.H) return false;
+  
+  const target = data[ty * map.W + tx];
+  if (!target) {
+     if (App.statusEl) App.statusEl.textContent = 'Ring fill needs to start on a block';
+     return false;
+  }
+
+  const anchor = App.resolveClassicAnchor();
+  if (!anchor) return false;
+  const terrIdx = anchor.terrIdx;
+  const ts = anchor.ts;
+
+  const isPartOfBlock = (id) => {
+    if (!id) return false;
+    if (id === solidTile) return true;
+    const nts = App.renderer.findTileset(id);
+    if (!nts || nts !== ts) return false;
+    const t = nts.tiles[id - nts.firstgid];
+    if (!t || !t.terrain) return false;
+    return t.terrain.includes(terrIdx);
+  };
+
+  // 1. Находим связную область
+  const region = new Set();
+  const queue = [[tx, ty]];
+  let minX = tx, maxX = tx, minY = ty, maxY = ty;
+
+  while (queue.length) {
+    const [cx, cy] = queue.pop();
+    if (cx < 0 || cy < 0 || cx >= map.W || cy >= map.H) continue;
+    const idx = cy * map.W + cx;
+    if (region.has(idx)) continue;
+    const id = data[idx];
+    if (!isPartOfBlock(id)) continue;
+
+    region.add(idx);
+    if (cx < minX) minX = cx; if (cx > maxX) maxX = cx;
+    if (cy < minY) minY = cy; if (cy > maxY) maxY = cy;
+
+    queue.push([cx+1, cy], [cx-1, cy], [cx, cy+1], [cx, cy-1]);
+  }
+
+  if (region.size < 1) return false;
+
+  // 2. Расширяем область наружу (BFS от исходного блока)
+  const EXPAND_RADIUS = 15;
+  const startX = Math.max(0, minX - EXPAND_RADIUS);
+  const endX = Math.min(map.W - 1, maxX + EXPAND_RADIUS);
+  const startY = Math.max(0, minY - EXPAND_RADIUS);
+  const endY = Math.min(map.H - 1, maxY + EXPAND_RADIUS);
+
+  const dist = new Uint16Array(map.W * map.H).fill(9999);
+  
+  const bfsQ = [];
+  for (const idx of region) {
+      dist[idx] = 0;
+      bfsQ.push(idx);
+  }
+  
+  let head = 0;
+  while (head < bfsQ.length) {
+      const curr = bfsQ[head++];
+      const cx = curr % map.W;
+      const cy = Math.floor(curr / map.W);
+      const cd = dist[curr];
+      if (cd >= EXPAND_RADIUS) continue;
+      
+      for (let dy = -1; dy <= 1; dy++) {
+          for (let dx = -1; dx <= 1; dx++) {
+              if (dx === 0 && dy === 0) continue;
+              const nx = cx + dx, ny = cy + dy;
+              if (nx < 0 || ny < 0 || nx >= map.W || ny >= map.H) continue;
+              const nidx = ny * map.W + nx;
+              if (cd + 1 < dist[nidx]) {
+                  dist[nidx] = cd + 1;
+                  bfsQ.push(nidx);
+              }
+          }
+      }
+  }
+
+  // 3. Строим слои (пирог): чётные — солид (forcedSolid), нечётные — пусто (forcedEmpty)
+  const tempLayer = new Uint32Array(data); 
+  const forcedSolid = new Uint8Array(map.W * map.H);
+  const forcedEmpty = new Uint8Array(map.W * map.H);
+  
+  for (let y = startY; y <= endY; y++) {
+    for (let x = startX; x <= endX; x++) {
+      const idx = y * map.W + x;
+      if (dist[idx] === 9999) continue;
+      
+      if (dist[idx] % 2 === 0) {
+        tempLayer[idx] = solidTile;
+        forcedSolid[idx] = 1;
+      } else {
+        tempLayer[idx] = 0;
+        forcedEmpty[idx] = 1;
+      }
+    }
+  }
+
+  // 4. Прогоняем автотайл по расширенной области.
+  for (let y = startY - 1; y <= endY + 1; y++) {
+    for (let x = startX - 1; x <= endX + 1; x++) {
+      App.paintClassicCell(x, y, anchor, tempLayer, forcedSolid, forcedEmpty);
+    }
+  }
+
+  // 5. Применяем к основной карте
+  const changes = [];
+  for (let y = startY - 1; y <= endY + 1; y++) {
+    for (let x = startX - 1; x <= endX + 1; x++) {
+      if (x < 0 || y < 0 || x >= map.W || y >= map.H) continue;
+      const realIdx = y * map.W + x;
+      const before = data[realIdx];
+      const after = tempLayer[realIdx];
+      if (before !== after) {
+        data[realIdx] = after;
+        changes.push({ idx: realIdx, before, after });
+      }
+    }
+  }
+
+  if (changes.length) {
+    map.undoStack.push({ layer: App.activeLayer, changes });
+    if (map.undoStack.length > 50) map.undoStack.shift();
+    map.redoStack.length = 0;
+    App.invalidateMarkersCache();
+    
+    App.renderer.invalidateRange(startX - 1, startY - 1, endX + 1, endY + 1);
+    if (App.statusEl) App.statusEl.textContent = 'Pyramid expanded (' + changes.length + ' cells)';
+    return true;
+  }
+  return false;
+};
+
+// ═══════════════════════════════════════════════
+// UNDO / REDO
+// ═══════════════════════════════════════════════
+App.doUndo = function() {
+  if (!App.mapModel || !App.mapModel.canUndo()) { if (App.statusEl) App.statusEl.textContent = 'Nothing to undo'; return; }
+  const entry = App.mapModel.undo();
+  App.invalidateMarkersCache();
+  if (entry.type === 'resize') {
+    App.renderer.invalidate();
+    App.renderer.fitView();
+    App.updateZoomLabels();
+    if (App.layersPanel) App.layersPanel.build();
+  } else App.invalidateEntry(entry);
+  App.renderer.render();
+  if (App.statusEl) App.statusEl.textContent = 'Undo';
+};
+
+App.doRedo = function() {
+  if (!App.mapModel || !App.mapModel.canRedo()) { if (App.statusEl) App.statusEl.textContent = 'Nothing to redo'; return; }
+  const entry = App.mapModel.redo();
+  App.invalidateMarkersCache();
+  if (entry.type === 'resize') {
+    App.renderer.invalidate();
+    App.renderer.fitView();
+    App.updateZoomLabels();
+    if (App.layersPanel) App.layersPanel.build();
+  } else App.invalidateEntry(entry);
+  App.renderer.render();
+  if (App.statusEl) App.statusEl.textContent = 'Redo';
+};
+
+App.invalidateEntry = function(entry) {
+  if (!App.renderer) return;
+  if (entry.type === 'resize') return;
+  const list = entry.type === 'multi'
+    ? entry.layers
+    : [{ layer: entry.layer, changes: entry.changes }];
+  for (const le of list) {
+    if (!le.changes) continue;
+    for (const c of le.changes) {
+      const x = c.idx % App.mapModel.W, y = Math.floor(c.idx / App.mapModel.W);
+      App.renderer.chunkCache.delete(Math.floor(x/32) + ',' + Math.floor(y/32));
+    }
+  }
+};
+
+})(window.RWEditor = window.RWEditor || {});
