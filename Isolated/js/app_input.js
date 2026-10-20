@@ -104,17 +104,14 @@ if (App.cv) App.cv.addEventListener('pointerdown', (e) => {
       if (App.statusEl) App.statusEl.textContent = 'Classic: выбери terrain в BRUSH панели';
       return;
     }
-    
-    // ─── NEW: RING FILL (Shift + Click) ───
     if (e.shiftKey) {
       const anchor = App.resolveClassicAnchor();
       const solidTile = anchor.terrType.tile + anchor.ts.firstgid;
       if (App.fillRing(tx, ty, solidTile)) {
         App.renderer.render();
       }
-      return; // Не начинаем обычное рисование
+      return;
     }
-
     App.painting = true; App.strokeChanges = null;
     App.paintClassicCells(tx, ty);
     App.lastPaintKey = tx + ',' + ty;
@@ -130,8 +127,8 @@ if (App.cv) App.cv.addEventListener('pointerdown', (e) => {
     App.renderer.rectStart = App.rectStart; App.renderer.rectCurrent = App.rectCurrent;
     App.renderer.render();
   } else if (App.activeTool === 'fill') {
-    if (!App.brushGroup.length) { if (App.statusEl) App.statusEl.textContent = 'Brush empty'; return; }
-    App.floodFill(tx, ty, App.pickWeightedTile());
+    if (!App.tempTypeFill && !App.brushGroup.length) { if (App.statusEl) App.statusEl.textContent = 'Brush empty'; return; }
+    App.floodFill(tx, ty, App.tempTypeFill ? 0 : App.pickWeightedTile());
     App.renderer.render();
     App.cancelLongTap();
   } else if (App.activeTool === 'picker') {
@@ -343,6 +340,8 @@ window.addEventListener('keydown', (e) => {
   const tag = e.target && e.target.tagName;
   if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
 
+  App.pressedKeys.add(e.code);
+
   if (e.key === 'Escape') { if (App.pickMode) { App.endPick(); return; } }
 
   if (e.ctrlKey || e.metaKey) {
@@ -350,6 +349,25 @@ window.addEventListener('keydown', (e) => {
     if (e.code === 'KeyY') { e.preventDefault(); App.doRedo(); return; }
     if (e.code === 'KeyS') { e.preventDefault(); App.saveMap(); return; }
     return;
+  }
+
+  if (e.code === 'KeyF') {
+    if (e.shiftKey) {
+      e.preventDefault();
+      App.runTypeFill();
+      return;
+    }
+    if (App.pressedKeys.has('KeyE')) {
+      e.preventDefault();
+      App.runEmptyFill();
+      return;
+    }
+    if (App.tempEmptyFill || App.tempTypeFill) {
+      e.preventDefault();
+      if (App.tempEmptyFill) App.runEmptyFill();
+      if (App.tempTypeFill) App.runTypeFill();
+      return;
+    }
   }
 
   if (e.code === 'KeyW' || e.code === 'KeyA' || e.code === 'KeyS' || e.code === 'KeyD') {
@@ -366,10 +384,11 @@ window.addEventListener('keydown', (e) => {
 });
 
 window.addEventListener('keyup', (e) => {
+  App.pressedKeys.delete(e.code);
   if (e.code === 'KeyW' || e.code === 'KeyA' || e.code === 'KeyS' || e.code === 'KeyD') {
     App.stopPanKey(e.code);
   }
 });
-window.addEventListener('blur', () => { App.panKeys.clear(); });
+window.addEventListener('blur', () => { App.panKeys.clear(); App.pressedKeys.clear(); });
 
 })(window.RWEditor = window.RWEditor || {});
