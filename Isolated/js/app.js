@@ -35,7 +35,13 @@ App.rectStart = null;
 App.rectCurrent = null;
 App.lastPaintKey = null;
 
-App._pendingImportTilesets = []; // Для импорта из .tmx
+App._pendingImportTilesets = []; 
+
+// ─── TEMP FILL MODES ───
+App.tempEmptyFill = false;
+App.tempTypeFill = false;
+App.prevTool = null;
+App.prevBrush = null;
 
 // ─── REFERENCE ───
 App.refImage = null;
@@ -64,6 +70,7 @@ App.multiPointerActive = false;
 App.lastPinchDist = 0;
 App.lastPinchMidX = 0;
 App.lastPinchMidY = 0;
+App.pressedKeys = new Set(); // <--- ИСПРАВЛЕНИЕ
 
 App.panKeys = new Set();
 App.panRaf = null;
@@ -245,6 +252,8 @@ App.initFromParsed = async function(parsed, filename) {
   App.activeLayer = App.mapModel.layerOrder[0] || null;
   App.brushGroup = [];
   App.pickMode = null;
+  App.tempEmptyFill = false;
+  App.tempTypeFill = false;
   if (App.pickBannerEl) App.pickBannerEl.classList.add('hidden');
 
   App.classicMaskCache.clear();
