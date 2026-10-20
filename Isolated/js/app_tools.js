@@ -25,6 +25,7 @@ App.TOOLS = TOOLS;
 App.LONG_TAP_TOOLS = LONG_TAP_TOOLS;
 
 App.makeIconEl = function(t) {
+  let ic;
   if (t.icon) {
     const img = document.createElement('img');
     img.className = 'tool-ic';
@@ -36,12 +37,37 @@ App.makeIconEl = function(t) {
       span.textContent = t.emoji || '?';
       img.replaceWith(span);
     };
-    return img;
+    ic = img;
+  } else {
+    const span = document.createElement('span');
+    span.className = 'ic';
+    span.textContent = t.emoji || '?';
+    ic = span;
   }
-  const span = document.createElement('span');
-  span.className = 'ic';
-  span.textContent = t.emoji || '?';
-  return span;
+
+  // Композитные иконки для Fill режимов
+  if (t.id === 'fill' && (App.tempEmptyFill || App.tempTypeFill)) {
+    const wrap = document.createElement('div');
+    wrap.style.position = 'relative';
+    wrap.style.display = 'inline-block';
+    wrap.appendChild(ic);
+    
+    const badge = document.createElement('span');
+    badge.style.position = 'absolute';
+    badge.style.bottom = '-5px';
+    badge.style.right = '-5px';
+    badge.style.fontSize = '12px';
+    badge.style.lineHeight = '1';
+    badge.style.pointerEvents = 'none';
+    
+    if (App.tempEmptyFill) badge.textContent = '🧽';
+    else if (App.tempTypeFill) badge.textContent = 'T';
+    
+    wrap.appendChild(badge);
+    return wrap;
+  }
+
+  return ic;
 };
 
 App.makeLabelEl = function(t) {
@@ -110,6 +136,13 @@ App.updateMobileBrushBtn = function() {
 
 App.handleToolClick = function(id) {
   if (App.pickMode) App.endPick();
+  
+  // Сбрасываем временные режимы при смене инструмента
+  if (App.tempEmptyFill || App.tempTypeFill) {
+    App.tempEmptyFill = false;
+    App.tempTypeFill = false;
+  }
+  
   if (id === 'autotile') { App.runAutotileDialog(); return; }
   App.activeTool = id;
   document.querySelectorAll('#tools .tool').forEach(e => {
@@ -169,6 +202,46 @@ App.openToolPicker = function() {
 App.closeToolPicker = function() {
   const modal = App.el('toolPickerModal');
   if (modal) modal.classList.add('hidden');
+};
+
+// ═══════════════════════════════════════════════
+// TEMP FILL MODES
+// ═══════════════════════════════════════════════
+App.runEmptyFill = function() {
+  if (App.tempEmptyFill) {
+    App.tempEmptyFill = false;
+    if (App.prevTool) App.activeTool = App.prevTool;
+    if (App.prevBrush) App.brushGroup = App.prevBrush;
+    if (App.brushPanel) App.brushPanel.build();
+    if (App.statusEl) App.statusEl.textContent = 'Reverted from Empty Fill';
+  } else {
+    App.tempTypeFill = false;
+    App.prevTool = App.activeTool;
+    App.prevBrush = App.brushGroup;
+    App.activeTool = 'fill';
+    App.brushGroup = [{ tileID: 0, weight: 1 }];
+    App.tempEmptyFill = true;
+    if (App.brushPanel) App.brushPanel.build();
+    if (App.statusEl) App.statusEl.textContent = 'Empty Fill Mode (F to revert)';
+  }
+  App.buildTools();
+};
+
+App.runTypeFill = function() {
+  if (App.tempTypeFill) {
+    App.tempTypeFill = false;
+    if (App.prevTool) App.activeTool = App.prevTool;
+    if (App.brushPanel) App.brushPanel.build();
+    if (App.statusEl) App.statusEl.textContent = 'Reverted from Type Fill';
+  } else {
+    App.tempEmptyFill = false;
+    App.prevTool = App.activeTool;
+    App.activeTool = 'fill';
+    App.tempTypeFill = true;
+    if (App.brushPanel) App.brushPanel.build();
+    if (App.statusEl) App.statusEl.textContent = 'Type Fill Mode (Shift+F to revert)';
+  }
+  App.buildTools();
 };
 
 })(window.RWEditor = window.RWEditor || {});
