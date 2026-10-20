@@ -278,7 +278,7 @@ App.combinations = function(arr, k) {
   return r;
 };
 
-App.paintClassicCell = function(tx, ty, anchor, layerData) {
+App.paintClassicCell = function(tx, ty, anchor, layerData, forcedSolid) {
   if (!anchor) return;
   const map = App.mapModel;
   if (tx < 0 || ty < 0 || tx >= map.W || ty >= map.H) return;
@@ -288,6 +288,18 @@ App.paintClassicCell = function(tx, ty, anchor, layerData) {
   
   const i = ty * map.W + tx;
   const solidTileId = anchor.terrType.tile + anchor.ts.firstgid;
+
+  if (forcedSolid && forcedSolid[i]) {
+    if (layerData[i] !== solidTileId) {
+      layerData[i] = solidTileId;
+      if (!isTemp) {
+        App.recordChange(App.activeLayer, i, layerData[i], solidTileId);
+        App.renderer.invalidateCell(tx, ty);
+      }
+    }
+    return;
+  }
+
   const tsIdx = anchor.tsIdx;
   const terrIdx = anchor.terrIdx;
   const ev = App.findEmptyValue(tsIdx, terrIdx);
@@ -321,6 +333,10 @@ App.paintClassicCell = function(tx, ty, anchor, layerData) {
   if (tileID === undefined) return;
   const before = layerData[i];
   if (before === tileID) return;
+  
+  // FIX: Не перезаписываем солид краем
+  if (before === solidTileId && tileID !== solidTileId && tileID !== 0) return;
+  
   layerData[i] = tileID;
   
   if (!isTemp) {
@@ -441,6 +457,51 @@ App.endStroke = function() {
 // FLOOD / RECT / PICKER / AUTOTILE DIALOG
 // ═══════════════════════════════════════════════
 App.floodFill = function(tx, ty, newTile) {
+  if (App.tempTypeFill) {
+    const map = App.mapModel;
+    if (!map || !App.activeLayer) return;
+    const data = map.layers[App.activeLayer];
+    const target = data[ty * map.W + tx];
+    if (!target) return;
+    
+    const type = App.typesModel.findBySolid(target);
+    if (!type) { if (App.statusEl) App.statusEl.textContent = 'Tile is not in any Type'; return; }
+    
+    const solidIds = new Set(type.solids.map(s => s.tileID));
+    const newTileId = App.pickWeightedSolid(type);
+    
+    const stack = [[tx, ty]];
+    const seen = new Set();
+    const changes = [];
+    while (stack.length) {
+        const p = stack.pop();
+        const x = p[0], y = p[1];
+        if (x < 0 || y < 0 || x >= map.W || y >= map.H) continue;
+        const i = y * map.W + x;
+        if (seen.has(i) || !solidIds.has(data[i])) continue;
+        seen.add(i);
+        changes.push({ idx: i, before: data[i], after: newTileId });
+        stack.push([x+1,y],[x-1,y],[x,y+1],[x,y-1]);
+    }
+    if (!changes.length) return;
+    for (const c of changes) data[c.idx] = c.after;
+    
+    let minX = map.W, maxX = 0, minY = map.H, maxY = 0;
+    for (const c of changes) {
+        const x = c.idx % map.W, y = Math.floor(c.idx / map.W);
+        if (x < minX) minX = x; if (x > maxX) maxX = x;
+        if (y < minY) minY = y; if (y > maxY) maxY = y;
+    }
+    App.renderer.invalidateRange(minX, minY, maxX, maxY);
+    map.undoStack.push({ layer: App.activeLayer, changes });
+    if (map.undoStack.length > 50) map.undoStack.shift();
+    map.redoStack.length = 0;
+    App.invalidateMarkersCache();
+    if (App.layersPanel) App.layersPanel.flash(App.activeLayer);
+    if (App.statusEl) App.statusEl.textContent = 'Type Fill: ' + changes.length + ' cells';
+    return;
+  }
+
   const map = App.mapModel;
   if (tx < 0 || ty < 0 || tx >= map.W || ty >= map.H) return;
   if (!App.activeLayer) return;
@@ -567,7 +628,7 @@ App.runAutotileDialog = function() {
 };
 
 // ═══════════════════════════════════════════════
-// CONCENTRIC RING FILL (OUTWARD EXPANSION)
+// CONCENTRIC RING FILL (PYRAMID EDITION)
 // ═══════════════════════════════════════════════
 App.fillRing = function(tx, ty, solidTile) {
   const map = App.mapModel;
@@ -596,7 +657,7 @@ App.fillRing = function(tx, ty, solidTile) {
     return t.terrain.includes(terrIdx);
   };
 
-  // 1. Находим исходную связную область (то, что нарисовал юзер)
+  // 1. Находим связную область
   const region = new Set();
   const queue = [[tx, ty]];
   let minX = tx, maxX = tx, minY = ty, maxY = ty;
@@ -660,6 +721,7 @@ App.fillRing = function(tx, ty, solidTile) {
 
   // 3. Строим слои (пирог)
   const tempLayer = new Uint32Array(data); 
+  const forcedSolid = new Uint8Array(map.W * map.H);
   
   for (let y = startY; y <= endY; y++) {
     for (let x = startX; x <= endX; x++) {
@@ -668,6 +730,7 @@ App.fillRing = function(tx, ty, solidTile) {
       
       if (dist[idx] % 2 === 0) {
         tempLayer[idx] = solidTile;
+        forcedSolid[idx] = 1;
       } else {
         tempLayer[idx] = 0;
       }
@@ -677,7 +740,7 @@ App.fillRing = function(tx, ty, solidTile) {
   // 4. Прогоняем автотайл по ВСЕЙ расширенной области
   for (let y = startY - 1; y <= endY + 1; y++) {
     for (let x = startX - 1; x <= endX + 1; x++) {
-      App.paintClassicCell(x, y, anchor, tempLayer);
+      App.paintClassicCell(x, y, anchor, tempLayer, forcedSolid);
     }
   }
 
