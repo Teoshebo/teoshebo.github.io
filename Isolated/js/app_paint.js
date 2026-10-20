@@ -230,6 +230,7 @@ App.findEmptyValue = function(tsIdx, targetTerr) {
   return best;
 };
 
+// Исправленная проверка: солид — это только тайл со всеми 4 квадрантами == targetTerr
 App.cellHasTarget = function(tx, ty, tsIdx, targetTerr, solidTileId, layerData) {
   const map = App.mapModel;
   if (tx < 0 || ty < 0 || tx >= map.W || ty >= map.H) return false;
@@ -244,10 +245,12 @@ App.cellHasTarget = function(tx, ty, tsIdx, targetTerr, solidTileId, layerData) 
   if (!nts || nts !== ts) return false;
   const t = nts.tiles[id - nts.firstgid];
   if (!t || !t.terrain) return false;
-  return t.terrain.includes(targetTerr);
+  
+  return t.terrain[0] === targetTerr && t.terrain[1] === targetTerr &&
+         t.terrain[2] === targetTerr && t.terrain[3] === targetTerr;
 };
 
-// ТОЧНАЯ ЛОГИКА TNS (OR): если хотя бы один сосед солидный — угол солидный
+// ТОЧНАЯ ЛОГИКА TNS (OR)
 App.resolveClassicMask = function(tx, ty, tsIdx, targetTerr, emptyValue, solidTileId, layerData) {
   const tN  = App.cellHasTarget(tx,     ty - 1, tsIdx, targetTerr, solidTileId, layerData);
   const tS  = App.cellHasTarget(tx,     ty + 1, tsIdx, targetTerr, solidTileId, layerData);
@@ -277,7 +280,6 @@ App.paintClassicCell = function(tx, ty, anchor, layerData, forcedSolid, forcedEm
   const i = ty * map.W + tx;
   const solidTileId = anchor.terrType.tile + anchor.ts.firstgid;
 
-  // 1. Принудительный солид (пирамида / forced)
   if (forcedSolid && forcedSolid[i]) {
     const prev = layerData[i];
     if (prev !== solidTileId) {
@@ -290,7 +292,6 @@ App.paintClassicCell = function(tx, ty, anchor, layerData, forcedSolid, forcedEm
     return;
   }
 
-  // 2. Принудительная пустота (пирамида: пустые кольца)
   if (forcedEmpty && forcedEmpty[i]) {
     const prev = layerData[i];
     if (prev !== 0) {
@@ -303,7 +304,6 @@ App.paintClassicCell = function(tx, ty, anchor, layerData, forcedSolid, forcedEm
     return;
   }
 
-  // 3. СОЛИД — СВЯТОЕ. Никогда не перезаписываем существующий солид.
   const before = layerData[i];
   if (before === solidTileId) return;
 
@@ -321,7 +321,6 @@ App.paintClassicCell = function(tx, ty, anchor, layerData, forcedSolid, forcedEm
   } else {
     const idx = App.buildClassicMaskIndex(tsIdx);
     tileID = idx.get(mask.join(','));
-    // Никаких fallback! Если маски нет, ставим 0.
     if (tileID === undefined) tileID = 0;
   }
   
