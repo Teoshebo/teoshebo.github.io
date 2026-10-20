@@ -230,7 +230,7 @@ App.findEmptyValue = function(tsIdx, targetTerr) {
   return best;
 };
 
-// Исправленная проверка: солид — это только тайл со всеми 4 квадрантами == targetTerr
+// Солид — это только тайл со всеми 4 квадрантами == targetTerr
 App.cellHasTarget = function(tx, ty, tsIdx, targetTerr, solidTileId, layerData) {
   const map = App.mapModel;
   if (tx < 0 || ty < 0 || tx >= map.W || ty >= map.H) return false;
@@ -250,7 +250,7 @@ App.cellHasTarget = function(tx, ty, tsIdx, targetTerr, solidTileId, layerData) 
          t.terrain[2] === targetTerr && t.terrain[3] === targetTerr;
 };
 
-// ТОЧНАЯ ЛОГИКА TNS (OR)
+// Умный поиск ближайшей маски
 App.resolveClassicMask = function(tx, ty, tsIdx, targetTerr, emptyValue, solidTileId, layerData) {
   const tN  = App.cellHasTarget(tx,     ty - 1, tsIdx, targetTerr, solidTileId, layerData);
   const tS  = App.cellHasTarget(tx,     ty + 1, tsIdx, targetTerr, solidTileId, layerData);
@@ -266,7 +266,33 @@ App.resolveClassicMask = function(tx, ty, tsIdx, targetTerr, emptyValue, solidTi
   const qSW = (tSW || tS || tW) ? targetTerr : emptyValue;
   const qSE = (tSE || tS || tE) ? targetTerr : emptyValue;
 
-  return [qNW, qNE, qSW, qSE];
+  const mask = [qNW, qNE, qSW, qSE];
+  const idx = App.buildClassicMaskIndex(tsIdx);
+  
+  if (idx.has(mask.join(','))) return mask;
+
+  // Поиск ближайшей маски (фоллбэк)
+  let bestMask = mask;
+  let minDist = Infinity;
+  
+  for (const [k, id] of idx.entries()) {
+    const testMask = k.split(',').map(Number);
+    let dist = 0;
+    for (let i = 0; i < 4; i++) {
+      if (mask[i] === testMask[i]) continue;
+      const wantSolid = (mask[i] === targetTerr);
+      const gotSolid = (testMask[i] === targetTerr);
+      if (wantSolid && !gotSolid) dist += 1;   // не хватает солида (лучше)
+      else if (!wantSolid && gotSolid) dist += 10; // лишний солид (плохо)
+      else dist += 100; // вообще другой тип
+    }
+    if (dist < minDist) {
+      minDist = dist;
+      bestMask = testMask;
+    }
+    if (minDist === 0) break;
+  }
+  return bestMask;
 };
 
 App.paintClassicCell = function(tx, ty, anchor, layerData, forcedSolid, forcedEmpty) {
@@ -334,6 +360,7 @@ App.paintClassicCell = function(tx, ty, anchor, layerData, forcedSolid, forcedEm
   }
 };
 
+// Добавлено: мгновенное обновление краев вокруг нарисованных солидов
 App.paintClassicCells = function(cx, cy) {
   const map = App.mapModel;
   if (!map || !App.activeLayer) return;
@@ -345,6 +372,8 @@ App.paintClassicCells = function(cx, cy) {
   const solidTile = anchor.terrType.tile + anchor.ts.firstgid;
   const cells = App.brushCells(cx, cy);
   const data = map.layers[App.activeLayer];
+  
+  // 1. Ставим солиды
   for (const c of cells) {
     const tx = c[0], ty = c[1];
     if (tx < 0 || ty < 0 || tx >= map.W || ty >= map.H) continue;
@@ -355,6 +384,17 @@ App.paintClassicCells = function(cx, cy) {
     App.recordChange(App.activeLayer, i, before, solidTile);
     App.renderer.invalidateCell(tx, ty);
     App.expandStrokeBound(tx, ty);
+  }
+
+  // 2. Сразу же обновляем края вокруг
+  for (const c of cells) {
+    const tx = c[0], ty = c[1];
+    if (tx < 0 || ty < 0 || tx >= map.W || ty >= map.H) continue;
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        App.paintClassicCell(tx + dx, ty + dy, anchor);
+      }
+    }
   }
 };
 
