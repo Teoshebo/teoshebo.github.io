@@ -247,8 +247,16 @@ App.cellHasCorner = function(tx, ty, ci, tsIdx, targetTerr, solidTileId, layerDa
   return t.terrain[ci] === targetTerr;
 };
 
+App.cellHasSolid = function(tx, ty, solidTileId, layerData) {
+  const map = App.mapModel;
+  if (tx < 0 || ty < 0 || tx >= map.W || ty >= map.H) return false;
+  const data = layerData || map.layers[App.activeLayer];
+  if (!data) return false;
+  return data[ty * map.W + tx] === solidTileId;
+};
+
 App.resolveClassicMask = function(tx, ty, tsIdx, targetTerr, emptyValue, solidTileId, layerData) {
-  // 47-tile blob (оригинальная логика Беты-32)
+  // AND logic for large blocks (original Beta-32)
   const tlOK = App.cellHasCorner(tx-1, ty-1, 3, tsIdx, targetTerr, solidTileId, layerData) &&
                App.cellHasCorner(tx, ty-1, 2, tsIdx, targetTerr, solidTileId, layerData) &&
                App.cellHasCorner(tx-1, ty, 1, tsIdx, targetTerr, solidTileId, layerData);
@@ -268,22 +276,28 @@ App.resolveClassicMask = function(tx, ty, tsIdx, targetTerr, emptyValue, solidTi
     blOK ? targetTerr : emptyValue,
     brOK ? targetTerr : emptyValue
   ];
-  
-  // Edge-fallback: если 47-blob дал полностью пустую маску, но рядом есть
-  // ортогональный солид — рисуем прямые края.
-  if (mask[0] === emptyValue && mask[1] === emptyValue &&
-      mask[2] === emptyValue && mask[3] === emptyValue) {
-    const up = App.cellHasCorner(tx, ty-1, 2, tsIdx, targetTerr, solidTileId, layerData);
-    const down = App.cellHasCorner(tx, ty+1, 0, tsIdx, targetTerr, solidTileId, layerData);
-    const left = App.cellHasCorner(tx-1, ty, 1, tsIdx, targetTerr, solidTileId, layerData);
-    const right = App.cellHasCorner(tx+1, ty, 3, tsIdx, targetTerr, solidTileId, layerData);
-    
-    if (up) { mask[0] = targetTerr; mask[1] = targetTerr; }
-    if (down) { mask[2] = targetTerr; mask[3] = targetTerr; }
-    if (left) { mask[0] = targetTerr; mask[2] = targetTerr; }
-    if (right) { mask[1] = targetTerr; mask[3] = targetTerr; }
+
+  // Fallback for single tiles (TNS logic)
+  if (mask[0] === emptyValue && mask[1] === emptyValue && mask[2] === emptyValue && mask[3] === emptyValue) {
+    const tN = App.cellHasSolid(tx, ty-1, solidTileId, layerData);
+    const tS = App.cellHasSolid(tx, ty+1, solidTileId, layerData);
+    const tE = App.cellHasSolid(tx+1, ty, solidTileId, layerData);
+    const tW = App.cellHasSolid(tx-1, ty, solidTileId, layerData);
+    const tNW = App.cellHasSolid(tx-1, ty-1, solidTileId, layerData);
+    const tNE = App.cellHasSolid(tx+1, ty-1, solidTileId, layerData);
+    const tSW = App.cellHasSolid(tx-1, ty+1, solidTileId, layerData);
+    const tSE = App.cellHasSolid(tx+1, ty+1, solidTileId, layerData);
+
+    if (tS && !tN && !tE && !tW && !tNW && !tNE && !tSW && !tSE) mask = [emptyValue, emptyValue, targetTerr, targetTerr];
+    else if (tN && !tS && !tE && !tW && !tNW && !tNE && !tSW && !tSE) mask = [targetTerr, targetTerr, emptyValue, emptyValue];
+    else if (tE && !tN && !tS && !tW && !tNW && !tNE && !tSW && !tSE) mask = [emptyValue, targetTerr, emptyValue, targetTerr];
+    else if (tW && !tN && !tS && !tE && !tNW && !tNE && !tSW && !tSE) mask = [targetTerr, emptyValue, targetTerr, emptyValue];
+    else if (tSE && !tN && !tS && !tE && !tW && !tNW && !tNE && !tSW) mask = [emptyValue, emptyValue, emptyValue, targetTerr];
+    else if (tSW && !tN && !tS && !tE && !tW && !tNW && !tNE && !tSE) mask = [emptyValue, emptyValue, targetTerr, emptyValue];
+    else if (tNE && !tN && !tS && !tE && !tW && !tNW && !tSW && !tSE) mask = [emptyValue, targetTerr, emptyValue, emptyValue];
+    else if (tNW && !tN && !tS && !tE && !tW && !tNE && !tSW && !tSE) mask = [targetTerr, emptyValue, emptyValue, emptyValue];
   }
-  
+
   return mask;
 };
 
@@ -353,8 +367,7 @@ App.paintClassicCell = function(tx, ty, anchor, layerData, forcedSolid, forcedEm
     const idx = App.buildClassicMaskIndex(tsIdx);
     tileID = idx.get(mask.join(','));
     
-    // Fallback: только в сторону "пустее". Никогда не ставим солиднее —
-    // иначе чёрные дуги/солиды на пустых клетках.
+    // Fallback: only degrade if tileID is undefined
     if (tileID === undefined) {
       const solid = [];
       for (let j = 0; j < 4; j++) if (mask[j] === terrIdx) solid.push(j);
