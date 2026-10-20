@@ -314,17 +314,33 @@ App.paintClassicCell = function(tx, ty, anchor, layerData, forcedSolid) {
   } else {
     const idx = App.buildClassicMaskIndex(tsIdx);
     tileID = idx.get(mask.join(','));
+    
+    // FIX: Сначала пытаемся найти солиднее, потом пустее
     if (tileID === undefined) {
-      const solid = [];
-      for (let i = 0; i < 4; i++) if (mask[i] === terrIdx) solid.push(i);
+      const empty = [];
+      for (let i = 0; i < 4; i++) if (mask[i] === ev) empty.push(i);
       outer:
-      for (let n = solid.length; n >= 1; n--) {
-        const combos = App.combinations(solid, n);
+      for (let n = empty.length; n >= 1; n--) {
+        const combos = App.combinations(empty, n);
         for (const combo of combos) {
           const test = mask.slice();
-          for (const i of combo) test[i] = ev;
+          for (const i of combo) test[i] = terrIdx;
           tileID = idx.get(test.join(','));
           if (tileID !== undefined) break outer;
+        }
+      }
+      if (tileID === undefined) {
+        const solid = [];
+        for (let i = 0; i < 4; i++) if (mask[i] === terrIdx) solid.push(i);
+        outer:
+        for (let n = solid.length; n >= 1; n--) {
+          const combos = App.combinations(solid, n);
+          for (const combo of combos) {
+            const test = mask.slice();
+            for (const i of combo) test[i] = ev;
+            tileID = idx.get(test.join(','));
+            if (tileID !== undefined) break outer;
+          }
         }
       }
     }
@@ -334,7 +350,6 @@ App.paintClassicCell = function(tx, ty, anchor, layerData, forcedSolid) {
   const before = layerData[i];
   if (before === tileID) return;
   
-  // FIX: Не перезаписываем солид краем
   if (before === solidTileId && tileID !== solidTileId && tileID !== 0) return;
   
   layerData[i] = tileID;
@@ -367,7 +382,7 @@ App.paintClassicCells = function(cx, cy) {
     App.renderer.invalidateCell(tx, ty);
     App.expandStrokeBound(tx, ty);
   }
-  for (const c of cells) App.paintClassicCell(c[0], c[1], anchor);
+  // Убрано: paintClassicCell не должен вызываться здесь, чтобы не портить солиды
 };
 
 App.finalizeClassicForStroke = function() {
@@ -379,14 +394,8 @@ App.finalizeClassicForStroke = function() {
   const solidTile = anchor.terrType.tile + anchor.ts.firstgid;
   const data = App.mapModel.layers[App.activeLayer];
   const painted = new Set(m.keys());
-  for (const i of painted) {
-    const before = data[i];
-    if (before === solidTile) continue;
-    data[i] = solidTile;
-    App.recordChange(App.activeLayer, i, before, solidTile);
-    const x = i % App.mapModel.W, y = Math.floor(i / App.mapModel.W);
-    App.renderer.invalidateCell(x, y);
-  }
+  
+  // Проходим только по соседям нарисованных солидов
   const lookup = new Set();
   for (const i of painted) {
     const x = i % App.mapModel.W, y = Math.floor(i / App.mapModel.W);
@@ -394,9 +403,11 @@ App.finalizeClassicForStroke = function() {
       for (let dx = -1; dx <= 1; dx++) {
         const nx = x + dx, ny = y + dy;
         if (nx < 0 || ny < 0 || nx >= App.mapModel.W || ny >= App.mapModel.H) continue;
-        lookup.add(ny * App.mapModel.W + nx);
+        const nidx = ny * App.mapModel.W + nx;
+        if (!painted.has(nidx)) lookup.add(nidx);
       }
   }
+  
   for (const i of lookup) {
     const x = i % App.mapModel.W, y = Math.floor(i / App.mapModel.W);
     App.paintClassicCell(x, y, anchor);
@@ -686,11 +697,8 @@ App.fillRing = function(tx, ty, solidTile) {
   const startY = Math.max(0, minY - EXPAND_RADIUS);
   const endY = Math.min(map.H - 1, maxY + EXPAND_RADIUS);
 
-  const w = endX - startX + 1;
-  const h = endY - startY + 1;
   const dist = new Uint16Array(map.W * map.H).fill(9999);
   
-  // Инициализируем BFS
   const bfsQ = [];
   for (const idx of region) {
       dist[idx] = 0;
@@ -799,23 +807,4 @@ App.doRedo = function() {
     App.updateZoomLabels();
     if (App.layersPanel) App.layersPanel.build();
   } else App.invalidateEntry(entry);
-  App.renderer.render();
-  if (App.statusEl) App.statusEl.textContent = 'Redo';
-};
-
-App.invalidateEntry = function(entry) {
-  if (!App.renderer) return;
-  if (entry.type === 'resize') return;
-  const list = entry.type === 'multi'
-    ? entry.layers
-    : [{ layer: entry.layer, changes: entry.changes }];
-  for (const le of list) {
-    if (!le.changes) continue;
-    for (const c of le.changes) {
-      const x = c.idx % App.mapModel.W, y = Math.floor(c.idx / App.mapModel.W);
-      App.renderer.chunkCache.delete(Math.floor(x/32) + ',' + Math.floor(y/32));
-    }
-  }
-};
-
-})(window.RWEditor = window.RWEditor || {});
+  App.renderer
