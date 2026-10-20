@@ -278,7 +278,7 @@ App.combinations = function(arr, k) {
   return r;
 };
 
-App.paintClassicCell = function(tx, ty, anchor, layerData, forcedSolid) {
+App.paintClassicCell = function(tx, ty, anchor, layerData, forcedSolid, forcedEmpty) {
   if (!anchor) return;
   const map = App.mapModel;
   if (tx < 0 || ty < 0 || tx >= map.W || ty >= map.H) return;
@@ -289,16 +289,35 @@ App.paintClassicCell = function(tx, ty, anchor, layerData, forcedSolid) {
   const i = ty * map.W + tx;
   const solidTileId = anchor.terrType.tile + anchor.ts.firstgid;
 
+  // 1. Принудительный солид (пирамида / forced)
   if (forcedSolid && forcedSolid[i]) {
-    if (layerData[i] !== solidTileId) {
+    const prev = layerData[i];
+    if (prev !== solidTileId) {
       layerData[i] = solidTileId;
       if (!isTemp) {
-        App.recordChange(App.activeLayer, i, layerData[i], solidTileId);
+        App.recordChange(App.activeLayer, i, prev, solidTileId);
         App.renderer.invalidateCell(tx, ty);
       }
     }
     return;
   }
+
+  // 2. Принудительная пустота (пирамида: пустые кольца)
+  if (forcedEmpty && forcedEmpty[i]) {
+    const prev = layerData[i];
+    if (prev !== 0) {
+      layerData[i] = 0;
+      if (!isTemp) {
+        App.recordChange(App.activeLayer, i, prev, 0);
+        App.renderer.invalidateCell(tx, ty);
+      }
+    }
+    return;
+  }
+
+  // 3. СОЛИД — СВЯТОЕ. Никогда не перезаписываем существующий солид.
+  const before = layerData[i];
+  if (before === solidTileId) return;
 
   const tsIdx = anchor.tsIdx;
   const terrIdx = anchor.terrIdx;
@@ -315,29 +334,29 @@ App.paintClassicCell = function(tx, ty, anchor, layerData, forcedSolid) {
     const idx = App.buildClassicMaskIndex(tsIdx);
     tileID = idx.get(mask.join(','));
     
-    // FIX: Сначала пытаемся найти солиднее, потом пустее
+    // Сначала пытаемся найти солиднее, потом пустее
     if (tileID === undefined) {
       const empty = [];
-      for (let i = 0; i < 4; i++) if (mask[i] === ev) empty.push(i);
+      for (let j = 0; j < 4; j++) if (mask[j] === ev) empty.push(j);
       outer:
       for (let n = empty.length; n >= 1; n--) {
         const combos = App.combinations(empty, n);
         for (const combo of combos) {
           const test = mask.slice();
-          for (const i of combo) test[i] = terrIdx;
+          for (const j of combo) test[j] = terrIdx;
           tileID = idx.get(test.join(','));
           if (tileID !== undefined) break outer;
         }
       }
       if (tileID === undefined) {
         const solid = [];
-        for (let i = 0; i < 4; i++) if (mask[i] === terrIdx) solid.push(i);
+        for (let j = 0; j < 4; j++) if (mask[j] === terrIdx) solid.push(j);
         outer:
         for (let n = solid.length; n >= 1; n--) {
           const combos = App.combinations(solid, n);
           for (const combo of combos) {
             const test = mask.slice();
-            for (const i of combo) test[i] = ev;
+            for (const j of combo) test[j] = ev;
             tileID = idx.get(test.join(','));
             if (tileID !== undefined) break outer;
           }
@@ -347,10 +366,7 @@ App.paintClassicCell = function(tx, ty, anchor, layerData, forcedSolid) {
   }
   
   if (tileID === undefined) return;
-  const before = layerData[i];
   if (before === tileID) return;
-  
-  if (before === solidTileId && tileID !== solidTileId && tileID !== 0) return;
   
   layerData[i] = tileID;
   
@@ -382,7 +398,7 @@ App.paintClassicCells = function(cx, cy) {
     App.renderer.invalidateCell(tx, ty);
     App.expandStrokeBound(tx, ty);
   }
-  // Убрано: paintClassicCell не должен вызываться здесь, чтобы не портить солиды
+  // paintClassicCell здесь не вызывается: солиды уже стоят, края — в finalizeClassicForStroke
 };
 
 App.finalizeClassicForStroke = function() {
@@ -391,11 +407,10 @@ App.finalizeClassicForStroke = function() {
   if (!m || !m.size) return;
   const anchor = App.resolveClassicAnchor();
   if (!anchor) return;
-  const solidTile = anchor.terrType.tile + anchor.ts.firstgid;
   const data = App.mapModel.layers[App.activeLayer];
   const painted = new Set(m.keys());
   
-  // Проходим только по соседям нарисованных солидов
+  // Проходим только по соседям нарисованных солидов (сами солиды не трогаем)
   const lookup = new Set();
   for (const i of painted) {
     const x = i % App.mapModel.W, y = Math.floor(i / App.mapModel.W);
@@ -727,9 +742,10 @@ App.fillRing = function(tx, ty, solidTile) {
       }
   }
 
-  // 3. Строим слои (пирог)
+  // 3. Строим слои (пирог): чётные — солид (forcedSolid), нечётные — пусто (forcedEmpty)
   const tempLayer = new Uint32Array(data); 
   const forcedSolid = new Uint8Array(map.W * map.H);
+  const forcedEmpty = new Uint8Array(map.W * map.H);
   
   for (let y = startY; y <= endY; y++) {
     for (let x = startX; x <= endX; x++) {
@@ -741,14 +757,16 @@ App.fillRing = function(tx, ty, solidTile) {
         forcedSolid[idx] = 1;
       } else {
         tempLayer[idx] = 0;
+        forcedEmpty[idx] = 1;
       }
     }
   }
 
-  // 4. Прогоняем автотайл по ВСЕЙ расширенной области
+  // 4. Прогоняем автотайл по расширенной области.
+  //    forcedSolid защищает солиды, forcedEmpty не даёт краям залепить пустые кольца.
   for (let y = startY - 1; y <= endY + 1; y++) {
     for (let x = startX - 1; x <= endX + 1; x++) {
-      App.paintClassicCell(x, y, anchor, tempLayer, forcedSolid);
+      App.paintClassicCell(x, y, anchor, tempLayer, forcedSolid, forcedEmpty);
     }
   }
 
