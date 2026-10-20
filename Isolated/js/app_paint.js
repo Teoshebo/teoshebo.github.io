@@ -278,7 +278,7 @@ App.combinations = function(arr, k) {
   return r;
 };
 
-App.paintClassicCell = function(tx, ty, anchor, layerData, forcedSolid) {
+App.paintClassicCell = function(tx, ty, anchor, layerData) {
   if (!anchor) return;
   const map = App.mapModel;
   if (tx < 0 || ty < 0 || tx >= map.W || ty >= map.H) return;
@@ -288,19 +288,6 @@ App.paintClassicCell = function(tx, ty, anchor, layerData, forcedSolid) {
   
   const i = ty * map.W + tx;
   const solidTileId = anchor.terrType.tile + anchor.ts.firstgid;
-
-  // Если это принудительный солид, мы просто ставим его и НЕ ТРОГАЕМ
-  if (forcedSolid && forcedSolid[i]) {
-    if (layerData[i] !== solidTileId) {
-      layerData[i] = solidTileId;
-      if (!isTemp) {
-        App.recordChange(App.activeLayer, i, layerData[i], solidTileId);
-        App.renderer.invalidateCell(tx, ty);
-      }
-    }
-    return;
-  }
-
   const tsIdx = anchor.tsIdx;
   const terrIdx = anchor.terrIdx;
   const ev = App.findEmptyValue(tsIdx, terrIdx);
@@ -580,7 +567,7 @@ App.runAutotileDialog = function() {
 };
 
 // ═══════════════════════════════════════════════
-// CONCENTRIC RING FILL (PYRAMID EDITION)
+// CONCENTRIC RING FILL (OUTWARD EXPANSION)
 // ═══════════════════════════════════════════════
 App.fillRing = function(tx, ty, solidTile) {
   const map = App.mapModel;
@@ -609,7 +596,7 @@ App.fillRing = function(tx, ty, solidTile) {
     return t.terrain.includes(terrIdx);
   };
 
-  // 1. Находим связную область
+  // 1. Находим исходную связную область (то, что нарисовал юзер)
   const region = new Set();
   const queue = [[tx, ty]];
   let minX = tx, maxX = tx, minY = ty, maxY = ty;
@@ -629,78 +616,75 @@ App.fillRing = function(tx, ty, solidTile) {
     queue.push([cx+1, cy], [cx-1, cy], [cx, cy+1], [cx, cy-1]);
   }
 
-  if (region.size < 4) return false;
+  if (region.size < 1) return false;
 
-  // 2. Считаем дистанцию до края (Distance Transform - Chebyshev)
-  const w = maxX - minX + 1;
-  const h = maxY - minY + 1;
-  const dist = new Uint16Array(w * h).fill(9999);
+  // 2. Расширяем область наружу (BFS от исходного блока)
+  const EXPAND_RADIUS = 15;
+  const startX = Math.max(0, minX - EXPAND_RADIUS);
+  const endX = Math.min(map.W - 1, maxX + EXPAND_RADIUS);
+  const startY = Math.max(0, minY - EXPAND_RADIUS);
+  const endY = Math.min(map.H - 1, maxY + EXPAND_RADIUS);
 
-  for (let y = 0; y < h; y++) {
-    for (let x = 0; x < w; x++) {
-      const realX = minX + x, realY = minY + y;
-      const realIdx = realY * map.W + realX;
-      if (!region.has(realIdx)) dist[y * w + x] = 0;
-    }
-  }
-
-  for (let y = 0; y < h; y++) {
-    for (let x = 0; x < w; x++) {
-      const i = y * w + x;
-      if (dist[i] === 0) continue;
-      let d = dist[i];
-      if (y > 0) d = Math.min(d, dist[i - w] + 1);
-      if (x > 0) d = Math.min(d, dist[i - 1] + 1);
-      if (y > 0 && x > 0) d = Math.min(d, dist[i - w - 1] + 1);
-      if (y > 0 && x < w - 1) d = Math.min(d, dist[i - w + 1] + 1);
-      dist[i] = d;
-    }
+  const w = endX - startX + 1;
+  const h = endY - startY + 1;
+  const dist = new Uint16Array(map.W * map.H).fill(9999);
+  
+  // Инициализируем BFS
+  const bfsQ = [];
+  for (const idx of region) {
+      dist[idx] = 0;
+      bfsQ.push(idx);
   }
   
-  for (let y = h - 1; y >= 0; y--) {
-    for (let x = w - 1; x >= 0; x--) {
-      const i = y * w + x;
-      if (dist[i] === 0) continue;
-      let d = dist[i];
-      if (y < h - 1) d = Math.min(d, dist[i + w] + 1);
-      if (x < w - 1) d = Math.min(d, dist[i + 1] + 1);
-      if (y < h - 1 && x < w - 1) d = Math.min(d, dist[i + w + 1] + 1);
-      if (y < h - 1 && x > 0) d = Math.min(d, dist[i + w - 1] + 1);
-      dist[i] = d;
-    }
+  let head = 0;
+  while (head < bfsQ.length) {
+      const curr = bfsQ[head++];
+      const cx = curr % map.W;
+      const cy = Math.floor(curr / map.W);
+      const cd = dist[curr];
+      if (cd >= EXPAND_RADIUS) continue;
+      
+      for (let dy = -1; dy <= 1; dy++) {
+          for (let dx = -1; dx <= 1; dx++) {
+              if (dx === 0 && dy === 0) continue;
+              const nx = cx + dx, ny = cy + dy;
+              if (nx < 0 || ny < 0 || nx >= map.W || ny >= map.H) continue;
+              const nidx = ny * map.W + nx;
+              if (cd + 1 < dist[nidx]) {
+                  dist[nidx] = cd + 1;
+                  bfsQ.push(nidx);
+              }
+          }
+      }
   }
 
-  // 3. Применяем кольца к временному слою и запоминаем, где солиды
+  // 3. Строим слои (пирог)
   const tempLayer = new Uint32Array(data); 
-  const forcedSolid = new Uint8Array(map.W * map.H); // Глобальный массив солидов
   
-  for (let y = 0; y < h; y++) {
-    for (let x = 0; x < w; x++) {
-      const realX = minX + x, realY = minY + y;
-      const realIdx = realY * map.W + realX;
-      const i = y * w + x;
-      if (!region.has(realIdx)) continue;
-
-      if (dist[i] % 2 !== 0) {
-        tempLayer[realIdx] = solidTile;
-        forcedSolid[realIdx] = 1; // Это солид
+  for (let y = startY; y <= endY; y++) {
+    for (let x = startX; x <= endX; x++) {
+      const idx = y * map.W + x;
+      if (dist[idx] === 9999) continue;
+      
+      if (dist[idx] % 2 === 0) {
+        tempLayer[idx] = solidTile;
       } else {
-        tempLayer[realIdx] = 0;
+        tempLayer[idx] = 0;
       }
     }
   }
 
-  // 4. Прогоняем постпроцесс (автотайл), передавая forcedSolid
-  for (let y = minY - 1; y <= maxY + 1; y++) {
-    for (let x = minX - 1; x <= maxX + 1; x++) {
-      App.paintClassicCell(x, y, anchor, tempLayer, forcedSolid);
+  // 4. Прогоняем автотайл по ВСЕЙ расширенной области
+  for (let y = startY - 1; y <= endY + 1; y++) {
+    for (let x = startX - 1; x <= endX + 1; x++) {
+      App.paintClassicCell(x, y, anchor, tempLayer);
     }
   }
 
   // 5. Применяем к основной карте
   const changes = [];
-  for (let y = minY - 1; y <= maxY + 1; y++) {
-    for (let x = minX - 1; x <= maxX + 1; x++) {
+  for (let y = startY - 1; y <= endY + 1; y++) {
+    for (let x = startX - 1; x <= endX + 1; x++) {
       if (x < 0 || y < 0 || x >= map.W || y >= map.H) continue;
       const realIdx = y * map.W + x;
       const before = data[realIdx];
@@ -718,8 +702,8 @@ App.fillRing = function(tx, ty, solidTile) {
     map.redoStack.length = 0;
     App.invalidateMarkersCache();
     
-    App.renderer.invalidateRange(minX - 1, minY - 1, maxX + 1, maxY + 1);
-    if (App.statusEl) App.statusEl.textContent = 'Pyramid filled (' + changes.length + ' cells)';
+    App.renderer.invalidateRange(startX - 1, startY - 1, endX + 1, endY + 1);
+    if (App.statusEl) App.statusEl.textContent = 'Pyramid expanded (' + changes.length + ' cells)';
     return true;
   }
   return false;
