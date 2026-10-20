@@ -807,4 +807,23 @@ App.doRedo = function() {
     App.updateZoomLabels();
     if (App.layersPanel) App.layersPanel.build();
   } else App.invalidateEntry(entry);
-  App.renderer
+  App.renderer.render();
+  if (App.statusEl) App.statusEl.textContent = 'Redo';
+};
+
+App.invalidateEntry = function(entry) {
+  if (!App.renderer) return;
+  if (entry.type === 'resize') return;
+  const list = entry.type === 'multi'
+    ? entry.layers
+    : [{ layer: entry.layer, changes: entry.changes }];
+  for (const le of list) {
+    if (!le.changes) continue;
+    for (const c of le.changes) {
+      const x = c.idx % App.mapModel.W, y = Math.floor(c.idx / App.mapModel.W);
+      App.renderer.chunkCache.delete(Math.floor(x/32) + ',' + Math.floor(y/32));
+    }
+  }
+};
+
+})(window.RWEditor = window.RWEditor || {});
