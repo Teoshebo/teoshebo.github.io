@@ -278,7 +278,7 @@ App.combinations = function(arr, k) {
   return r;
 };
 
-App.paintClassicCell = function(tx, ty, anchor, layerData, forcedEmpty) {
+App.paintClassicCell = function(tx, ty, anchor, layerData, forcedSolid) {
   if (!anchor) return;
   const map = App.mapModel;
   if (tx < 0 || ty < 0 || tx >= map.W || ty >= map.H) return;
@@ -287,12 +287,14 @@ App.paintClassicCell = function(tx, ty, anchor, layerData, forcedEmpty) {
   if (!layerData) return;
   
   const i = ty * map.W + tx;
+  const solidTileId = anchor.terrType.tile + anchor.ts.firstgid;
 
-  if (forcedEmpty && forcedEmpty.has(i)) {
-    if (layerData[i] !== 0) {
-      layerData[i] = 0;
+  // Если это принудительный солид, мы просто ставим его и НЕ ТРОГАЕМ
+  if (forcedSolid && forcedSolid[i]) {
+    if (layerData[i] !== solidTileId) {
+      layerData[i] = solidTileId;
       if (!isTemp) {
-        App.recordChange(App.activeLayer, i, layerData[i], 0);
+        App.recordChange(App.activeLayer, i, layerData[i], solidTileId);
         App.renderer.invalidateCell(tx, ty);
       }
     }
@@ -301,7 +303,6 @@ App.paintClassicCell = function(tx, ty, anchor, layerData, forcedEmpty) {
 
   const tsIdx = anchor.tsIdx;
   const terrIdx = anchor.terrIdx;
-  const solidTileId = anchor.terrType.tile + anchor.ts.firstgid;
   const ev = App.findEmptyValue(tsIdx, terrIdx);
   
   const mask = App.resolveClassicMask(tx, ty, tsIdx, terrIdx, ev, solidTileId, layerData);
@@ -669,79 +670,34 @@ App.fillRing = function(tx, ty, solidTile) {
     }
   }
 
-  // Инвертируем, чтобы центр был 0
-  let maxDist = 0;
-  for (let i = 0; i < w*h; i++) if (dist[i] < 9999 && dist[i] > maxDist) maxDist = dist[i];
+  // 3. Применяем кольца к временному слою и запоминаем, где солиды
+  const tempLayer = new Uint32Array(data); 
+  const forcedSolid = new Uint8Array(map.W * map.H); // Глобальный массив солидов
   
-  for (let i = 0; i < w*h; i++) {
-    if (dist[i] < 9999) dist[i] = maxDist - dist[i];
-  }
-
-  // 3. Вручную расставляем солиды и края
-  const tempLayer = new Uint32Array(data);
-  const ev = App.findEmptyValue(anchor.tsIdx, anchor.terrIdx);
-  const idxMap = App.buildClassicMaskIndex(anchor.tsIdx);
-
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
       const realX = minX + x, realY = minY + y;
       const realIdx = realY * map.W + realX;
       const i = y * w + x;
-      
       if (!region.has(realIdx)) continue;
 
-      const d = dist[i];
-      if (d === 0) {
+      if (dist[i] % 2 !== 0) {
         tempLayer[realIdx] = solidTile;
-      } else if (d % 2 === 1) {
-        // Края
-        const dL = x > 0 ? dist[i - 1] : 9999;
-        const dR = x < w - 1 ? dist[i + 1] : 9999;
-        const dU = y > 0 ? dist[i - w] : 9999;
-        const dD = y < h - 1 ? dist[i + w] : 9999;
-
-        let mask;
-        if (dL < d && dR > d) mask = [terrIdx, ev, terrIdx, ev]; // левый край (solid справа)
-        else if (dR < d && dL > d) mask = [ev, terrIdx, ev, terrIdx]; // правый край (solid слева)
-        else if (dU < d && dD > d) mask = [terrIdx, terrIdx, ev, ev]; // нижний край (solid сверху)
-        else if (dD < d && dU > d) mask = [ev, ev, terrIdx, terrIdx]; // верхний край (solid снизу)
-        else {
-          if (dL < d && dU < d) mask = [terrIdx, terrIdx, terrIdx, ev]; // нижний правый угол
-          else if (dR < d && dU < d) mask = [terrIdx, terrIdx, ev, terrIdx]; // нижний левый угол
-          else if (dL < d && dD < d) mask = [terrIdx, ev, terrIdx, terrIdx]; // верхний правый угол
-          else if (dR < d && dD < d) mask = [ev, terrIdx, terrIdx, terrIdx]; // верхний левый угол
-          else mask = [ev, ev, ev, ev];
-        }
-
-        let tileID = idxMap.get(mask.join(','));
-        if (tileID === undefined) {
-           const solid = [];
-           for (let j = 0; j < 4; j++) if (mask[j] === terrIdx) solid.push(j);
-           if (solid.length === 0) tileID = 0;
-           else if (solid.length === 4) tileID = solidTile;
-           else {
-              for (let n = solid.length; n >= 1; n--) {
-                const combos = App.combinations(solid, n);
-                for (const combo of combos) {
-                  const test = mask.slice();
-                  for (const j of combo) test[j] = ev;
-                  tileID = idxMap.get(test.join(','));
-                  if (tileID !== undefined) break;
-                }
-                if (tileID !== undefined) break;
-              }
-           }
-        }
-        
-        tempLayer[realIdx] = (tileID !== undefined) ? tileID : solidTile;
+        forcedSolid[realIdx] = 1; // Это солид
       } else {
-        // Четные дистанции -> пустота
         tempLayer[realIdx] = 0;
       }
     }
   }
 
-  // 4. Применяем к основной карте
+  // 4. Прогоняем постпроцесс (автотайл), передавая forcedSolid
+  for (let y = minY - 1; y <= maxY + 1; y++) {
+    for (let x = minX - 1; x <= maxX + 1; x++) {
+      App.paintClassicCell(x, y, anchor, tempLayer, forcedSolid);
+    }
+  }
+
+  // 5. Применяем к основной карте
   const changes = [];
   for (let y = minY - 1; y <= maxY + 1; y++) {
     for (let x = minX - 1; x <= maxX + 1; x++) {
@@ -763,7 +719,7 @@ App.fillRing = function(tx, ty, solidTile) {
     App.invalidateMarkersCache();
     
     App.renderer.invalidateRange(minX - 1, minY - 1, maxX + 1, maxY + 1);
-    if (App.statusEl) App.statusEl.textContent = 'Ring fill applied (' + changes.length + ' cells)';
+    if (App.statusEl) App.statusEl.textContent = 'Pyramid filled (' + changes.length + ' cells)';
     return true;
   }
   return false;
