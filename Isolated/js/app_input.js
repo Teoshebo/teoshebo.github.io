@@ -2,9 +2,6 @@
 'use strict';
 const App = RW.App;
 
-// ═══════════════════════════════════════════════
-// TOUCH / POINTER
-// ═══════════════════════════════════════════════
 App.cancelLongTap = function() {
   if (App.longTapTimer) { clearTimeout(App.longTapTimer); App.longTapTimer = null; }
 };
@@ -219,7 +216,6 @@ if (App.cv) App.cv.addEventListener('pointermove', (e) => {
 
 if (App.cv) App.cv.addEventListener('pointerup', (e) => {
   if (!App.renderer) return;
-  const wasDrawing = (App.drawingPointerId === e.pointerId);
   App.pointers.delete(e.pointerId);
   App.cancelLongTap();
 
@@ -298,9 +294,6 @@ App.updateInfo = function(tx, ty) {
   App.infoEl.innerHTML = out;
 };
 
-// ═══════════════════════════════════════════════
-// WASD PAN / WHEEL
-// ═══════════════════════════════════════════════
 App.startPanKey = function(code) {
   App.panKeys.add(code);
   if (!App.panRaf) App.panRaf = requestAnimationFrame(App.panTick);
@@ -333,14 +326,11 @@ if (App.wrap) App.wrap.addEventListener('wheel', (e) => {
   App.updateZoomLabels();
 }, { passive: false });
 
-// ═══════════════════════════════════════════════
-// HOTKEYS
-// ═══════════════════════════════════════════════
 window.addEventListener('keydown', (e) => {
   const tag = e.target && e.target.tagName;
   if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
 
-  App.pressedKeys.add(e.code);
+  if (App.pressedKeys) App.pressedKeys.add(e.code);
 
   if (e.key === 'Escape') { if (App.pickMode) { App.endPick(); return; } }
 
@@ -357,7 +347,7 @@ window.addEventListener('keydown', (e) => {
       App.runTypeFill();
       return;
     }
-    if (App.pressedKeys.has('KeyE')) {
+    if (App.pressedKeys && App.pressedKeys.has('KeyE')) {
       e.preventDefault();
       App.runEmptyFill();
       return;
@@ -384,11 +374,11 @@ window.addEventListener('keydown', (e) => {
 });
 
 window.addEventListener('keyup', (e) => {
-  App.pressedKeys.delete(e.code);
+  if (App.pressedKeys) App.pressedKeys.delete(e.code);
   if (e.code === 'KeyW' || e.code === 'KeyA' || e.code === 'KeyS' || e.code === 'KeyD') {
     App.stopPanKey(e.code);
   }
 });
-window.addEventListener('blur', () => { App.panKeys.clear(); App.pressedKeys.clear(); });
+window.addEventListener('blur', () => { App.panKeys.clear(); if (App.pressedKeys) App.pressedKeys.clear(); });
 
 })(window.RWEditor = window.RWEditor || {});
