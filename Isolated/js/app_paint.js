@@ -230,7 +230,7 @@ App.findEmptyValue = function(tsIdx, targetTerr) {
   return best;
 };
 
-App.cellHasCorner = function(tx, ty, ci, tsIdx, targetTerr, solidTileId, layerData) {
+App.cellHasTarget = function(tx, ty, tsIdx, targetTerr, solidTileId, layerData) {
   const map = App.mapModel;
   if (tx < 0 || ty < 0 || tx >= map.W || ty >= map.H) return false;
   const data = layerData || map.layers[App.activeLayer];
@@ -244,71 +244,26 @@ App.cellHasCorner = function(tx, ty, ci, tsIdx, targetTerr, solidTileId, layerDa
   if (!nts || nts !== ts) return false;
   const t = nts.tiles[id - nts.firstgid];
   if (!t || !t.terrain) return false;
-  return t.terrain[ci] === targetTerr;
+  return t.terrain.includes(targetTerr);
 };
 
-App.cellHasSolid = function(tx, ty, solidTileId, layerData) {
-  const map = App.mapModel;
-  if (tx < 0 || ty < 0 || tx >= map.W || ty >= map.H) return false;
-  const data = layerData || map.layers[App.activeLayer];
-  if (!data) return false;
-  return data[ty * map.W + tx] === solidTileId;
-};
-
+// ТОЧНАЯ ЛОГИКА TNS (OR): если хотя бы один сосед солидный — угол солидный
 App.resolveClassicMask = function(tx, ty, tsIdx, targetTerr, emptyValue, solidTileId, layerData) {
-  // AND logic for large blocks (original Beta-32)
-  const tlOK = App.cellHasCorner(tx-1, ty-1, 3, tsIdx, targetTerr, solidTileId, layerData) &&
-               App.cellHasCorner(tx, ty-1, 2, tsIdx, targetTerr, solidTileId, layerData) &&
-               App.cellHasCorner(tx-1, ty, 1, tsIdx, targetTerr, solidTileId, layerData);
-  const trOK = App.cellHasCorner(tx, ty-1, 3, tsIdx, targetTerr, solidTileId, layerData) &&
-               App.cellHasCorner(tx+1, ty-1, 2, tsIdx, targetTerr, solidTileId, layerData) &&
-               App.cellHasCorner(tx+1, ty, 0, tsIdx, targetTerr, solidTileId, layerData);
-  const blOK = App.cellHasCorner(tx-1, ty, 3, tsIdx, targetTerr, solidTileId, layerData) &&
-               App.cellHasCorner(tx-1, ty+1, 1, tsIdx, targetTerr, solidTileId, layerData) &&
-               App.cellHasCorner(tx, ty+1, 0, tsIdx, targetTerr, solidTileId, layerData);
-  const brOK = App.cellHasCorner(tx+1, ty, 2, tsIdx, targetTerr, solidTileId, layerData) &&
-               App.cellHasCorner(tx+1, ty+1, 0, tsIdx, targetTerr, solidTileId, layerData) &&
-               App.cellHasCorner(tx, ty+1, 1, tsIdx, targetTerr, solidTileId, layerData);
-  
-  let mask = [
-    tlOK ? targetTerr : emptyValue,
-    trOK ? targetTerr : emptyValue,
-    blOK ? targetTerr : emptyValue,
-    brOK ? targetTerr : emptyValue
-  ];
+  const tN  = App.cellHasTarget(tx,     ty - 1, tsIdx, targetTerr, solidTileId, layerData);
+  const tS  = App.cellHasTarget(tx,     ty + 1, tsIdx, targetTerr, solidTileId, layerData);
+  const tE  = App.cellHasTarget(tx + 1, ty,     tsIdx, targetTerr, solidTileId, layerData);
+  const tW  = App.cellHasTarget(tx - 1, ty,     tsIdx, targetTerr, solidTileId, layerData);
+  const tNW = App.cellHasTarget(tx - 1, ty - 1, tsIdx, targetTerr, solidTileId, layerData);
+  const tNE = App.cellHasTarget(tx + 1, ty - 1, tsIdx, targetTerr, solidTileId, layerData);
+  const tSW = App.cellHasTarget(tx - 1, ty + 1, tsIdx, targetTerr, solidTileId, layerData);
+  const tSE = App.cellHasTarget(tx + 1, ty + 1, tsIdx, targetTerr, solidTileId, layerData);
 
-  // Fallback for single tiles (TNS logic)
-  if (mask[0] === emptyValue && mask[1] === emptyValue && mask[2] === emptyValue && mask[3] === emptyValue) {
-    const tN = App.cellHasSolid(tx, ty-1, solidTileId, layerData);
-    const tS = App.cellHasSolid(tx, ty+1, solidTileId, layerData);
-    const tE = App.cellHasSolid(tx+1, ty, solidTileId, layerData);
-    const tW = App.cellHasSolid(tx-1, ty, solidTileId, layerData);
-    const tNW = App.cellHasSolid(tx-1, ty-1, solidTileId, layerData);
-    const tNE = App.cellHasSolid(tx+1, ty-1, solidTileId, layerData);
-    const tSW = App.cellHasSolid(tx-1, ty+1, solidTileId, layerData);
-    const tSE = App.cellHasSolid(tx+1, ty+1, solidTileId, layerData);
+  const qNW = (tNW || tN || tW) ? targetTerr : emptyValue;
+  const qNE = (tNE || tN || tE) ? targetTerr : emptyValue;
+  const qSW = (tSW || tS || tW) ? targetTerr : emptyValue;
+  const qSE = (tSE || tS || tE) ? targetTerr : emptyValue;
 
-    if (tS && !tN && !tE && !tW && !tNW && !tNE && !tSW && !tSE) mask = [emptyValue, emptyValue, targetTerr, targetTerr];
-    else if (tN && !tS && !tE && !tW && !tNW && !tNE && !tSW && !tSE) mask = [targetTerr, targetTerr, emptyValue, emptyValue];
-    else if (tE && !tN && !tS && !tW && !tNW && !tNE && !tSW && !tSE) mask = [emptyValue, targetTerr, emptyValue, targetTerr];
-    else if (tW && !tN && !tS && !tE && !tNW && !tNE && !tSW && !tSE) mask = [targetTerr, emptyValue, targetTerr, emptyValue];
-    else if (tSE && !tN && !tS && !tE && !tW && !tNW && !tNE && !tSW) mask = [emptyValue, emptyValue, emptyValue, targetTerr];
-    else if (tSW && !tN && !tS && !tE && !tW && !tNW && !tNE && !tSE) mask = [emptyValue, emptyValue, targetTerr, emptyValue];
-    else if (tNE && !tN && !tS && !tE && !tW && !tNW && !tSW && !tSE) mask = [emptyValue, targetTerr, emptyValue, emptyValue];
-    else if (tNW && !tN && !tS && !tE && !tW && !tNE && !tSW && !tSE) mask = [targetTerr, emptyValue, emptyValue, emptyValue];
-  }
-
-  return mask;
-};
-
-App.combinations = function(arr, k) {
-  const r = [];
-  function rec(s, cur) {
-    if (cur.length === k) { r.push(cur.slice()); return; }
-    for (let i = s; i < arr.length; i++) { cur.push(arr[i]); rec(i+1, cur); cur.pop(); }
-  }
-  rec(0, []);
-  return r;
+  return [qNW, qNE, qSW, qSE];
 };
 
 App.paintClassicCell = function(tx, ty, anchor, layerData, forcedSolid, forcedEmpty) {
@@ -366,26 +321,10 @@ App.paintClassicCell = function(tx, ty, anchor, layerData, forcedSolid, forcedEm
   } else {
     const idx = App.buildClassicMaskIndex(tsIdx);
     tileID = idx.get(mask.join(','));
-    
-    // Fallback: only degrade if tileID is undefined
-    if (tileID === undefined) {
-      const solid = [];
-      for (let j = 0; j < 4; j++) if (mask[j] === terrIdx) solid.push(j);
-      outer:
-      for (let n = solid.length; n >= 1; n--) {
-        const combos = App.combinations(solid, n);
-        for (const combo of combos) {
-          const test = mask.slice();
-          for (const j of combo) test[j] = ev;
-          tileID = idx.get(test.join(','));
-          if (tileID !== undefined) break outer;
-        }
-      }
-      if (tileID === undefined) tileID = 0;
-    }
+    // Никаких fallback! Если маски нет, ставим 0.
+    if (tileID === undefined) tileID = 0;
   }
   
-  if (tileID === undefined) return;
   if (before === tileID) return;
   
   layerData[i] = tileID;
@@ -700,7 +639,6 @@ App.fillRing = function(tx, ty, solidTile) {
     return t.terrain.includes(terrIdx);
   };
 
-  // 1. Находим связную область
   const region = new Set();
   const queue = [[tx, ty]];
   let minX = tx, maxX = tx, minY = ty, maxY = ty;
@@ -722,7 +660,6 @@ App.fillRing = function(tx, ty, solidTile) {
 
   if (region.size < 1) return false;
 
-  // 2. Расширяем область наружу (BFS от исходного блока)
   const EXPAND_RADIUS = 15;
   const startX = Math.max(0, minX - EXPAND_RADIUS);
   const endX = Math.min(map.W - 1, maxX + EXPAND_RADIUS);
@@ -759,7 +696,6 @@ App.fillRing = function(tx, ty, solidTile) {
       }
   }
 
-  // 3. Строим слои (пирог): чётные — солид (forcedSolid), нечётные — пусто (forcedEmpty)
   const tempLayer = new Uint32Array(data); 
   const forcedSolid = new Uint8Array(map.W * map.H);
   const forcedEmpty = new Uint8Array(map.W * map.H);
@@ -779,14 +715,12 @@ App.fillRing = function(tx, ty, solidTile) {
     }
   }
 
-  // 4. Прогоняем автотайл по расширенной области.
   for (let y = startY - 1; y <= endY + 1; y++) {
     for (let x = startX - 1; x <= endX + 1; x++) {
       App.paintClassicCell(x, y, anchor, tempLayer, forcedSolid, forcedEmpty);
     }
   }
 
-  // 5. Применяем к основной карте
   const changes = [];
   for (let y = startY - 1; y <= endY + 1; y++) {
     for (let x = startX - 1; x <= endX + 1; x++) {
