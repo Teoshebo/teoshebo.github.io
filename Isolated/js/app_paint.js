@@ -144,18 +144,15 @@ App.expandStrokeBound = function(tx, ty) {
   }
 };
 
-// НОВОЕ: Обновление краев TNS в реальном времени
 App.updateTNSEdgesAround = function(tx, ty) {
   if (!App.generator || !App.mapModel) return;
   const items0 = App.mapModel.layers.Items0;
   if (!items0) return;
-
   for (let dy = -1; dy <= 1; dy++) {
     for (let dx = -1; dx <= 1; dx++) {
       const nx = tx + dx, ny = ty + dy;
       if (nx < 0 || ny < 0 || nx >= App.mapModel.W || ny >= App.mapModel.H) continue;
       const idx = ny * App.mapModel.W + nx;
-      
       const before = items0[idx];
       const after = App.generator.resolveEdge(nx, ny);
       if (before !== after) {
@@ -184,10 +181,7 @@ App.paintBrushCells = function(cx, cy, tileFn) {
     App.recordChange(App.activeLayer, idx, before, v);
     App.renderer.invalidateCell(tx, ty);
     App.expandStrokeBound(tx, ty);
-    if (App.activeLayer === 'Ground') {
-      touchedGround = true;
-      App.updateTNSEdgesAround(tx, ty); // Лайв-превью для TNS при стирании
-    }
+    if (App.activeLayer === 'Ground') { touchedGround = true; App.updateTNSEdgesAround(tx, ty); }
   }
   if (touchedGround) App.invalidateMarkersCache();
 };
@@ -214,10 +208,7 @@ App.paintTerrainCells = function(cx, cy) {
     App.recordChange(App.activeLayer, idx, before, after);
     App.renderer.invalidateCell(tx, ty);
     App.expandStrokeBound(tx, ty);
-    if (App.activeLayer === 'Ground') {
-      touchedGround = true;
-      App.updateTNSEdgesAround(tx, ty); // Лайв-превью для TNS
-    }
+    if (App.activeLayer === 'Ground') { touchedGround = true; App.updateTNSEdgesAround(tx, ty); }
   }
   if (touchedGround) App.invalidateMarkersCache();
 };
@@ -267,13 +258,11 @@ App.cellHasTarget = function(tx, ty, tsIdx, targetTerr, solidTileId, layerData) 
   const id = data[ty * map.W + tx];
   if (!id) return false;
   if (id === solidTileId) return true;
-  
   const ts = App.mapModel.tilesets[tsIdx];
   const nts = App.renderer.findTileset(id);
   if (!nts || nts !== ts) return false;
   const t = nts.tiles[id - nts.firstgid];
   if (!t || !t.terrain) return false;
-  
   return t.terrain[0] === targetTerr && t.terrain[1] === targetTerr &&
          t.terrain[2] === targetTerr && t.terrain[3] === targetTerr;
 };
@@ -294,18 +283,14 @@ App.resolveClassicMask = function(tx, ty, tsIdx, targetTerr, emptyValue, solidTi
   const qSE = (tSE || tS || tE) ? targetTerr : emptyValue;
 
   const mask = [qNW, qNE, qSW, qSE];
-  
-  if (mask[0] === emptyValue && mask[1] === emptyValue && 
-      mask[2] === emptyValue && mask[3] === emptyValue) {
-    return mask;
-  }
+  if (mask[0] === emptyValue && mask[1] === emptyValue &&
+      mask[2] === emptyValue && mask[3] === emptyValue) return mask;
 
   const idx = App.buildClassicMaskIndex(tsIdx);
   if (idx.has(mask.join(','))) return mask;
 
   let bestMask = mask;
   let minDist = Infinity;
-  
   for (const [k, id] of idx.entries()) {
     const testMask = k.split(',').map(Number);
     let dist = 0;
@@ -317,10 +302,7 @@ App.resolveClassicMask = function(tx, ty, tsIdx, targetTerr, emptyValue, solidTi
       else if (!wantSolid && gotSolid) dist += 10;
       else dist += 100;
     }
-    if (dist < minDist) {
-      minDist = dist;
-      bestMask = testMask;
-    }
+    if (dist < minDist) { minDist = dist; bestMask = testMask; }
     if (minDist === 0) break;
   }
   return bestMask;
@@ -333,7 +315,7 @@ App.paintClassicCell = function(tx, ty, anchor, layerData, forcedSolid, forcedEm
   const isTemp = !!layerData;
   if (!layerData) layerData = map.layers[App.activeLayer];
   if (!layerData) return;
-  
+
   const i = ty * map.W + tx;
   const solidTileId = anchor.terrType.tile + anchor.ts.firstgid;
 
@@ -367,7 +349,6 @@ App.paintClassicCell = function(tx, ty, anchor, layerData, forcedSolid, forcedEm
   const tsIdx = anchor.tsIdx;
   const terrIdx = anchor.terrIdx;
   const ev = App.findEmptyValue(tsIdx, terrIdx);
-  
   const mask = App.resolveClassicMask(tx, ty, tsIdx, terrIdx, ev, solidTileId, layerData);
   let tileID;
 
@@ -380,11 +361,9 @@ App.paintClassicCell = function(tx, ty, anchor, layerData, forcedSolid, forcedEm
     tileID = idx.get(mask.join(','));
     if (tileID === undefined) tileID = 0;
   }
-  
   if (before === tileID) return;
-  
+
   layerData[i] = tileID;
-  
   if (!isTemp) {
     App.recordChange(App.activeLayer, i, before, tileID);
     App.renderer.invalidateCell(tx, ty);
@@ -402,7 +381,7 @@ App.paintClassicCells = function(cx, cy) {
   const solidTile = anchor.terrType.tile + anchor.ts.firstgid;
   const cells = App.brushCells(cx, cy);
   const data = map.layers[App.activeLayer];
-  
+
   for (const c of cells) {
     const tx = c[0], ty = c[1];
     if (tx < 0 || ty < 0 || tx >= map.W || ty >= map.H) continue;
@@ -432,14 +411,11 @@ App.finalizeClassicForStroke = function() {
   if (!m || !m.size) return;
   const anchor = App.resolveClassicAnchor();
   if (!anchor) return;
-  
+
   const solidTile = anchor.terrType.tile + anchor.ts.firstgid;
   const painted = new Set();
-  
-  for (const [i, c] of m) {
-    if (c.after === solidTile) painted.add(i);
-  }
-  
+  for (const [i, c] of m) if (c.after === solidTile) painted.add(i);
+
   const lookup = new Set();
   for (const i of painted) {
     const x = i % App.mapModel.W, y = Math.floor(i / App.mapModel.W);
@@ -451,7 +427,6 @@ App.finalizeClassicForStroke = function() {
         if (!painted.has(nidx)) lookup.add(nidx);
       }
   }
-  
   for (const i of lookup) {
     const x = i % App.mapModel.W, y = Math.floor(i / App.mapModel.W);
     App.paintClassicCell(x, y, anchor);
@@ -500,16 +475,14 @@ App.endStroke = function() {
     if (map.undoStack.length > 50) map.undoStack.shift();
     map.redoStack.length = 0;
     if (App.statusEl) App.statusEl.textContent = total + ' cells changed';
-    if (App.layersPanel) {
-      for (const ln of touchedLayers) App.layersPanel.flash(ln);
-    }
+    if (App.layersPanel) for (const ln of touchedLayers) App.layersPanel.flash(ln);
   }
   App.invalidateMarkersCache();
   App.strokeChanges = null; App.strokeBound = null; App.lastPaintKey = null;
 };
 
 // ═══════════════════════════════════════════════
-// FLOOD / RECT / PICKER / AUTOTILE DIALOG
+// FLOOD / RECT / PICKER / AUTOTILE
 // ═══════════════════════════════════════════════
 App.floodFill = function(tx, ty, newTile) {
   if (App.tempTypeFill) {
@@ -518,34 +491,30 @@ App.floodFill = function(tx, ty, newTile) {
     const data = map.layers[App.activeLayer];
     const target = data[ty * map.W + tx];
     if (!target) return;
-    
     const type = App.typesModel.findBySolid(target);
     if (!type) { if (App.statusEl) App.statusEl.textContent = 'Tile is not in any Type'; return; }
-    
     const solidIds = new Set(type.solids.map(s => s.tileID));
     const newTileId = App.pickWeightedSolid(type);
-    
     const stack = [[tx, ty]];
     const seen = new Set();
     const changes = [];
     while (stack.length) {
-        const p = stack.pop();
-        const x = p[0], y = p[1];
-        if (x < 0 || y < 0 || x >= map.W || y >= map.H) continue;
-        const i = y * map.W + x;
-        if (seen.has(i) || !solidIds.has(data[i])) continue;
-        seen.add(i);
-        changes.push({ idx: i, before: data[i], after: newTileId });
-        stack.push([x+1,y],[x-1,y],[x,y+1],[x,y-1]);
+      const p = stack.pop();
+      const x = p[0], y = p[1];
+      if (x < 0 || y < 0 || x >= map.W || y >= map.H) continue;
+      const i = y * map.W + x;
+      if (seen.has(i) || !solidIds.has(data[i])) continue;
+      seen.add(i);
+      changes.push({ idx: i, before: data[i], after: newTileId });
+      stack.push([x+1,y],[x-1,y],[x,y+1],[x,y-1]);
     }
     if (!changes.length) return;
     for (const c of changes) data[c.idx] = c.after;
-    
     let minX = map.W, maxX = 0, minY = map.H, maxY = 0;
     for (const c of changes) {
-        const x = c.idx % map.W, y = Math.floor(c.idx / map.W);
-        if (x < minX) minX = x; if (x > maxX) maxX = x;
-        if (y < minY) minY = y; if (y > maxY) maxY = y;
+      const x = c.idx % map.W, y = Math.floor(c.idx / map.W);
+      if (x < minX) minX = x; if (x > maxX) maxX = x;
+      if (y < minY) minY = y; if (y > maxY) maxY = y;
     }
     App.renderer.invalidateRange(minX, minY, maxX, maxY);
     map.undoStack.push({ layer: App.activeLayer, changes });
@@ -659,14 +628,10 @@ App.pickerAt = function(tx, ty) {
 
 App.runAutotileDialog = function() {
   if (!App.mapModel || !App.generator) return;
-  const x0 = parseInt(prompt('x0:', '0'), 10);
-  if (isNaN(x0)) return;
-  const y0 = parseInt(prompt('y0:', '0'), 10);
-  if (isNaN(y0)) return;
-  const x1 = parseInt(prompt('x1:', String(App.mapModel.W - 1)), 10);
-  if (isNaN(x1)) return;
-  const y1 = parseInt(prompt('y1:', String(App.mapModel.H - 1)), 10);
-  if (isNaN(y1)) return;
+  const x0 = parseInt(prompt('x0:', '0'), 10); if (isNaN(x0)) return;
+  const y0 = parseInt(prompt('y0:', '0'), 10); if (isNaN(y0)) return;
+  const x1 = parseInt(prompt('x1:', String(App.mapModel.W - 1)), 10); if (isNaN(x1)) return;
+  const y1 = parseInt(prompt('y1:', String(App.mapModel.H - 1)), 10); if (isNaN(y1)) return;
   const changes = App.generator.generateRect(x0, y0, x1, y1);
   if (!changes.length) { if (App.statusEl) App.statusEl.textContent = 'Autotile: no changes'; return; }
   const data = App.mapModel.layers.Items0;
@@ -683,25 +648,22 @@ App.runAutotileDialog = function() {
 };
 
 // ═══════════════════════════════════════════════
-// CONCENTRIC RING FILL (PYRAMID EDITION)
+// CONCENTRIC RING FILL (PYRAMID)
 // ═══════════════════════════════════════════════
 App.fillRing = function(tx, ty, solidTile) {
   const map = App.mapModel;
   if (!map || !App.activeLayer) return false;
   const data = map.layers[App.activeLayer];
   if (tx < 0 || ty < 0 || tx >= map.W || ty >= map.H) return false;
-  
   const target = data[ty * map.W + tx];
   if (!target) {
-     if (App.statusEl) App.statusEl.textContent = 'Ring fill needs to start on a block';
-     return false;
+    if (App.statusEl) App.statusEl.textContent = 'Ring fill needs to start on a block';
+    return false;
   }
-
   const anchor = App.resolveClassicAnchor();
   if (!anchor) return false;
   const terrIdx = anchor.terrIdx;
   const ts = anchor.ts;
-
   const isPartOfBlock = (id) => {
     if (!id) return false;
     if (id === solidTile) return true;
@@ -711,11 +673,9 @@ App.fillRing = function(tx, ty, solidTile) {
     if (!t || !t.terrain) return false;
     return t.terrain.includes(terrIdx);
   };
-
   const region = new Set();
   const queue = [[tx, ty]];
   let minX = tx, maxX = tx, minY = ty, maxY = ty;
-
   while (queue.length) {
     const [cx, cy] = queue.pop();
     if (cx < 0 || cy < 0 || cx >= map.W || cy >= map.H) continue;
@@ -723,97 +683,63 @@ App.fillRing = function(tx, ty, solidTile) {
     if (region.has(idx)) continue;
     const id = data[idx];
     if (!isPartOfBlock(id)) continue;
-
     region.add(idx);
     if (cx < minX) minX = cx; if (cx > maxX) maxX = cx;
     if (cy < minY) minY = cy; if (cy > maxY) maxY = cy;
-
     queue.push([cx+1, cy], [cx-1, cy], [cx, cy+1], [cx, cy-1]);
   }
-
   if (region.size < 1) return false;
-
   const EXPAND_RADIUS = 15;
   const startX = Math.max(0, minX - EXPAND_RADIUS);
   const endX = Math.min(map.W - 1, maxX + EXPAND_RADIUS);
   const startY = Math.max(0, minY - EXPAND_RADIUS);
   const endY = Math.min(map.H - 1, maxY + EXPAND_RADIUS);
-
   const dist = new Uint16Array(map.W * map.H).fill(9999);
-  
   const bfsQ = [];
-  for (const idx of region) {
-      dist[idx] = 0;
-      bfsQ.push(idx);
-  }
-  
+  for (const idx of region) { dist[idx] = 0; bfsQ.push(idx); }
   let head = 0;
   while (head < bfsQ.length) {
-      const curr = bfsQ[head++];
-      const cx = curr % map.W;
-      const cy = Math.floor(curr / map.W);
-      const cd = dist[curr];
-      if (cd >= EXPAND_RADIUS) continue;
-      
-      for (let dy = -1; dy <= 1; dy++) {
-          for (let dx = -1; dx <= 1; dx++) {
-              if (dx === 0 && dy === 0) continue;
-              const nx = cx + dx, ny = cy + dy;
-              if (nx < 0 || ny < 0 || nx >= map.W || ny >= map.H) continue;
-              const nidx = ny * map.W + nx;
-              if (cd + 1 < dist[nidx]) {
-                  dist[nidx] = cd + 1;
-                  bfsQ.push(nidx);
-              }
-          }
-      }
+    const curr = bfsQ[head++];
+    const cx = curr % map.W;
+    const cy = Math.floor(curr / map.W);
+    const cd = dist[curr];
+    if (cd >= EXPAND_RADIUS) continue;
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+      if (dx === 0 && dy === 0) continue;
+      const nx = cx + dx, ny = cy + dy;
+      if (nx < 0 || ny < 0 || nx >= map.W || ny >= map.H) continue;
+      const nidx = ny * map.W + nx;
+      if (cd + 1 < dist[nidx]) { dist[nidx] = cd + 1; bfsQ.push(nidx); }
+    }
   }
-
-  const tempLayer = new Uint32Array(data); 
+  const tempLayer = new Uint32Array(data);
   const forcedSolid = new Uint8Array(map.W * map.H);
   const forcedEmpty = new Uint8Array(map.W * map.H);
-  
-  for (let y = startY; y <= endY; y++) {
-    for (let x = startX; x <= endX; x++) {
-      const idx = y * map.W + x;
-      if (dist[idx] === 9999) continue;
-      
-      if (dist[idx] % 2 === 0) {
-        tempLayer[idx] = solidTile;
-        forcedSolid[idx] = 1;
-      } else {
-        tempLayer[idx] = 0;
-        forcedEmpty[idx] = 1;
-      }
-    }
+  for (let y = startY; y <= endY; y++) for (let x = startX; x <= endX; x++) {
+    const idx = y * map.W + x;
+    if (dist[idx] === 9999) continue;
+    if (dist[idx] % 2 === 0) { tempLayer[idx] = solidTile; forcedSolid[idx] = 1; }
+    else { tempLayer[idx] = 0; forcedEmpty[idx] = 1; }
   }
-
-  for (let y = startY - 1; y <= endY + 1; y++) {
-    for (let x = startX - 1; x <= endX + 1; x++) {
-      App.paintClassicCell(x, y, anchor, tempLayer, forcedSolid, forcedEmpty);
-    }
+  for (let y = startY - 1; y <= endY + 1; y++) for (let x = startX - 1; x <= endX + 1; x++) {
+    App.paintClassicCell(x, y, anchor, tempLayer, forcedSolid, forcedEmpty);
   }
-
   const changes = [];
-  for (let y = startY - 1; y <= endY + 1; y++) {
-    for (let x = startX - 1; x <= endX + 1; x++) {
-      if (x < 0 || y < 0 || x >= map.W || y >= map.H) continue;
-      const realIdx = y * map.W + x;
-      const before = data[realIdx];
-      const after = tempLayer[realIdx];
-      if (before !== after) {
-        data[realIdx] = after;
-        changes.push({ idx: realIdx, before, after });
-      }
+  for (let y = startY - 1; y <= endY + 1; y++) for (let x = startX - 1; x <= endX + 1; x++) {
+    if (x < 0 || y < 0 || x >= map.W || y >= map.H) continue;
+    const realIdx = y * map.W + x;
+    const before = data[realIdx];
+    const after = tempLayer[realIdx];
+    if (before !== after) {
+      data[realIdx] = after;
+      changes.push({ idx: realIdx, before, after });
     }
   }
-
   if (changes.length) {
     map.undoStack.push({ layer: App.activeLayer, changes });
     if (map.undoStack.length > 50) map.undoStack.shift();
     map.redoStack.length = 0;
     App.invalidateMarkersCache();
-    
     App.renderer.invalidateRange(startX - 1, startY - 1, endX + 1, endY + 1);
     if (App.statusEl) App.statusEl.textContent = 'Pyramid expanded (' + changes.length + ' cells)';
     return true;
@@ -865,6 +791,232 @@ App.invalidateEntry = function(entry) {
       App.renderer.chunkCache.delete(Math.floor(x/32) + ',' + Math.floor(y/32));
     }
   }
+};
+
+// ═══════════════════════════════════════════════
+// [Patch 02.6] MAP MIRROR
+// ═══════════════════════════════════════════════
+App.mirrorMap = function(mode, layersToMirror) {
+  const map = App.mapModel;
+  if (!map) return;
+  const W = map.W;
+  const H = map.H;
+  const halfW = Math.floor(W / 2);
+  const halfH = Math.floor(H / 2);
+  const undoData = [];
+
+  for (const layerName of layersToMirror) {
+    const data = map.layers[layerName];
+    if (!data) continue;
+    const changes = [];
+    const orig = new Uint32Array(data);
+    const getNewTile = (id) => {
+      if (!id) return 0;
+      if (layerName === 'Ground') {
+        const type = App.typesModel.findBySolid(id);
+        if (type && type.solids && type.solids.length > 0) return App.pickWeightedSolid(type);
+      }
+      return id;
+    };
+    const apply = (tx, ty, sx, sy) => {
+      const idx = ty * W + tx;
+      const srcIdx = sy * W + sx;
+      const before = data[idx];
+      const after = getNewTile(orig[srcIdx]);
+      if (before !== after) {
+        data[idx] = after;
+        changes.push({ idx, before, after });
+      }
+    };
+    if (mode === 'h') {
+      for (let y = 0; y < H; y++) for (let x = 0; x < halfW; x++) apply(W - 1 - x, y, x, y);
+    } else if (mode === 'h_inv') {
+      for (let y = 0; y < H; y++) for (let x = 0; x < halfW; x++) apply(x, y, W - 1 - x, y);
+    } else if (mode === 'v') {
+      for (let y = 0; y < halfH; y++) for (let x = 0; x < W; x++) apply(x, H - 1 - y, x, y);
+    } else if (mode === 'v_inv') {
+      for (let y = 0; y < halfH; y++) for (let x = 0; x < W; x++) apply(x, y, x, H - 1 - y);
+    } else if (mode === 'quad') {
+      for (let y = 0; y < halfH; y++) for (let x = 0; x < halfW; x++) {
+        apply(W - 1 - x, y, x, y);
+        apply(x, H - 1 - y, x, y);
+        apply(W - 1 - x, H - 1 - y, x, y);
+      }
+    }
+    if (changes.length) undoData.push({ layer: layerName, changes });
+  }
+
+  if (layersToMirror.includes('Ground') && map.layers.Items0 && App.generator) {
+    const items0 = map.layers.Items0;
+    const edgeChanges = App.generator.generateRect(0, 0, W - 1, H - 1);
+    const changesEdges = [];
+    for (const c of edgeChanges) {
+      if (items0[c.idx] !== c.after) {
+        changesEdges.push({ idx: c.idx, before: items0[c.idx], after: c.after });
+        items0[c.idx] = c.after;
+      }
+    }
+    if (changesEdges.length) {
+      const existing = undoData.find(l => l.layer === 'Items0');
+      if (existing) {
+        const merged = new Map();
+        for (const c of existing.changes) merged.set(c.idx, c);
+        for (const c of changesEdges) merged.set(c.idx, c);
+        existing.changes = Array.from(merged.values());
+      } else {
+        undoData.push({ layer: 'Items0', changes: changesEdges });
+      }
+    }
+  }
+
+  const anchor = App.resolveClassicAnchor();
+  if (layersToMirror.includes('Ground') && anchor) {
+    const ground = map.layers.Ground;
+    const classicChanges = [];
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const idx = y * W + x;
+      const before = ground[idx];
+      App.paintClassicCell(x, y, anchor, ground);
+      const after = ground[idx];
+      if (before !== after) classicChanges.push({ idx, before, after });
+    }
+    if (classicChanges.length) {
+      const existing = undoData.find(l => l.layer === 'Ground');
+      if (existing) {
+        const mapFinal = new Map();
+        for (const c of existing.changes) mapFinal.set(c.idx, c);
+        for (const c of classicChanges) mapFinal.set(c.idx, c);
+        existing.changes = Array.from(mapFinal.values());
+      } else {
+        undoData.push({ layer: 'Ground', changes: classicChanges });
+      }
+    }
+  }
+
+  if (undoData.length) {
+    if (undoData.length === 1) map.undoStack.push({ layer: undoData[0].layer, changes: undoData[0].changes });
+    else map.undoStack.push({ type: 'multi', layers: undoData });
+    if (map.undoStack.length > 50) map.undoStack.shift();
+    map.redoStack.length = 0;
+    App.invalidateMarkersCache();
+    App.renderer.invalidate();
+    App.renderer.render();
+    const total = undoData.reduce((s, l) => s + l.changes.length, 0);
+    if (App.statusEl) App.statusEl.textContent = 'Mirror: ' + total + ' cells';
+  } else {
+    if (App.statusEl) App.statusEl.textContent = 'Mirror: no changes';
+  }
+};
+
+// ═══════════════════════════════════════════════
+// [Patch 02.2] GUIDES — finalize / remove / clear
+// ═══════════════════════════════════════════════
+App.finalizeGuide = function() {
+  if (!App.guideDrawStart) return;
+  const s = App.guideDrawStart;
+  const c = App.guideDrawCurrent || s;
+  const type = App.activeGuideType;
+  let helper = null;
+
+  if (type === 'line') {
+    if (s.tx === c.x && s.ty === c.y) { App.guideDrawStart = null; App.guideDrawCurrent = null; return; }
+    helper = { type: 'line', x1: s.tx, y1: s.ty, x2: c.x, y2: c.y, color: '#0ff' };
+  } else if (type === 'rect') {
+    const x = Math.min(s.tx, c.x), y = Math.min(s.ty, c.y);
+    const w = Math.abs(c.x - s.tx), h = Math.abs(c.y - s.ty);
+    if (w === 0 || h === 0) { App.guideDrawStart = null; App.guideDrawCurrent = null; return; }
+    helper = { type: 'rect', x, y, w, h, color: '#0ff' };
+  } else if (type === 'circle') {
+    const x = Math.min(s.tx, c.x), y = Math.min(s.ty, c.y);
+    const w = Math.abs(c.x - s.tx), h = Math.abs(c.y - s.ty);
+    if (w === 0 || h === 0) { App.guideDrawStart = null; App.guideDrawCurrent = null; return; }
+    helper = { type: 'circle', x, y, w, h, color: '#0ff' };
+  } else if (type === 'point') {
+    helper = { type: 'point', x: s.tx, y: s.ty, color: '#0ff' };
+  }
+
+  if (helper) {
+    App.helpers.push(helper);
+    if (typeof App.renderGuidesList === 'function') App.renderGuidesList();
+    if (App.statusEl) App.statusEl.textContent = 'Guide added: ' + helper.type + ' (' + App.helpers.length + ' total)';
+  }
+  App.guideDrawStart = null;
+  App.guideDrawCurrent = null;
+};
+
+App.removeGuide = function(idx) {
+  if (idx >= 0 && idx < App.helpers.length) {
+    App.helpers.splice(idx, 1);
+    if (App.selectedGuideIdx === idx) App.selectedGuideIdx = -1;
+    else if (App.selectedGuideIdx > idx) App.selectedGuideIdx--;
+    if (typeof App.renderGuidesList === 'function') App.renderGuidesList();
+    if (App.renderer) App.renderer.render();
+  }
+};
+
+App.clearGuides = function() {
+  App.helpers = [];
+  App.selectedGuideIdx = -1;
+  if (typeof App.renderGuidesList === 'function') App.renderGuidesList();
+  if (App.renderer) App.renderer.render();
+  if (App.statusEl) App.statusEl.textContent = 'All guides cleared';
+};
+
+// ═══════════════════════════════════════════════
+// [Patch 03.2] GUIDES — Symmetry & Add
+// ═══════════════════════════════════════════════
+App.addGuideWithSymmetry = function(baseGuide) {
+  const map = App.mapModel;
+  if (!map) return;
+  const W = map.W;
+  const H = map.H;
+
+  App.helpers.push(baseGuide);
+
+  const getMirrored = (g, mode) => {
+    const ng = JSON.parse(JSON.stringify(g));
+    ng.opacity = 0.5;
+    ng.color = '#0a8'; // визуально отличаем зеркала от оригинала
+
+    const mirrorPt = (pt) => {
+      const nx = pt.x;
+      const ny = pt.y;
+      if (mode === 'h') pt.x = W - 1 - nx;
+      if (mode === 'v') pt.y = H - 1 - ny;
+      if (mode === 'd') { pt.x = ny; pt.y = nx; }
+      if (mode === 'ad') { pt.x = H - 1 - ny; pt.y = W - 1 - nx; }
+    };
+
+    if (ng.type === 'line') {
+      const p1 = { x: ng.x1, y: ng.y1 };
+      const p2 = { x: ng.x2, y: ng.y2 };
+      mirrorPt(p1); mirrorPt(p2);
+      ng.x1 = p1.x; ng.y1 = p1.y;
+      ng.x2 = p2.x; ng.y2 = p2.y;
+    } else if (ng.type === 'rect' || ng.type === 'circle') {
+      const p1 = { x: ng.x, y: ng.y };
+      const p2 = { x: ng.x + ng.w, y: ng.y + ng.h };
+      mirrorPt(p1); mirrorPt(p2);
+      ng.x = Math.min(p1.x, p2.x);
+      ng.y = Math.min(p1.y, p2.y);
+      ng.w = Math.abs(p2.x - p1.x);
+      ng.h = Math.abs(p2.y - p1.y);
+    } else if (ng.type === 'point') {
+      const p = { x: ng.x, y: ng.y };
+      mirrorPt(p);
+      ng.x = p.x; ng.y = p.y;
+    }
+    return ng;
+  };
+
+  if (App.guideSymmetry.h)  App.helpers.push(getMirrored(baseGuide, 'h'));
+  if (App.guideSymmetry.v)  App.helpers.push(getMirrored(baseGuide, 'v'));
+  if (App.guideSymmetry.d)  App.helpers.push(getMirrored(baseGuide, 'd'));
+  if (App.guideSymmetry.ad) App.helpers.push(getMirrored(baseGuide, 'ad'));
+
+  if (typeof App.renderGuidesList === 'function') App.renderGuidesList();
+  if (App.statusEl) App.statusEl.textContent = 'Guide added +' + App.helpers.length + ' helpers';
+  App.renderer.render();
 };
 
 })(window.RWEditor = window.RWEditor || {});

@@ -25,13 +25,11 @@ class Renderer {
     this.markerScale = 1;
     this.getMarkers = null;
 
-    // ─── REFERENCE ───
-    this.referenceImage = null;    // Image объект
+    this.referenceImage = null;
     this.referenceOpacity = 0.5;
-    this.referenceMode = 'overlay'; // 'overlay' | 'underlay'
+    this.referenceMode = 'overlay';
 
-    // ─── FPS LOCK ───
-    this.targetFps = 0; // 0 = unlimited
+    this.targetFps = 0;
     this._lastRenderTime = 0;
     this._renderTimeout = null;
 
@@ -44,37 +42,18 @@ class Renderer {
     this.resize();
   }
 
-  setBg(color) {
-    this.bgColor = color || '#0a0a0a';
-    this.render();
-  }
-
-  setReference(img) {
-    this.referenceImage = img || null;
-    this.render();
-  }
-  setReferenceOpacity(v) {
-    this.referenceOpacity = Math.max(0, Math.min(1, v));
-    this.render();
-  }
-  setReferenceMode(mode) {
-    this.referenceMode = (mode === 'underlay') ? 'underlay' : 'overlay';
-    this.render();
-  }
+  setBg(color) { this.bgColor = color || '#0a0a0a'; this.render(); }
+  setReference(img) { this.referenceImage = img || null; this.render(); }
+  setReferenceOpacity(v) { this.referenceOpacity = Math.max(0, Math.min(1, v)); this.render(); }
+  setReferenceMode(mode) { this.referenceMode = (mode === 'underlay') ? 'underlay' : 'overlay'; this.render(); }
 
   isLayerVisible(name) {
     if (this.soloLayer) return name === this.soloLayer;
     return this.layerVisibility[name] !== false;
   }
 
-  setLayerVisibility(name, v) {
-    this.layerVisibility[name] = v;
-    this.invalidate();
-  }
-  setSolo(name) {
-    this.soloLayer = name;
-    this.invalidate();
-  }
+  setLayerVisibility(name, v) { this.layerVisibility[name] = v; this.invalidate(); }
+  setSolo(name) { this.soloLayer = name; this.invalidate(); }
   invalidate() { this.chunkCache.clear(); }
   invalidateCell(tx, ty) {
     const cx = Math.floor(tx / CHUNK);
@@ -145,9 +124,7 @@ class Renderer {
   findTileset(id) {
     const map = this.getMap();
     let found = null;
-    for (const ts of map.tilesets) {
-      if (id >= ts.firstgid) found = ts; else break;
-    }
+    for (const ts of map.tilesets) { if (id >= ts.firstgid) found = ts; else break; }
     return found;
   }
 
@@ -176,7 +153,6 @@ class Renderer {
     g.imageSmoothingEnabled = false;
     const baseX = cx * CHUNK;
     const baseY = cy * CHUNK;
-
     for (const name of map.layerOrder) {
       if (!this.isLayerVisible(name)) continue;
       const data = map.layers[name];
@@ -192,7 +168,6 @@ class Renderer {
     return c;
   }
 
-  // ─── REFERENCE ───
   _drawReference(ctx, map) {
     if (!this.referenceImage) return;
     const w = map.W * map.tw;
@@ -220,10 +195,7 @@ class Renderer {
       }
     }
     this._lastRenderTime = now;
-    if (this._renderTimeout) {
-      clearTimeout(this._renderTimeout);
-      this._renderTimeout = null;
-    }
+    if (this._renderTimeout) { clearTimeout(this._renderTimeout); this._renderTimeout = null; }
     this._doRender();
   }
 
@@ -244,10 +216,7 @@ class Renderer {
     ctx.scale(this.view.zoom, this.view.zoom);
     ctx.imageSmoothingEnabled = false;
 
-    // ─── UNDERLAY ───
-    if (this.referenceMode === 'underlay') {
-      this._drawReference(ctx, map);
-    }
+    if (this.referenceMode === 'underlay') this._drawReference(ctx, map);
 
     const tw = map.tw, th = map.th;
     const chunksX = Math.ceil(map.W / CHUNK);
@@ -278,23 +247,13 @@ class Renderer {
       const sy = Math.max(0, Math.floor(mapPxY0 / th));
       const ex = Math.min(map.W, Math.ceil(mapPxX1 / tw));
       const ey = Math.min(map.H, Math.ceil(mapPxY1 / th));
-      for (let x = sx; x <= ex; x++) {
-        ctx.moveTo(x * tw, sy * th);
-        ctx.lineTo(x * tw, ey * th);
-      }
-      for (let y = sy; y <= ey; y++) {
-        ctx.moveTo(sx * tw, y * th);
-        ctx.lineTo(ex * tw, y * th);
-      }
+      for (let x = sx; x <= ex; x++) { ctx.moveTo(x * tw, sy * th); ctx.lineTo(x * tw, ey * th); }
+      for (let y = sy; y <= ey; y++) { ctx.moveTo(sx * tw, y * th); ctx.lineTo(ex * tw, y * th); }
       ctx.stroke();
     }
 
-    // ─── OVERLAY (до маркеров) ───
-    if (this.referenceMode === 'overlay') {
-      this._drawReference(ctx, map);
-    }
+    if (this.referenceMode === 'overlay') this._drawReference(ctx, map);
 
-    // ─── MARKERS ───
     if (this.showMarkers && this.getMarkers) {
       const m = this.getMarkers();
       if (m) this._drawMarkers(ctx, map, m, tw, th);
@@ -324,6 +283,137 @@ class Renderer {
         (y1 - y0 + 1) * th - 2 / this.view.zoom);
     }
 
+    // ═══════════════════════════════════════════════
+    // [Patch 03.1 / 03.2] GUIDES OVERLAY
+    // ═══════════════════════════════════════════════
+    const A = RW.App;
+    if (A && A.helpers && A.helpers.length) {
+      ctx.save();
+      ctx.font = 'bold ' + (12 / this.view.zoom) + 'px monospace';
+      ctx.textBaseline = 'bottom';
+
+      const drawShape = (h, isSelected) => {
+        const col = isSelected ? '#fff' : (h.color || '#0ff');
+
+        // ── Shape + text (с учётом opacity) ──
+        ctx.save();
+        ctx.globalAlpha = (h.opacity != null) ? h.opacity : 1;
+
+        // Чёрная подложка
+        ctx.save();
+        ctx.strokeStyle = '#000';
+        ctx.fillStyle = '#000';
+        ctx.lineWidth = 4 / this.view.zoom;
+        if (h.type === 'line') {
+          ctx.beginPath(); ctx.moveTo(h.x1 * tw, h.y1 * th); ctx.lineTo(h.x2 * tw, h.y2 * th); ctx.stroke();
+        } else if (h.type === 'rect') {
+          ctx.strokeRect(h.x * tw, h.y * th, h.w * tw, h.h * th);
+        } else if (h.type === 'circle') {
+          ctx.beginPath();
+          const cx = (h.x + h.w / 2) * tw, cy = (h.y + h.h / 2) * th;
+          ctx.ellipse(cx, cy, Math.abs(h.w / 2) * tw, Math.abs(h.h / 2) * th, 0, 0, Math.PI * 2);
+          ctx.stroke();
+        } else if (h.type === 'point') {
+          ctx.beginPath(); ctx.arc(h.x * tw, h.y * th, 6 / this.view.zoom, 0, Math.PI * 2); ctx.fill();
+        }
+        ctx.restore();
+
+        // Цветная линия
+        ctx.strokeStyle = col;
+        ctx.fillStyle = col;
+        ctx.lineWidth = 2 / this.view.zoom;
+        if (h.type === 'line') {
+          ctx.beginPath(); ctx.moveTo(h.x1 * tw, h.y1 * th); ctx.lineTo(h.x2 * tw, h.y2 * th); ctx.stroke();
+        } else if (h.type === 'rect') {
+          ctx.strokeRect(h.x * tw, h.y * th, h.w * tw, h.h * th);
+        } else if (h.type === 'circle') {
+          ctx.beginPath();
+          const cx = (h.x + h.w / 2) * tw, cy = (h.y + h.h / 2) * th;
+          ctx.ellipse(cx, cy, Math.abs(h.w / 2) * tw, Math.abs(h.h / 2) * th, 0, 0, Math.PI * 2);
+          ctx.stroke();
+        } else if (h.type === 'point') {
+          ctx.beginPath(); ctx.arc(h.x * tw, h.y * th, 4 / this.view.zoom, 0, Math.PI * 2); ctx.fill();
+        }
+
+        // Текст
+        let txt, tx, ty;
+        if (h.type === 'point') {
+          txt = '[' + h.x + ', ' + h.y + ']';
+          tx = h.x * tw + 6 / this.view.zoom;
+          ty = h.y * th + 6 / this.view.zoom;
+        } else if (h.type === 'line') {
+          txt = '[' + h.x1 + ',' + h.y1 + ']→[' + h.x2 + ',' + h.y2 + ']';
+          tx = h.x1 * tw + 6 / this.view.zoom;
+          ty = h.y1 * th - 6 / this.view.zoom;
+        } else {
+          txt = '[' + h.x + ',' + h.y + ' ' + h.w + '×' + h.h + ']';
+          tx = h.x * tw + 6 / this.view.zoom;
+          ty = h.y * th - 6 / this.view.zoom;
+        }
+        ctx.lineWidth = 3 / this.view.zoom;
+        ctx.strokeStyle = '#000';
+        ctx.strokeText(txt, tx, ty);
+        ctx.fillStyle = col;
+        ctx.fillText(txt, tx, ty);
+
+        ctx.restore(); // restore opacity
+
+        // ── [Patch 03.2] Handles at full alpha ──
+        if (isSelected) {
+          ctx.save();
+          ctx.fillStyle = '#fff';
+          ctx.strokeStyle = '#000';
+          ctx.lineWidth = 2 / this.view.zoom;
+          const drawHandle = (htx, hty) => {
+            const px = htx * tw;
+            const py = hty * th;
+            const size = 6 / this.view.zoom;
+            ctx.fillRect(px - size / 2, py - size / 2, size, size);
+            ctx.strokeRect(px - size / 2, py - size / 2, size, size);
+          };
+          if (h.type === 'line') {
+            drawHandle(h.x1, h.y1);
+            drawHandle(h.x2, h.y2);
+          } else if (h.type === 'rect' || h.type === 'circle') {
+            drawHandle(h.x, h.y);
+            drawHandle(h.x + h.w, h.y);
+            drawHandle(h.x, h.y + h.h);
+            drawHandle(h.x + h.w, h.y + h.h);
+          } else if (h.type === 'point') {
+            drawHandle(h.x, h.y);
+          }
+          ctx.restore();
+        }
+      };
+
+      for (let i = 0; i < A.helpers.length; i++) {
+        drawShape(A.helpers[i], i === A.selectedGuideIdx);
+      }
+
+      // Live preview
+      if (A.guideDrawStart && A.guideDrawCurrent) {
+        const s = A.guideDrawStart, c = A.guideDrawCurrent;
+        ctx.save();
+        ctx.strokeStyle = '#fa0';
+        ctx.fillStyle = '#fa0';
+        ctx.lineWidth = 2 / this.view.zoom;
+        ctx.setLineDash([5 / this.view.zoom, 3 / this.view.zoom]);
+        if (A.activeGuideType === 'line') {
+          ctx.beginPath(); ctx.moveTo(s.tx * tw, s.ty * th); ctx.lineTo(c.x * tw, c.y * th); ctx.stroke();
+        } else if (A.activeGuideType === 'rect' || A.activeGuideType === 'circle') {
+          const x = Math.min(s.tx, c.x) * tw, y = Math.min(s.ty, c.y) * th;
+          const w = Math.abs(c.x - s.tx) * tw, h = Math.abs(c.y - s.ty) * th;
+          if (A.activeGuideType === 'rect') ctx.strokeRect(x, y, w, h);
+          else { ctx.beginPath(); ctx.ellipse(x + w / 2, y + h / 2, w / 2, h / 2, 0, 0, Math.PI * 2); ctx.stroke(); }
+        } else if (A.activeGuideType === 'point') {
+          ctx.beginPath(); ctx.arc(s.tx * tw, s.ty * th, 4 / this.view.zoom, 0, Math.PI * 2); ctx.fill();
+        }
+        ctx.restore();
+      }
+
+      ctx.restore();
+    }
+
     ctx.restore();
     this._tickFps();
   }
@@ -333,43 +423,25 @@ class Renderer {
     const tile = Math.min(tw, th);
     const scaleInv = 1 / this.view.zoom;
     const M = RW.Markers;
-
     const dotR = M.DOT_RADIUS_TILES * tile * scale;
     for (const p of markers.respools) {
-      const cx = p.x * tw + tw / 2;
-      const cy = p.y * th + th / 2;
-      ctx.beginPath();
-      ctx.arc(cx, cy, dotR, 0, Math.PI * 2);
-      ctx.fillStyle = '#ffea30';
-      ctx.fill();
-      ctx.strokeStyle = '#000';
-      ctx.lineWidth = 1.5 * scaleInv;
-      ctx.stroke();
+      const cx = p.x * tw + tw / 2, cy = p.y * th + th / 2;
+      ctx.beginPath(); ctx.arc(cx, cy, dotR, 0, Math.PI * 2);
+      ctx.fillStyle = '#ffea30'; ctx.fill();
+      ctx.strokeStyle = '#000'; ctx.lineWidth = 1.5 * scaleInv; ctx.stroke();
     }
-
     const circR = M.RADIUS_TILES * tile * scale;
     const fontPx = circR * 2 * M.FONT_RATIO;
-
     for (const s of markers.starts) {
-      const cx = s.x * tw + tw / 2;
-      const cy = s.y * th + th / 2;
+      const cx = s.x * tw + tw / 2, cy = s.y * th + th / 2;
       const color = M.colorFor(s.team);
-
-      ctx.beginPath();
-      ctx.arc(cx, cy, circR, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(0,0,0,0.5)';
-      ctx.fill();
-
-      ctx.strokeStyle = 'rgba(0,0,0,0.7)';
-      ctx.lineWidth = Math.max(1, circR * 0.06);
-      ctx.stroke();
-
+      ctx.beginPath(); ctx.arc(cx, cy, circR, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fill();
+      ctx.strokeStyle = 'rgba(0,0,0,0.7)'; ctx.lineWidth = Math.max(1, circR * 0.06); ctx.stroke();
       ctx.font = 'bold ' + fontPx + 'px "Arial Black", Arial, sans-serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       ctx.fillStyle = color;
-      ctx.shadowColor = 'rgba(0,0,0,0.9)';
-      ctx.shadowBlur = fontPx * 0.15;
+      ctx.shadowColor = 'rgba(0,0,0,0.9)'; ctx.shadowBlur = fontPx * 0.15;
       ctx.fillText(String(s.team + 1), cx, cy);
       ctx.shadowBlur = 0;
     }
@@ -380,8 +452,7 @@ class Renderer {
     const now = performance.now();
     if (now - this._fps.last >= 500) {
       const fps = Math.round(this._fps.frames * 1000 / (now - this._fps.last));
-      this._fps.frames = 0;
-      this._fps.last = now;
+      this._fps.frames = 0; this._fps.last = now;
       if (this.onFps) this.onFps(fps, this.chunkCache.size);
     }
   }

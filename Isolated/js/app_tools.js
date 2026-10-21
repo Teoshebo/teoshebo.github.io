@@ -16,6 +16,8 @@ const TOOLS = [
   { id: 'fill',    hk: 'KeyF', label: 'FILL',    hkPos: 0, icon: 'asset/icon/fill.png',    emoji: '🪣', title: 'Fill (F)' },
   { id: 'picker',  hk: 'KeyK', label: 'PICK',    hkPos: 3, icon: 'asset/icon/picker.png',  emoji: '💧', title: 'Picker (K)' },
   { sep: true },
+  { id: 'guides',  hk: 'KeyG', label: 'GUIDE',   hkPos: 0, emoji: '📏', title: 'Guides (G)' },
+  { id: 'utils',   hk: 'KeyU', label: 'UTILS',   hkPos: 0, emoji: '🛠', title: 'Utilities (U)' },
   { id: 'autotile', label: 'AUTO', hkPos: -1, icon: 'asset/icon/auto.png', emoji: '⚙', title: 'Autotile area' }
 ];
 
@@ -45,7 +47,6 @@ App.makeIconEl = function(t) {
     ic = span;
   }
 
-  // Композитные иконки для Fill режимов
   if (t.id === 'fill' && (App.tempEmptyFill || App.tempTypeFill)) {
     const wrap = document.createElement('div');
     wrap.style.position = 'relative';
@@ -136,8 +137,16 @@ App.updateMobileBrushBtn = function() {
 
 App.handleToolClick = function(id) {
   if (App.pickMode) App.endPick();
-  
-  // Сбрасываем временные режимы при смене инструмента
+
+  if (id === 'utils') { App.openUtilityModal(); return; }
+
+  // [Patch 02.2] показать/скрыть панель GUIDES
+  if (id === 'guides') {
+    if (typeof App.showGuidesPanel === 'function') App.showGuidesPanel();
+  } else {
+    if (typeof App.hideGuidesPanel === 'function') App.hideGuidesPanel();
+  }
+
   if (App.tempEmptyFill || App.tempTypeFill) {
     App.tempEmptyFill = false;
     App.tempTypeFill = false;

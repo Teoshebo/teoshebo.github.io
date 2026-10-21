@@ -15,7 +15,6 @@
     <input type="file" id="fileInput" accept=".tmx,application/xml,text/xml" hidden>
     <input type="file" id="tilesetInput" accept="image/png,image/*,.tmx,application/xml,text/xml" hidden>
 
-    <!-- ═══ DESKTOP: file ops ═══ -->
     <button id="btnNew" class="primary desktop-only" title="New empty map">
       <img class="btn-ic" src="asset/icon/new.png" data-emoji="📄" alt="">
       <span data-i18n="btn.new">New</span>
@@ -42,10 +41,6 @@
 
     <div class="sep desktop-only"></div>
 
-    <button id="btnResize" title="Change map size" class="desktop-only">
-      <img class="btn-ic" src="asset/icon/resize.png" data-emoji="⤢" alt="">
-      <span data-i18n="btn.resize">Size</span>
-    </button>
     <button id="btnMerge" title="Merge multiple maps" class="desktop-only">
       <img class="btn-ic" src="asset/icon/merge.png" data-emoji="⌘" alt="">
       <span data-i18n="btn.merge">Merge</span>
@@ -63,11 +58,6 @@
     <button id="btnReset" data-i18n="btn.reset" class="desktop-only">1:1</button>
     <div class="zoom-box desktop-only">Zoom <b id="zoomVal">1.00</b></div>
 
-    <button id="btnRef" title="Reference image">
-      <img class="btn-ic" src="asset/icon/ref.png" data-emoji="🖼" alt="">
-      <span data-i18n="btn.ref">REF</span>
-    </button>
-
     <div class="sep desktop-only"></div>
 
     <button id="btnSettings" title="Settings">
@@ -77,9 +67,8 @@
       <img class="btn-ic" src="asset/icon/docs.png" data-emoji="📖" alt="">
     </button>
 
-    <span id="status" data-i18n="status.idle">Load .tmx file</span>
+    <span id="appVersion" style="color:#fd4; font-size:11px; margin-left:auto; font-weight:bold">v0.6(149)</span>
 
-    <!-- ═══ MOBILE-ONLY ═══ -->
     <button id="btnMobileBrush" class="mobile-only" title="Brush tool">
       <span class="mtool-icon">🖌</span>
       <span class="mtool-label">BRUSH</span>
@@ -110,6 +99,9 @@
         <span id="warnBannerText">—</span>
         <button id="btnWarnClose">OK</button>
       </div>
+
+      <div id="logConsole" style="position:absolute; bottom:10px; right:10px; pointer-events:none; font-family:monospace; font-size:11px; color:#fff; text-shadow:0 0 3px #000, 0 0 3px #000; text-align:right; line-height:1.4; z-index:10; display:flex; flex-direction:column; gap:2px;"></div>
+
       <div id="rightPanel">
         <div class="right-panel-close mobile-only" id="rightPanelClose">×</div>
         <div id="layers"><h3>LAYERS <span id="activeLayerLabel">—</span></h3></div>
@@ -131,16 +123,43 @@
             <div id="tnsList"></div>
           </div>
         </div>
+
+        <div id="guidesPanel" style="display:none; margin-top:10px; padding:10px; background:#161616; border:1px solid #333; border-radius:4px">
+          <h3 style="margin:0 0 8px; font-size:10px; color:#888; letter-spacing:2px">GUIDES MANAGER</h3>
+
+          <div style="display:flex; gap:4px; margin-bottom:8px">
+            <button id="btnGuideModeCreate" class="guide-mode-btn active" style="flex:1;background:#3a2050;color:#e8f;border:1px solid #c8f;padding:4px;font-family:inherit;font-size:10px;cursor:pointer;border-radius:3px">➕ Create</button>
+            <button id="btnGuideModeSelect" class="guide-mode-btn" style="flex:1;background:#222;color:#888;border:1px solid #444;padding:4px;font-family:inherit;font-size:10px;cursor:pointer;border-radius:3px">🖱 Select</button>
+          </div>
+
+          <div style="display:flex; gap:4px; margin-bottom:8px">
+            <button class="guide-type-btn active" data-type="line" style="flex:1;background:#3a2050;color:#e8f;border:1px solid #c8f;padding:4px;font-family:inherit;font-size:10px;cursor:pointer;border-radius:3px">Line</button>
+            <button class="guide-type-btn" data-type="rect" style="flex:1;background:#222;color:#888;border:1px solid #444;padding:4px;font-family:inherit;font-size:10px;cursor:pointer;border-radius:3px">Rect</button>
+            <button class="guide-type-btn" data-type="circle" style="flex:1;background:#222;color:#888;border:1px solid #444;padding:4px;font-family:inherit;font-size:10px;cursor:pointer;border-radius:3px">Circle</button>
+            <button class="guide-type-btn" data-type="point" style="flex:1;background:#222;color:#888;border:1px solid #444;padding:4px;font-family:inherit;font-size:10px;cursor:pointer;border-radius:3px">Point</button>
+          </div>
+
+          <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px; font-size:10px; color:#aaa">
+            <label style="display:flex; gap:3px; align-items:center; cursor:pointer"><input type="checkbox" id="symH"> H-Sym</label>
+            <label style="display:flex; gap:3px; align-items:center; cursor:pointer"><input type="checkbox" id="symV"> V-Sym</label>
+            <label style="display:flex; gap:3px; align-items:center; cursor:pointer"><input type="checkbox" id="symD"> Diag</label>
+            <label style="display:flex; gap:3px; align-items:center; cursor:pointer"><input type="checkbox" id="symAD"> Anti-D</label>
+          </div>
+
+          <div id="guidesList" style="max-height:150px; overflow-y:auto; font-size:11px;"></div>
+          <button id="btnClearGuides" style="width:100%; margin-top:8px; background:#3a1a1a; color:#f88; border:1px solid #833; padding:4px; font-family:inherit; font-size:11px; cursor:pointer; border-radius:3px">Clear All</button>
+        </div>
       </div>
       <div id="rightBackdrop" class="mobile-only hidden"></div>
     </div>
   </div>
 
-  <div id="bottom">
+  <!-- [Patch 04.0] стартуем с TYPES → atlases-hidden -->
+  <div id="bottom" class="atlases-hidden">
     <div id="bottomGrabber" title="Drag to resize"></div>
     <div id="tsTabs">
-      <button id="btnAtlasesTab" class="section-tab active" data-i18n="tab.atlases">ATLASES</button>
-      <button id="btnTypesTab" class="section-tab types-tab" data-i18n="tab.types">TYPES</button>
+      <button id="btnAtlasesTab" class="section-tab" data-i18n="tab.atlases">ATLASES</button>
+      <button id="btnTypesTab" class="section-tab types-tab active" data-i18n="tab.types">TYPES</button>
       <button id="btnGenTab" class="section-tab gen-tab" data-i18n="tab.gen">GENERATOR</button>
       <button id="btnV3Tab" class="section-tab v3-tab" data-i18n="tab.v3">3D</button>
       <div id="tsTabsList"></div>
@@ -161,7 +180,6 @@
   </div>
 </div>
 
-<!-- ═══ TOOL PICKER (BRUSH, mobile) ═══ -->
 <div id="toolPickerModal" class="hidden mobile-only">
   <div class="tool-picker-dialog">
     <div class="tool-picker-header">
@@ -172,7 +190,6 @@
   </div>
 </div>
 
-<!-- ═══ MAP MODAL (mobile) ═══ -->
 <div id="mapModal" class="hidden mobile-only">
   <div class="mobile-modal-dialog">
     <div class="mobile-modal-header">
@@ -208,8 +225,7 @@
   </div>
 </div>
 
-<!-- ═══ UTILITY MODAL (mobile) ═══ -->
-<div id="utilityModal" class="hidden mobile-only">
+<div id="utilityModal" class="hidden" style="display:flex">
   <div class="mobile-modal-dialog">
     <div class="mobile-modal-header">
       <span>UTILITY</span>
@@ -236,15 +252,30 @@
         <span class="ma-ic">⛶</span>
         <span class="ma-lbl" data-i18n="btn.fullscreen">Fullscreen</span>
       </button>
+      <button id="utilResize" class="mobile-action-btn">
+        <span class="ma-ic">⤢</span>
+        <span class="ma-lbl" data-i18n="btn.resize">Size</span>
+      </button>
       <button id="utilRef" class="mobile-action-btn">
         <span class="ma-ic">🖼</span>
         <span class="ma-lbl" data-i18n="btn.ref">Reference</span>
       </button>
+
+      <div class="settings-section" style="margin-bottom:10px">
+        <div class="settings-section-title">MAP MIRROR</div>
+        <div style="display:flex; gap:5px; flex-wrap:wrap; margin-bottom:5px">
+          <button id="utilMirrorH" class="mobile-action-btn" style="padding:8px" title="Left replaces Right">⬅ Left to Right</button>
+          <button id="utilMirrorHInv" class="mobile-action-btn" style="padding:8px" title="Right replaces Left">Right to Left ➡</button>
+          <button id="utilMirrorV" class="mobile-action-btn" style="padding:8px" title="Top replaces Bottom">⬆ Top to Bottom</button>
+          <button id="utilMirrorVInv" class="mobile-action-btn" style="padding:8px" title="Bottom replaces Top">Bottom to Top ⬇</button>
+          <button id="utilMirrorQuad" class="mobile-action-btn" style="padding:8px; background:#2a1a3a; border-color:#c8f; color:#e8f" title="Top-Left to all 4">Quad (TL)</button>
+        </div>
+        <div id="utilMirrorLayers" style="display:flex; flex-direction:column; gap:4px; margin-top:8px; max-height:120px; overflow-y:auto; font-size:11px; color:#ccc;"></div>
+      </div>
     </div>
   </div>
 </div>
 
-<!-- ═══ REFERENCE MODAL ═══ -->
 <div id="refModal" class="hidden">
   <div class="ref-dialog">
     <div class="ref-header">
@@ -276,16 +307,13 @@
   </div>
 </div>
 
-<!-- ═══ TMX TILESET IMPORT MODAL ═══ -->
 <div id="importTmxTilesetsModal" class="hidden">
   <div class="import-tmx-dialog">
     <div class="import-tmx-header">
       <span>IMPORT TILESETS FROM .TMX</span>
       <button id="importTmxClose" title="Close">×</button>
     </div>
-    <div class="import-tmx-body" id="importTmxList">
-      <!-- Список будет заполняться динамически -->
-    </div>
+    <div class="import-tmx-body" id="importTmxList"></div>
     <div class="import-tmx-footer">
       <button id="importTmxCancel">Cancel</button>
       <button id="importTmxAdd" class="primary">Add Selected</button>
@@ -293,7 +321,6 @@
   </div>
 </div>
 
-<!-- ═══ MERGE MODAL ═══ -->
 <div id="mergeModal" class="hidden">
   <div class="merge-dialog">
     <div class="merge-header">
@@ -325,7 +352,6 @@
 </div>
 <input type="file" id="mergeFileInput" accept=".tmx" multiple hidden>
 
-<!-- ═══ SETTINGS MODAL ═══ -->
 <div id="settingsModal" class="hidden">
   <div class="settings-dialog">
     <div class="settings-header">
@@ -371,14 +397,8 @@
   </div>
 </div>
 
-<!-- ═══════════════════════════════════════════════════════════
-     LIBRARIES
-     ═══════════════════════════════════════════════════════════ -->
 <script src="https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js"></script>
 
-<!-- ═══════════════════════════════════════════════════════════
-     CORE MODULES
-     ═══════════════════════════════════════════════════════════ -->
 <script src="js/utils.js"></script>
 <script src="js/tmx.js"></script>
 <script src="js/map.js"></script>
@@ -397,9 +417,6 @@
 <script src="js/merge_ui.js"></script>
 <script src="js/minitns_lib.js"></script>
 
-<!-- ═══════════════════════════════════════════════════════════
-     APP MODULES
-     ═══════════════════════════════════════════════════════════ -->
 <script src="js/app.js"></script>
 <script src="js/app_tools.js"></script>
 <script src="js/app_paint.js"></script>

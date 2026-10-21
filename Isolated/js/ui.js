@@ -252,8 +252,7 @@ class LayersPanel {
     if (this.ctx.getActiveLayer() === oldName) this.ctx.setActiveLayer(newName);
     if (r) { r.invalidate(); r.render(); }
 
-    const st = document.getElementById('status');
-    if (st) st.textContent = 'Слой "' + oldName + '" → "' + newName + '"';
+    if (RW.App && RW.App.statusEl) RW.App.statusEl.textContent = 'Слой "' + oldName + '" → "' + newName + '"';
     return true;
   }
 
@@ -324,7 +323,7 @@ class LayersPanel {
 }
 
 // ═══════════════════════════════════════════════
-// BRUSH PANEL — 3 режима
+// BRUSH PANEL
 // ═══════════════════════════════════════════════
 class BrushPanel {
   constructor(opts) {
@@ -651,7 +650,7 @@ class BrushPanel {
 }
 
 // ═══════════════════════════════════════════════
-// TILESET TABS
+// TILESET TABS  [Patch 03.6: arrows + dropdown]
 // ═══════════════════════════════════════════════
 class TilesetTabs {
   constructor(tabsListEl, bodyEl, bottomEl, ctx) {
@@ -689,35 +688,73 @@ class TilesetTabs {
 
     if (this.activeIdx < 0 || this.activeIdx >= map.tilesets.length) this.activeIdx = 0;
 
+    // 1. Блок навигации (стрелки + список)
+    const navWrap = document.createElement('div');
+    navWrap.style.display = 'flex';
+    navWrap.style.alignItems = 'center';
+    navWrap.style.gap = '4px';
+    navWrap.style.padding = '4px 8px';
+
+    const prevBtn = document.createElement('button');
+    prevBtn.innerHTML = '◀';
+    prevBtn.style.background = 'none';
+    prevBtn.style.border = 'none';
+    prevBtn.style.color = '#fd4';
+    prevBtn.style.cursor = 'pointer';
+    prevBtn.style.fontSize = '16px';
+    prevBtn.onclick = (e) => {
+      e.preventDefault();
+      this.activeIdx = (this.activeIdx - 1 + map.tilesets.length) % map.tilesets.length;
+      this.activeTerrainIdx = 0;
+      this.selectedTileIds.clear();
+      this.build();
+    };
+    navWrap.appendChild(prevBtn);
+
+    const sel = document.createElement('select');
+    sel.style.background = '#101010';
+    sel.style.color = '#fd4';
+    sel.style.border = '1px solid #333';
+    sel.style.fontFamily = 'inherit';
+    sel.style.fontSize = '11px';
+    sel.style.padding = '4px 8px';
+    sel.style.cursor = 'pointer';
+    sel.style.borderRadius = '3px';
+
     map.tilesets.forEach((ts, i) => {
-      const btn = document.createElement('button');
-      btn.className = 'ts-tab-btn';
-      btn.textContent = ts.name.length > 20 ? ts.name.slice(0, 18) + '…' : ts.name;
-      btn.title = ts.name + ' (firstgid=' + ts.firstgid + ')';
-      btn.addEventListener('click', () => {
-        this.activeIdx = i;
-        this.activeTerrainIdx = 0;
-        this.selectedTileIds.clear();
-        this.build();
-      });
-      if (i === this.activeIdx) btn.classList.add('active');
-      this.tabsListEl.appendChild(btn);
-
-      const del = document.createElement('button');
-      del.className = 'ts-del';
-      del.textContent = '×';
-      del.title = 'Delete tileset';
-      del.dataset.tilesetIdx = String(i);
-      del.dataset.tilesetName = ts.name;
-      del.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        const idx = parseInt(del.dataset.tilesetIdx, 10);
-        this.handleTilesetDelete(idx);
-      });
-      this.tabsListEl.appendChild(del);
+      const opt = document.createElement('option');
+      opt.value = i;
+      opt.textContent = ts.name;
+      sel.appendChild(opt);
     });
+    sel.value = this.activeIdx;
+    sel.onchange = (e) => {
+      this.activeIdx = parseInt(e.target.value, 10);
+      this.activeTerrainIdx = 0;
+      this.selectedTileIds.clear();
+      this.build();
+    };
+    navWrap.appendChild(sel);
 
+    const nextBtn = document.createElement('button');
+    nextBtn.innerHTML = '▶';
+    nextBtn.style.background = 'none';
+    nextBtn.style.border = 'none';
+    nextBtn.style.color = '#fd4';
+    nextBtn.style.cursor = 'pointer';
+    nextBtn.style.fontSize = '16px';
+    nextBtn.onclick = (e) => {
+      e.preventDefault();
+      this.activeIdx = (this.activeIdx + 1) % map.tilesets.length;
+      this.activeTerrainIdx = 0;
+      this.selectedTileIds.clear();
+      this.build();
+    };
+    navWrap.appendChild(nextBtn);
+
+    this.tabsListEl.appendChild(navWrap);
+
+    // 2. Кнопка добавления тайлсета
     const addBtn = document.createElement('button');
     addBtn.className = 'ts-tab-add';
     addBtn.textContent = '+ Tileset';
@@ -729,6 +766,7 @@ class TilesetTabs {
     });
     this.tabsListEl.appendChild(addBtn);
 
+    // 3. Рендер блока активного тайлсета
     const ts = map.tilesets[this.activeIdx];
     if (ts) this.bodyEl.appendChild(this.buildBlock(ts));
   }
@@ -815,8 +853,7 @@ class TilesetTabs {
       if (r) { r.invalidate(); r.render(); }
       this.build();
 
-      const st = document.getElementById('status');
-      if (st) st.textContent = 'Удалён tileset "' + ts.name + '"' +
+      if (RW.App && RW.App.statusEl) RW.App.statusEl.textContent = 'Удалён tileset "' + ts.name + '"' +
         (usage ? ' (+' + usage + ' тайлов стёрто)' : '');
     } catch (err) {
       console.error('Tileset delete failed:', err);
@@ -840,6 +877,24 @@ class TilesetTabs {
       '<span class="tag">tiles=' + ts.tilecount + '</span>' +
       '<span class="tag">columns=' + ts.columns + '</span>' +
       '<span class="tag">' + ts.tileW + '×' + ts.tileH + '</span>';
+
+    const delBtn = document.createElement('button');
+    delBtn.innerHTML = '🗑';
+    delBtn.title = 'Delete this tileset';
+    delBtn.style.marginLeft = 'auto';
+    delBtn.style.background = 'transparent';
+    delBtn.style.border = 'none';
+    delBtn.style.color = '#f88';
+    delBtn.style.cursor = 'pointer';
+    delBtn.style.fontSize = '16px';
+    delBtn.style.padding = '0 4px';
+    delBtn.style.lineHeight = '1';
+    delBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.handleTilesetDelete(this.activeIdx);
+    });
+    head.appendChild(delBtn);
+
     block.appendChild(head);
 
     const toolbar = document.createElement('div');
@@ -1073,7 +1128,7 @@ class TilesetTabs {
           self.selectedTileIds.forEach(i => {
             const col = i % ts.columns;
             const row = Math.floor(i / ts.columns);
-            g.strokeStyle = '#0ff'; // Cyan for edit selection
+            g.strokeStyle = '#0ff';
             g.lineWidth = 2;
             g.strokeRect(col * ts.tileW + 1, row * ts.tileH + 1, ts.tileW - 2, ts.tileH - 2);
           });
@@ -1279,7 +1334,7 @@ class TilesetTabs {
   openTileEditor(ts, localID, parentBlock, infoEl) {
     if (!ts.tiles[localID]) ts.tiles[localID] = { terrain: null, props: {} };
     const tile = ts.tiles[localID];
-    if (!tile.props) tile.props = {}; // <--- FIX: проверка на наличие props
+    if (!tile.props) tile.props = {};
 
     const ed = document.createElement('div');
     ed.className = 'ts-editor';
@@ -1308,13 +1363,9 @@ class TilesetTabs {
     ed.appendChild(trRow);
 
     ed.appendChild(this.buildPropertiesSection(tile.props, (action, key, val) => {
-      if (action === 'add') {
-        tile.props[key] = val;
-      } else if (action === 'del') {
-        delete tile.props[key];
-      } else if (action === 'set') {
-        tile.props[key] = val;
-      }
+      if (action === 'add') tile.props[key] = val;
+      else if (action === 'del') delete tile.props[key];
+      else if (action === 'set') tile.props[key] = val;
       ts._dirty = true;
       this.buildEditor(ts, parentBlock, infoEl);
     }));
@@ -1356,15 +1407,11 @@ class TilesetTabs {
       for (const localID of selectedIds) {
         if (!ts.tiles[localID]) ts.tiles[localID] = { terrain: null, props: {} };
         const t = ts.tiles[localID];
-        if (!t.props) t.props = {}; // <--- FIX
-        
-        if (action === 'add') {
-          t.props[key] = val;
-        } else if (action === 'del') {
-          delete t.props[key];
-        } else if (action === 'set') {
-          t.props[key] = val;
-        }
+        if (!t.props) t.props = {};
+
+        if (action === 'add') t.props[key] = val;
+        else if (action === 'del') delete t.props[key];
+        else if (action === 'set') t.props[key] = val;
       }
       ts._dirty = true;
       this.buildEditor(ts, parentBlock, infoEl);
@@ -1393,24 +1440,24 @@ class TilesetTabs {
     const propList = document.createElement('div');
     propList.className = 'solids-list';
     const propKeys = Object.keys(propsObj).sort();
-    
+
     if (!propKeys.length) {
       const empty = document.createElement('div');
       empty.className = 'empty-inline';
       empty.textContent = '— нет —';
       propList.appendChild(empty);
     }
-    
+
     propKeys.forEach(k => {
       const row = document.createElement('div');
       row.className = 'solid-row';
-      
+
       const kEl = document.createElement('span');
       kEl.className = 'solid-id';
-      
+
       let isFull = true;
       let missingStr = '';
-      
+
       if (metaInfo && metaInfo[k]) {
         isFull = metaInfo[k].isFull;
         if (!isFull) {
@@ -1420,23 +1467,23 @@ class TilesetTabs {
 
       kEl.innerHTML = k + missingStr;
       kEl.style.color = isFull ? '#fd4' : '#fff';
-      
+
       const vInp = document.createElement('input');
       vInp.type = 'text';
       vInp.value = propsObj[k] || '';
       vInp.placeholder = propsObj[k] === '<mixed>' ? '<mixed>' : 'value';
-      
+
       vInp.addEventListener('change', () => {
         onUpdate('set', k, vInp.value);
       });
-      
+
       const delBtn = document.createElement('button');
       delBtn.className = 'type-del';
       delBtn.textContent = '×';
       delBtn.addEventListener('click', () => {
         onUpdate('del', k);
       });
-      
+
       row.append(kEl, vInp, delBtn);
       propList.appendChild(row);
     });

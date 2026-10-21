@@ -39,6 +39,7 @@ App.beginMultiTouch = function() {
     if (App.activeTool === 'classic') App.finalizeClassicForStroke();
     App.endStroke();
     App.renderer.rectStart = null; App.renderer.rectCurrent = null;
+    App.guideDrawStart = null; App.guideDrawCurrent = null; App.activeGuideNode = null;
     App.renderer.render();
   }
   App.drag.active = false;
@@ -74,10 +75,78 @@ if (App.cv) App.cv.addEventListener('pointerdown', (e) => {
   }
 
   if (!App.mapModel) return;
+
+  // [Patch 03.2] GUIDES — перехватываем до проверки activeLayer (guides не зависят от слоя)
+  if (App.activeTool === 'guides') {
+    App.drawingPointerId = e.pointerId;
+    const pos = App.renderer.screenToTile(e.clientX, e.clientY);
+    const tx = pos.tx, ty = pos.ty;
+
+    if (App.guideMode === 'create') {
+      App.guideDrawStart = { x: tx, y: ty };
+      App.guideDrawCurrent = { x: tx, y: ty };
+      App.painting = true;
+      App.renderer.render();
+      return;
+    } else if (App.guideMode === 'select') {
+      App.activeGuideNode = null;
+
+      // 1. Поиск узла у выбранной фигуры
+      if (App.selectedGuideIdx >= 0 && App.helpers[App.selectedGuideIdx]) {
+        const h = App.helpers[App.selectedGuideIdx];
+        const hitRadius = 15 / App.renderer.view.zoom;
+        const rect = App.renderer.wrap.getBoundingClientRect();
+        const mx = (e.clientX - rect.left - App.renderer.view.x) / App.renderer.view.zoom;
+        const my = (e.clientY - rect.top - App.renderer.view.y) / App.renderer.view.zoom;
+
+        const checkNode = (nx, ny) => {
+          const px = nx * App.mapModel.tw;
+          const py = ny * App.mapModel.th;
+          return Math.hypot(px - mx, py - my) < hitRadius;
+        };
+
+        if (h.type === 'line') {
+          if (checkNode(h.x1, h.y1)) App.activeGuideNode = 'p1';
+          else if (checkNode(h.x2, h.y2)) App.activeGuideNode = 'p2';
+        } else if (h.type === 'rect' || h.type === 'circle') {
+          if (checkNode(h.x, h.y)) App.activeGuideNode = 'tl';
+          else if (checkNode(h.x + h.w, h.y)) App.activeGuideNode = 'tr';
+          else if (checkNode(h.x, h.y + h.h)) App.activeGuideNode = 'bl';
+          else if (checkNode(h.x + h.w, h.y + h.h)) App.activeGuideNode = 'br';
+        } else if (h.type === 'point') {
+          if (checkNode(h.x, h.y)) App.activeGuideNode = 'p1';
+        }
+
+        if (App.activeGuideNode) { App.painting = true; App.renderer.render(); return; }
+      }
+
+      // 2. Иначе — поиск ближайшей фигуры по bounding box
+      App.selectedGuideIdx = -1;
+      for (let i = App.helpers.length - 1; i >= 0; i--) {
+        const h = App.helpers[i];
+        let minX, maxX, minY, maxY;
+        if (h.type === 'line') {
+          minX = Math.min(h.x1, h.x2); maxX = Math.max(h.x1, h.x2);
+          minY = Math.min(h.y1, h.y2); maxY = Math.max(h.y1, h.y2);
+        } else if (h.type === 'point') {
+          minX = h.x; maxX = h.x; minY = h.y; maxY = h.y;
+        } else {
+          minX = h.x; maxX = h.x + h.w; minY = h.y; maxY = h.y + h.h;
+        }
+        if (tx >= minX - 1 && tx <= maxX + 1 && ty >= minY - 1 && ty <= maxY + 1) {
+          App.selectedGuideIdx = i;
+          break;
+        }
+      }
+      if (typeof App.renderGuidesList === 'function') App.renderGuidesList();
+      App.renderer.render();
+      return;
+    }
+  }
+
   if (!App.activeLayer) { if (App.statusEl) App.statusEl.textContent = 'Select active layer'; return; }
 
   App.drawingPointerId = e.pointerId;
-
   const pos = App.renderer.screenToTile(e.clientX, e.clientY);
   const tx = pos.tx, ty = pos.ty;
 
@@ -104,9 +173,7 @@ if (App.cv) App.cv.addEventListener('pointerdown', (e) => {
     if (e.shiftKey) {
       const anchor = App.resolveClassicAnchor();
       const solidTile = anchor.terrType.tile + anchor.ts.firstgid;
-      if (App.fillRing(tx, ty, solidTile)) {
-        App.renderer.render();
-      }
+      if (App.fillRing(tx, ty, solidTile)) App.renderer.render();
       return;
     }
     App.painting = true; App.strokeChanges = null;
@@ -164,10 +231,8 @@ if (App.cv) App.cv.addEventListener('pointermove', (e) => {
     const d = Math.hypot(arr[0].x - arr[1].x, arr[0].y - arr[1].y);
     const mx = (arr[0].x + arr[1].x) / 2;
     const my = (arr[0].y + arr[1].y) / 2;
-
     App.renderer.view.x += (mx - App.lastPinchMidX);
     App.renderer.view.y += (my - App.lastPinchMidY);
-
     if (App.lastPinchDist > 8 && d > 8) {
       const k = d / App.lastPinchDist;
       if (Math.abs(k - 1) > 0.002) {
@@ -175,7 +240,6 @@ if (App.cv) App.cv.addEventListener('pointermove', (e) => {
         App.renderer.zoomAt(mx - r.left, my - r.top, k);
       }
     }
-
     App.lastPinchDist = d;
     App.lastPinchMidX = mx;
     App.lastPinchMidY = my;
@@ -188,6 +252,49 @@ if (App.cv) App.cv.addEventListener('pointermove', (e) => {
     App.renderer.view.x += dx;
     App.renderer.view.y += dy;
     App.renderer.render();
+    return;
+  }
+
+  // [Patch 03.2] GUIDES — отдельная ветка для create/select-drag
+  if (App.activeTool === 'guides' && App.painting) {
+    const pos = App.renderer.screenToTile(e.clientX, e.clientY);
+    const tx = pos.tx, ty = pos.ty;
+    App.renderer.hoverTile = { tx, ty };
+
+    if (App.guideMode === 'create' && App.guideDrawStart) {
+      App.guideDrawCurrent = { x: tx, y: ty };
+    } else if (App.guideMode === 'select' && App.selectedGuideIdx >= 0 && App.activeGuideNode) {
+      const h = App.helpers[App.selectedGuideIdx];
+      if (h) {
+        if (h.type === 'line') {
+          if (App.activeGuideNode === 'p1') { h.x1 = tx; h.y1 = ty; }
+          if (App.activeGuideNode === 'p2') { h.x2 = tx; h.y2 = ty; }
+        } else if (h.type === 'rect' || h.type === 'circle') {
+          const x2 = h.x + h.w;
+          const y2 = h.y + h.h;
+          if (App.activeGuideNode === 'tl') {
+            h.x = tx; h.y = ty;
+            h.w = x2 - tx; h.h = y2 - ty;
+          }
+          if (App.activeGuideNode === 'tr') {
+            h.y = ty; h.w = tx - h.x; h.h = y2 - ty;
+          }
+          if (App.activeGuideNode === 'bl') {
+            h.x = tx; h.w = x2 - tx; h.h = ty - h.y;
+          }
+          if (App.activeGuideNode === 'br') {
+            h.w = tx - h.x; h.h = ty - h.y;
+          }
+          // нормализация при отрицательных размерах
+          if (h.w < 0) { h.x += h.w; h.w = -h.w; if (App.activeGuideNode === 'tl') App.activeGuideNode = 'tr'; else if (App.activeGuideNode === 'tr') App.activeGuideNode = 'tl'; else if (App.activeGuideNode === 'bl') App.activeGuideNode = 'br'; else if (App.activeGuideNode === 'br') App.activeGuideNode = 'bl'; }
+          if (h.h < 0) { h.y += h.h; h.h = -h.h; if (App.activeGuideNode === 'tl') App.activeGuideNode = 'bl'; else if (App.activeGuideNode === 'tr') App.activeGuideNode = 'br'; else if (App.activeGuideNode === 'bl') App.activeGuideNode = 'tl'; else if (App.activeGuideNode === 'br') App.activeGuideNode = 'tr'; }
+        } else if (h.type === 'point') {
+          h.x = tx; h.y = ty;
+        }
+      }
+    }
+    App.renderer.render();
+    App.updateInfo(tx, ty);
     return;
   }
 
@@ -231,15 +338,48 @@ if (App.cv) App.cv.addEventListener('pointerup', (e) => {
 
   if (App.pointers.size === 0) {
     App.multiPointerActive = false;
-
     if (App.drag.active) {
       App.drag.active = false;
       if (App.cv) App.cv.classList.remove('drag');
     }
 
     if (App.painting) {
-      if (App.activeTool === 'rect' && App.rectStart && App.rectCurrent && App.brushGroup.length) {
-        App.applyRect(App.rectStart.x, App.rectStart.y, App.rectCurrent.x, App.rectCurrent.y, App.pickWeightedTile);
+      if (App.activeTool === 'guides') {
+        // [Patch 03.2] создание финала через addGuideWithSymmetry
+        if (App.guideMode === 'create' && App.guideDrawStart && App.guideDrawCurrent) {
+          const start = App.guideDrawStart;
+          const end = App.guideDrawCurrent;
+          if (start.x !== end.x || start.y !== end.y || App.activeGuideType === 'point') {
+            let newGuide = { color: '#0ff' };
+            if (App.activeGuideType === 'line') {
+              newGuide = { ...newGuide, type: 'line', x1: start.x, y1: start.y, x2: end.x, y2: end.y };
+            } else if (App.activeGuideType === 'rect' || App.activeGuideType === 'circle') {
+              newGuide = {
+                ...newGuide, type: App.activeGuideType,
+                x: Math.min(start.x, end.x), y: Math.min(start.y, end.y),
+                w: Math.abs(end.x - start.x), h: Math.abs(end.y - start.y)
+              };
+            } else if (App.activeGuideType === 'point') {
+              newGuide = { ...newGuide, type: 'point', x: start.x, y: start.y };
+            }
+            App.addGuideWithSymmetry(newGuide);
+          }
+        }
+        App.guideDrawStart = null;
+        App.guideDrawCurrent = null;
+        App.activeGuideNode = null;
+      } else if (App.activeTool === 'rect') {
+        if (App.rectStart && App.rectCurrent) {
+          App.lastSelection = {
+            x0: Math.min(App.rectStart.x, App.rectCurrent.x),
+            y0: Math.min(App.rectStart.y, App.rectCurrent.y),
+            x1: Math.max(App.rectStart.x, App.rectCurrent.x),
+            y1: Math.max(App.rectStart.y, App.rectCurrent.y)
+          };
+          if (App.brushGroup.length) {
+            App.applyRect(App.rectStart.x, App.rectStart.y, App.rectCurrent.x, App.rectCurrent.y, App.pickWeightedTile);
+          }
+        }
       } else {
         if (App.activeTool === 'terrain') App.finalizeAutotileForStroke();
         if (App.activeTool === 'classic') App.finalizeClassicForStroke();
@@ -267,16 +407,16 @@ if (App.cv) App.cv.addEventListener('pointercancel', (e) => {
     App.drag.active = false;
     App.multiPointerActive = false;
     App.drawingPointerId = null;
+    App.guideDrawStart = null;
+    App.guideDrawCurrent = null;
+    App.activeGuideNode = null;
     if (App.renderer) App.renderer.render();
   }
 });
 
 if (App.cv) App.cv.addEventListener('pointerleave', (e) => {
   if (e.pointerType === 'mouse' && !App.pointers.has(e.pointerId)) {
-    if (App.renderer) {
-      App.renderer.hoverTile = null;
-      App.renderer.render();
-    }
+    if (App.renderer) { App.renderer.hoverTile = null; App.renderer.render(); }
   }
 });
 
@@ -334,6 +474,14 @@ window.addEventListener('keydown', (e) => {
 
   if (e.key === 'Escape') { if (App.pickMode) { App.endPick(); return; } }
 
+  // [Patch 03.2] Delete/Backspace — удалить выбранный guide
+  if ((e.code === 'Delete' || e.code === 'Backspace') && App.activeTool === 'guides' && App.selectedGuideIdx >= 0) {
+    e.preventDefault();
+    App.removeGuide(App.selectedGuideIdx);
+    if (App.renderer) App.renderer.render();
+    return;
+  }
+
   if (e.ctrlKey || e.metaKey) {
     if (e.code === 'KeyZ') { e.preventDefault(); App.doUndo(); return; }
     if (e.code === 'KeyY') { e.preventDefault(); App.doRedo(); return; }
@@ -342,16 +490,8 @@ window.addEventListener('keydown', (e) => {
   }
 
   if (e.code === 'KeyF') {
-    if (e.shiftKey) {
-      e.preventDefault();
-      App.runTypeFill();
-      return;
-    }
-    if (App.pressedKeys && App.pressedKeys.has('KeyE')) {
-      e.preventDefault();
-      App.runEmptyFill();
-      return;
-    }
+    if (e.shiftKey) { e.preventDefault(); App.runTypeFill(); return; }
+    if (App.pressedKeys && App.pressedKeys.has('KeyE')) { e.preventDefault(); App.runEmptyFill(); return; }
     if (App.tempEmptyFill || App.tempTypeFill) {
       e.preventDefault();
       if (App.tempEmptyFill) App.runEmptyFill();
@@ -367,7 +507,8 @@ window.addEventListener('keydown', (e) => {
 
   const map = {
     KeyM: 'pan', KeyB: 'brush', KeyY: 'terrain', KeyT: 'classic',
-    KeyE: 'eraser', KeyR: 'rect', KeyF: 'fill', KeyK: 'picker'
+    KeyE: 'eraser', KeyR: 'rect', KeyF: 'fill', KeyK: 'picker',
+    KeyG: 'guides', KeyU: 'utils'
   };
   const tool = map[e.code];
   if (tool) { e.preventDefault(); App.handleToolClick(tool); }

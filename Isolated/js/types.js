@@ -78,7 +78,7 @@ class TypesModel {
 }
 
 // ═══════════════════════════════════════════════
-// TYPES PANEL
+// TYPES PANEL  [Patch 03.6: dropdown + 4 кнопки]
 // ═══════════════════════════════════════════════
 class TypesPanel {
   constructor(rootEl, ctx) {
@@ -98,73 +98,81 @@ class TypesPanel {
 
     const listStrip = document.createElement('div');
     listStrip.className = 'types-strip';
+    listStrip.style.display = 'flex';
+    listStrip.style.flexWrap = 'wrap';
+    listStrip.style.alignItems = 'center';
+    listStrip.style.gap = '6px';
+
+    // 1. Выпадающий список типов (вместо карточек)
+    const sel = document.createElement('select');
+    sel.style.background = '#1a1024';
+    sel.style.color = '#e8f';
+    sel.style.border = '1px solid #3a2a4a';
+    sel.style.fontFamily = 'inherit';
+    sel.style.fontSize = '11px';
+    sel.style.padding = '4px 8px';
+    sel.style.borderRadius = '3px';
+    sel.style.cursor = 'pointer';
 
     model.types.forEach(t => {
-      const card = document.createElement('div');
-      card.className = 'type-card' + (t.id === activeId ? ' active' : '');
-      card.dataset.typeId = t.id;
-      card.style.borderLeftColor = t.color;
-
-      const nm = document.createElement('span');
-      nm.className = 'type-name';
-      nm.textContent = t.name || '(no name)';
-
-      const pr = document.createElement('span');
-      pr.className = 'type-priority';
-      pr.textContent = 'P' + t.priority;
-
-      card.append(nm, pr);
-      card.addEventListener('click', () => {
-        this.ctx.setActiveType(t.id);
-        this.ctx.onChanged();
-      });
-
-      const del = document.createElement('button');
-      del.className = 'type-del';
-      del.textContent = '×';
-      del.title = 'Удалить';
-      del.addEventListener('click', (e) => {
-        e.stopPropagation();
-        if (!confirm('Удалить тип "' + t.name + '"?')) return;
-        model.remove(t.id);
-        if (this.ctx.getActiveType() === t.id) this.ctx.setActiveType(null);
-        this.ctx.onChanged();
-      });
-      card.appendChild(del);
-
-      listStrip.appendChild(card);
+      const opt = document.createElement('option');
+      opt.value = t.id;
+      opt.textContent = (t.name || '(no name)') + ' P' + t.priority;
+      sel.appendChild(opt);
     });
+    if (activeId) sel.value = activeId;
+    sel.onchange = (e) => {
+      this.ctx.setActiveType(e.target.value);
+      this.ctx.onChanged();
+    };
+    listStrip.appendChild(sel);
 
+    // 2. Кнопка "Создать TnS"
     const btnAdd = document.createElement('button');
     btnAdd.className = 'types-add-btn';
-    btnAdd.textContent = '+ тип';
-    btnAdd.addEventListener('click', () => {
+    btnAdd.textContent = 'Создать TnS';
+    btnAdd.onclick = () => {
       const t = model.add('Type', model.types.length);
       this.ctx.setActiveType(t.id);
       this.ctx.onChanged();
-    });
+    };
     listStrip.appendChild(btnAdd);
 
-    // ── Import MiniTNS (local file) ──
+    // 3. Кнопка удаления текущего типа
+    const btnDel = document.createElement('button');
+    btnDel.className = 'types-add-btn';
+    btnDel.innerHTML = '🗑 Удалить';
+    btnDel.style.background = '#3a1a1a';
+    btnDel.style.borderColor = '#833';
+    btnDel.style.color = '#f88';
+    btnDel.onclick = () => {
+      if (!activeId) return;
+      const t = model.get(activeId);
+      if (!t) return;
+      if (!confirm('Удалить тип "' + t.name + '"?')) return;
+      model.remove(activeId);
+      const next = model.types.length ? model.types[0].id : null;
+      this.ctx.setActiveType(next);
+      this.ctx.onChanged();
+    };
+    listStrip.appendChild(btnDel);
+
+    // 4. Кнопка Import MiniTNS
     const btnMini = document.createElement('button');
     btnMini.className = 'types-add-btn';
     btnMini.textContent = '📦 Import MiniTNS';
-    btnMini.title = 'Импорт PNG 3×5 тайлов → новый tileset + тип';
-    btnMini.addEventListener('click', () => {
+    btnMini.onclick = () => {
       if (this.ctx.onImportMiniTNS) this.ctx.onImportMiniTNS();
-      else alert('onImportMiniTNS не подключён');
-    });
+    };
     listStrip.appendChild(btnMini);
 
-    // ── Library (MiniTNS из asset/miniTNS/) ──
+    // 5. Кнопка Library
     const btnLib = document.createElement('button');
     btnLib.className = 'types-add-btn';
     btnLib.textContent = '📚 Library';
-    btnLib.title = 'Библиотека MiniTNS (asset/miniTNS/)';
-    btnLib.addEventListener('click', () => {
+    btnLib.onclick = () => {
       if (this.ctx.onOpenLibrary) this.ctx.onOpenLibrary();
-      else alert('onOpenLibrary не подключён');
-    });
+    };
     listStrip.appendChild(btnLib);
 
     topbar.appendChild(listStrip);
@@ -173,7 +181,7 @@ class TypesPanel {
     if (!model.types.length) {
       const empty = document.createElement('div');
       empty.className = 'empty-msg';
-      empty.textContent = 'Нет типов. Нажми "+ тип", "📦 Import MiniTNS" или "📚 Library".';
+      empty.textContent = 'Нет типов. Нажми "Создать TnS", "📦 Import MiniTNS" или "📚 Library".';
       this.root.appendChild(empty);
       return;
     }
@@ -188,6 +196,23 @@ class TypesPanel {
     const model = this.ctx.getModel();
     const strip = this.root.querySelector('.types-strip');
     if (!strip) return;
+
+    const sel = strip.querySelector('select');
+    if (sel) {
+      // Перестроим options: сохраняем значение, если тип ещё есть
+      const cur = sel.value;
+      sel.innerHTML = '';
+      for (const t of model.types) {
+        const opt = document.createElement('option');
+        opt.value = t.id;
+        opt.textContent = (t.name || '(no name)') + ' P' + t.priority;
+        sel.appendChild(opt);
+      }
+      if (model.types.some(t => t.id === cur)) sel.value = cur;
+      else if (model.types.length) sel.value = model.types[0].id;
+    }
+
+    // Если у нас всё ещё карточки (не трогали) — обновим их; иначе просто no-op
     for (const card of strip.querySelectorAll('.type-card')) {
       const id = card.dataset.typeId;
       if (!id) continue;
