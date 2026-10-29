@@ -209,7 +209,7 @@ App.paintTerrainCells = function(cx, cy) {
   if (touchedGround) App.invalidateMarkersCache();
 };
 
-// CLASSIC AUTOTILE (без изменений)
+// CLASSIC AUTOTILE
 App.buildClassicMaskIndex = function(tsIdx) {
   const c = App.classicMaskCache.get(tsIdx);
   if (c) return c;
@@ -434,12 +434,52 @@ App.finalizeAutotileForStroke = function() {
   }
 };
 
+// [Patch 0.6.5] — Wall Creator (Void) logic in endStroke
 App.endStroke = function() {
   if (!App.strokeChanges || !App.strokeChanges.size) {
     App.strokeChanges = null; App.strokeBound = null;
     return;
   }
   const map = App.mapModel;
+
+  // ─── ПРОВЕРКА НА VOID (WALL CREATOR) ───
+  const activeType = App.typesModel.get(App.activeTypeId);
+  let isVoid = false;
+  
+  if (activeType && activeType.solids.length > 0) {
+    // Проверяем ВСЕ солиды типа, так как pickWeightedSolid может выбрать любой
+    for (const s of activeType.solids) {
+      const ts = App.renderer.findTileset(s.tileID);
+      if (ts) {
+        const t = ts.tiles[s.tileID - ts.firstgid];
+        // Если у солида есть проп 'void' (или 'wall'), считаем его невидимым
+        if (t && t.props && (t.props.void !== undefined || t.props.wall !== undefined)) {
+          isVoid = true;
+          break;
+        }
+      }
+    }
+  }
+
+  if (isVoid && App.strokeChanges.has('Ground')) {
+    const groundChanges = App.strokeChanges.get('Ground');
+    const groundData = map.layers.Ground;
+    
+    // 1. Возвращаем Ground в исходное состояние
+    for (const [idx, c] of groundChanges.entries()) {
+      groundData[idx] = c.before; 
+      const x = idx % map.W;
+      const y = Math.floor(idx / map.W);
+      App.renderer.invalidateCell(x, y);
+    }
+    
+    // 2. Удаляем изменения Ground из корзины Undo, чтобы они не сохранились
+    App.strokeChanges.delete('Ground');
+    
+    if (App.statusEl) App.statusEl.textContent = 'Wall Creator: Солиды скрыты, края сохранены';
+  }
+  // ──────────────────────────────────────────────
+
   const layers = [];
   let total = 0;
   const touchedLayers = [];
@@ -463,7 +503,7 @@ App.endStroke = function() {
     }
     if (map.undoStack.length > 50) map.undoStack.shift();
     map.redoStack.length = 0;
-    if (App.statusEl) App.statusEl.textContent = total + ' cells changed';
+    if (App.statusEl && !isVoid) App.statusEl.textContent = total + ' cells changed';
     if (App.layersPanel) for (const ln of touchedLayers) App.layersPanel.flash(ln);
   }
   App.invalidateMarkersCache();
@@ -609,7 +649,6 @@ App.pickerAt = function(tx, ty) {
   if (App.statusEl) App.statusEl.textContent = 'Picker: empty';
 };
 
-// [Patch 04.3] — multi-layer undo через группировку
 App.runAutotileDialog = function() {
   if (!App.mapModel || !App.generator) return;
   const x0 = parseInt(prompt('x0:', '0'), 10); if (isNaN(x0)) return;
@@ -641,7 +680,7 @@ App.runAutotileDialog = function() {
   if (App.statusEl) App.statusEl.textContent = 'Autotile: ' + changes.length + ' cells';
 };
 
-// CONCENTRIC RING FILL (без изменений)
+// CONCENTRIC RING FILL
 App.fillRing = function(tx, ty, solidTile) {
   const map = App.mapModel;
   if (!map || !App.activeLayer) return false;
@@ -893,7 +932,7 @@ App.mirrorMap = function(mode, layersToMirror) {
   }
 };
 
-// GUIDES (без изменений)
+// GUIDES
 App.finalizeGuide = function() {
   if (!App.guideDrawStart) return;
   const s = App.guideDrawStart;
