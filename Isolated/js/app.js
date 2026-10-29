@@ -79,7 +79,7 @@
   App.pickBannerEl = App.el('pickBanner'); App.pickBannerTextEl = App.el('pickBannerText');
   App.warnBannerEl = App.el('warnBanner'); App.warnBannerTextEl = App.el('warnBannerText');
 
-  // [Patch 03.4-fix] STATUS → PROXY
+  // STATUS → PROXY
   const logConsoleEl = document.getElementById('logConsole');
   let logs = [];
   const originalStatusEl = document.getElementById('status');
@@ -130,7 +130,7 @@
     document.documentElement.style.setProperty('--atlas-bg', v || '#0a0a0a');
   };
 
-  // I18N (сокращено для краткости — тексты те же)
+  // I18N
   const I18N = {
     en: {
       'title':'WebTiled','btn.new':'New','btn.open':'Open','btn.save':'Save','btn.resize':'Size',
@@ -327,7 +327,7 @@
     });
   };
 
-  // [Patch 04.3] передаём entry.extraProp
+  // [Patch 0.6.10] передаём entry.properties третьим аргументом
   App.importMiniTNSFromEntry = async function(entry) {
     if (!App.mapModel) {
       if (App.statusEl) App.statusEl.textContent = 'Сначала открой карту';
@@ -339,7 +339,9 @@
     for (let i = 0; i < byteString.length; i++) ia[i] = byteString.charCodeAt(i);
     const blob = new Blob([ab], { type: 'image/png' });
     const file = new File([blob], entry.name + '.png', { type: 'image/png' });
-    await App.importMiniTNS(file, entry.extraProp);
+
+    const newType = await App.importMiniTNS(file, entry.extraProp, entry.properties);
+
     RW.MiniTNSLib.close();
   };
 
