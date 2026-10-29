@@ -273,7 +273,6 @@ App.startMiniTNSImport = function() {
   inp.click();
 };
 
-// [Patch 0.6.10] properties — применяем ко всем солидам типа
 App.importMiniTNS = async function(file, extraProp, properties) {
   const buf = await file.arrayBuffer();
   const bytes = new Uint8Array(buf);
@@ -312,7 +311,9 @@ App.importMiniTNS = async function(file, extraProp, properties) {
   }
   const typeName = prompt('Type name:', defName) || defName;
   const t = App.typesModel.add(typeName, App.typesModel.types.length);
-  const g = (local) => firstgid + local;
+  
+  // [Patch 0.6.12] Использование Number() для глобального ID
+  const g = (local) => Number(firstgid + local);
 
   const isEmpty = (col, row) => {
     const c = document.createElement('canvas');
@@ -333,13 +334,11 @@ App.importMiniTNS = async function(file, extraProp, properties) {
   for (const local of solidLocals) {
     t.solids.push({ tileID: g(local), weight: 1 });
 
-    // ─── [Patch 0.6.10] Применяем void и другие properties к солидам ───
     if (properties && Object.keys(properties).length > 0) {
       if (!ts.tiles[local]) ts.tiles[local] = { terrain: null, props: {} };
       if (!ts.tiles[local].props) ts.tiles[local].props = {};
       Object.assign(ts.tiles[local].props, properties);
     }
-    // ──────────────────────────────────────────────────────────────────
   }
 
   t.edges.NWo = g(0); t.edges.N = g(1); t.edges.NEo = g(2);
@@ -348,7 +347,6 @@ App.importMiniTNS = async function(file, extraProp, properties) {
   t.edges.NWi = g(9); t.edges.NEi = g(10);
   t.edges.SWi = g(12); t.edges.SEi = g(13);
 
-  // [Patch 04.3] extraProp — краевые тайлы получают props[extraProp], тип → edgeLayer='Items'
   if (extraProp) {
     t.edgeLayer = 'Items';
     const solidSet = new Set(solidLocals);
