@@ -273,8 +273,8 @@ App.startMiniTNSImport = function() {
   inp.click();
 };
 
-// [Patch 04.3] extraProp — назначить свойства краевым тайлам + edgeLayer='Items'
-App.importMiniTNS = async function(file, extraProp) {
+// [Patch 0.6.10] properties — применяем ко всем солидам типа
+App.importMiniTNS = async function(file, extraProp, properties) {
   const buf = await file.arrayBuffer();
   const bytes = new Uint8Array(buf);
   const b64 = U.bytesToB64(bytes);
@@ -332,6 +332,14 @@ App.importMiniTNS = async function(file, extraProp) {
   t.solids = [];
   for (const local of solidLocals) {
     t.solids.push({ tileID: g(local), weight: 1 });
+
+    // ─── [Patch 0.6.10] Применяем void и другие properties к солидам ───
+    if (properties && Object.keys(properties).length > 0) {
+      if (!ts.tiles[local]) ts.tiles[local] = { terrain: null, props: {} };
+      if (!ts.tiles[local].props) ts.tiles[local].props = {};
+      Object.assign(ts.tiles[local].props, properties);
+    }
+    // ──────────────────────────────────────────────────────────────────
   }
 
   t.edges.NWo = g(0); t.edges.N = g(1); t.edges.NEo = g(2);
