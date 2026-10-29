@@ -16,7 +16,8 @@ class TypesModel {
       priority: priority ?? this.types.length,
       color: '#' + Math.floor(Math.random() * 0xffffff).toString(16).padStart(6, '0'),
       solids: [],
-      edges: {}
+      edges: {},
+      edgeLayer: 'Items0' // [Patch 04.3]
     };
     for (const r of EDGE_ROLES) t.edges[r] = 0;
     this.types.push(t);
@@ -41,10 +42,8 @@ class TypesModel {
     return {
       version: 1,
       types: this.types.map(t => ({
-        id: t.id,
-        name: t.name,
-        priority: t.priority,
-        color: t.color,
+        id: t.id, name: t.name, priority: t.priority, color: t.color,
+        edgeLayer: t.edgeLayer || 'Items0', // [Patch 04.3]
         solids: t.solids.map(s => ({ tileID: s.tileID, weight: s.weight })),
         edges: Object.assign({}, t.edges)
       }))
@@ -61,10 +60,8 @@ class TypesModel {
         name: t.name || '',
         priority: t.priority ?? 0,
         color: t.color || '#888',
-        solids: (t.solids || []).map(s => ({
-          tileID: s.tileID,
-          weight: s.weight ?? 1
-        })),
+        edgeLayer: t.edgeLayer || 'Items0', // [Patch 04.3]
+        solids: (t.solids || []).map(s => ({ tileID: s.tileID, weight: s.weight ?? 1 })),
         edges: {}
       };
       for (const r of EDGE_ROLES) nt.edges[r] = (t.edges && t.edges[r]) || 0;
@@ -78,7 +75,7 @@ class TypesModel {
 }
 
 // ═══════════════════════════════════════════════
-// TYPES PANEL  [Patch 03.6: dropdown + 4 кнопки]
+// TYPES PANEL
 // ═══════════════════════════════════════════════
 class TypesPanel {
   constructor(rootEl, ctx) {
@@ -103,16 +100,11 @@ class TypesPanel {
     listStrip.style.alignItems = 'center';
     listStrip.style.gap = '6px';
 
-    // 1. Выпадающий список типов (вместо карточек)
     const sel = document.createElement('select');
-    sel.style.background = '#1a1024';
-    sel.style.color = '#e8f';
-    sel.style.border = '1px solid #3a2a4a';
-    sel.style.fontFamily = 'inherit';
-    sel.style.fontSize = '11px';
-    sel.style.padding = '4px 8px';
-    sel.style.borderRadius = '3px';
-    sel.style.cursor = 'pointer';
+    sel.style.background = '#1a1024'; sel.style.color = '#e8f';
+    sel.style.border = '1px solid #3a2a4a'; sel.style.fontFamily = 'inherit';
+    sel.style.fontSize = '11px'; sel.style.padding = '4px 8px';
+    sel.style.borderRadius = '3px'; sel.style.cursor = 'pointer';
 
     model.types.forEach(t => {
       const opt = document.createElement('option');
@@ -127,7 +119,6 @@ class TypesPanel {
     };
     listStrip.appendChild(sel);
 
-    // 2. Кнопка "Создать TnS"
     const btnAdd = document.createElement('button');
     btnAdd.className = 'types-add-btn';
     btnAdd.textContent = 'Создать TnS';
@@ -138,7 +129,6 @@ class TypesPanel {
     };
     listStrip.appendChild(btnAdd);
 
-    // 3. Кнопка удаления текущего типа
     const btnDel = document.createElement('button');
     btnDel.className = 'types-add-btn';
     btnDel.innerHTML = '🗑 Удалить';
@@ -157,22 +147,16 @@ class TypesPanel {
     };
     listStrip.appendChild(btnDel);
 
-    // 4. Кнопка Import MiniTNS
     const btnMini = document.createElement('button');
     btnMini.className = 'types-add-btn';
     btnMini.textContent = '📦 Import MiniTNS';
-    btnMini.onclick = () => {
-      if (this.ctx.onImportMiniTNS) this.ctx.onImportMiniTNS();
-    };
+    btnMini.onclick = () => { if (this.ctx.onImportMiniTNS) this.ctx.onImportMiniTNS(); };
     listStrip.appendChild(btnMini);
 
-    // 5. Кнопка Library
     const btnLib = document.createElement('button');
     btnLib.className = 'types-add-btn';
     btnLib.textContent = '📚 Library';
-    btnLib.onclick = () => {
-      if (this.ctx.onOpenLibrary) this.ctx.onOpenLibrary();
-    };
+    btnLib.onclick = () => { if (this.ctx.onOpenLibrary) this.ctx.onOpenLibrary(); };
     listStrip.appendChild(btnLib);
 
     topbar.appendChild(listStrip);
@@ -196,10 +180,8 @@ class TypesPanel {
     const model = this.ctx.getModel();
     const strip = this.root.querySelector('.types-strip');
     if (!strip) return;
-
     const sel = strip.querySelector('select');
     if (sel) {
-      // Перестроим options: сохраняем значение, если тип ещё есть
       const cur = sel.value;
       sel.innerHTML = '';
       for (const t of model.types) {
@@ -210,19 +192,6 @@ class TypesPanel {
       }
       if (model.types.some(t => t.id === cur)) sel.value = cur;
       else if (model.types.length) sel.value = model.types[0].id;
-    }
-
-    // Если у нас всё ещё карточки (не трогали) — обновим их; иначе просто no-op
-    for (const card of strip.querySelectorAll('.type-card')) {
-      const id = card.dataset.typeId;
-      if (!id) continue;
-      const t = model.get(id);
-      if (!t) continue;
-      const nm = card.querySelector('.type-name');
-      const pr = card.querySelector('.type-priority');
-      if (nm) nm.textContent = t.name || '(no name)';
-      if (pr) pr.textContent = 'P' + t.priority;
-      card.style.borderLeftColor = t.color;
     }
   }
 
@@ -236,20 +205,15 @@ class TypesPanel {
     const lName = document.createElement('label');
     lName.textContent = 'Имя';
     const iName = document.createElement('input');
-    iName.type = 'text';
-    iName.value = t.name;
-    iName.addEventListener('input', () => {
-      t.name = iName.value;
-      this.updateStrip();
-    });
+    iName.type = 'text'; iName.value = t.name;
+    iName.addEventListener('input', () => { t.name = iName.value; this.updateStrip(); });
     lName.appendChild(iName);
     head.appendChild(lName);
 
     const lPri = document.createElement('label');
     lPri.textContent = 'Priority';
     const iPri = document.createElement('input');
-    iPri.type = 'number';
-    iPri.value = t.priority;
+    iPri.type = 'number'; iPri.value = t.priority;
     iPri.addEventListener('input', () => {
       const v = parseInt(iPri.value, 10);
       t.priority = isNaN(v) ? 0 : v;
@@ -261,14 +225,39 @@ class TypesPanel {
     const lCol = document.createElement('label');
     lCol.textContent = 'Цвет';
     const iCol = document.createElement('input');
-    iCol.type = 'color';
-    iCol.value = t.color;
-    iCol.addEventListener('input', () => {
-      t.color = iCol.value;
-      this.updateStrip();
-    });
+    iCol.type = 'color'; iCol.value = t.color;
+    iCol.addEventListener('input', () => { t.color = iCol.value; this.updateStrip(); });
     lCol.appendChild(iCol);
     head.appendChild(lCol);
+
+    // [Patch 04.3] Edge Layer selection
+    const lLayer = document.createElement('label');
+    lLayer.textContent = 'Edge Layer';
+    const sLayer = document.createElement('select');
+    sLayer.style.background = '#0e0a14';
+    sLayer.style.color = '#eee';
+    sLayer.style.border = '1px solid #3a2a4a';
+    sLayer.style.padding = '4px 6px';
+    sLayer.style.fontFamily = 'inherit';
+    sLayer.style.fontSize = '11px';
+
+    const mm = (RW.App && RW.App.mapModel) ? RW.App.mapModel : null;
+    const layerList = mm ? mm.layerOrder : ['Items0', 'Items'];
+    for (const ln of layerList) {
+      const o = document.createElement('option');
+      o.value = ln; o.textContent = ln;
+      sLayer.appendChild(o);
+    }
+    if (!layerList.includes(t.edgeLayer || 'Items0')) {
+      const o = document.createElement('option');
+      o.value = t.edgeLayer || 'Items0';
+      o.textContent = (t.edgeLayer || 'Items0') + ' (missing)';
+      sLayer.appendChild(o);
+    }
+    sLayer.value = t.edgeLayer || 'Items0';
+    sLayer.addEventListener('change', () => { t.edgeLayer = sLayer.value; });
+    lLayer.appendChild(sLayer);
+    head.appendChild(lLayer);
 
     el.appendChild(head);
 
@@ -284,7 +273,6 @@ class TypesPanel {
   buildSolidsColumn(t, pickMode) {
     const col = document.createElement('div');
     col.className = 'type-col';
-
     const isPickingSolid = pickMode && pickMode.kind === 'solid' && pickMode.typeId === t.id;
 
     const title = document.createElement('div');
@@ -296,10 +284,7 @@ class TypesPanel {
     const addBtn = document.createElement('button');
     addBtn.textContent = isPickingSolid ? '■ выбор...' : '+ из атласа';
     addBtn.className = 'mini-btn';
-    if (isPickingSolid) {
-      addBtn.style.background = '#c8f';
-      addBtn.style.color = '#000';
-    }
+    if (isPickingSolid) { addBtn.style.background = '#c8f'; addBtn.style.color = '#000'; }
     addBtn.addEventListener('click', () => {
       if (isPickingSolid) this.ctx.endPick();
       else this.ctx.startPick({ kind: 'solid', typeId: t.id, role: null });
@@ -329,13 +314,8 @@ class TypesPanel {
           const localID = s.tileID - ts.firstgid;
           const c = localID % ts.columns;
           const r = Math.floor(localID / ts.columns);
-          g.drawImage(ts.image,
-            c * ts.tileW, r * ts.tileH, ts.tileW, ts.tileH,
-            0, 0, 24, 24);
-        } else {
-          g.fillStyle = '#333';
-          g.fillRect(0, 0, 24, 24);
-        }
+          g.drawImage(ts.image, c * ts.tileW, r * ts.tileH, ts.tileW, ts.tileH, 0, 0, 24, 24);
+        } else { g.fillStyle = '#333'; g.fillRect(0, 0, 24, 24); }
         row.appendChild(preview);
 
         const idEl = document.createElement('span');
@@ -344,11 +324,8 @@ class TypesPanel {
         row.appendChild(idEl);
 
         const wInput = document.createElement('input');
-        wInput.type = 'number';
-        wInput.step = '0.1';
-        wInput.min = '0';
-        wInput.value = s.weight;
-        wInput.title = 'Вес';
+        wInput.type = 'number'; wInput.step = '0.1'; wInput.min = '0';
+        wInput.value = s.weight; wInput.title = 'Вес';
         wInput.addEventListener('input', () => {
           const v = parseFloat(wInput.value);
           s.weight = isNaN(v) ? 0 : Math.max(0, v);
@@ -358,10 +335,7 @@ class TypesPanel {
         const delBtn = document.createElement('button');
         delBtn.textContent = '×';
         delBtn.className = 'type-del';
-        delBtn.addEventListener('click', () => {
-          t.solids.splice(i, 1);
-          this.ctx.onChanged();
-        });
+        delBtn.addEventListener('click', () => { t.solids.splice(i, 1); this.ctx.onChanged(); });
         row.appendChild(delBtn);
 
         list.appendChild(row);
@@ -374,7 +348,6 @@ class TypesPanel {
   buildEdgesColumn(t, pickMode) {
     const col = document.createElement('div');
     col.className = 'type-col';
-
     const title = document.createElement('div');
     title.className = 'col-title';
     title.innerHTML = '<b>Edges</b> <span>стороны + углы</span>';
@@ -382,19 +355,12 @@ class TypesPanel {
 
     const grid = document.createElement('div');
     grid.className = 'edge-grid';
-
-    const layout = [
-      'NWo', 'N', 'NEo',
-      'W',   null, 'E',
-      'SWo', 'S', 'SEo'
-    ];
+    const layout = ['NWo','N','NEo','W',null,'E','SWo','S','SEo'];
     for (const role of layout) {
       if (!role) {
         const c = document.createElement('div');
-        c.className = 'edge-cell center';
-        c.textContent = '·';
-        grid.appendChild(c);
-        continue;
+        c.className = 'edge-cell center'; c.textContent = '·';
+        grid.appendChild(c); continue;
       }
       grid.appendChild(this.buildEdgeCell(t, role, pickMode));
     }
@@ -405,7 +371,6 @@ class TypesPanel {
   buildInnerColumn(t, pickMode) {
     const col = document.createElement('div');
     col.className = 'type-col';
-
     const title = document.createElement('div');
     title.className = 'col-title';
     title.innerHTML = '<b>Inner</b> <span>внутренние углы</span>';
@@ -413,19 +378,12 @@ class TypesPanel {
 
     const grid = document.createElement('div');
     grid.className = 'edge-grid';
-
-    const layout = [
-      'NWi', null, 'NEi',
-      null,  null, null,
-      'SWi', null, 'SEi'
-    ];
+    const layout = ['NWi',null,'NEi',null,null,null,'SWi',null,'SEi'];
     for (const role of layout) {
       if (!role) {
         const c = document.createElement('div');
-        c.className = 'edge-cell center';
-        c.textContent = '·';
-        grid.appendChild(c);
-        continue;
+        c.className = 'edge-cell center'; c.textContent = '·';
+        grid.appendChild(c); continue;
       }
       grid.appendChild(this.buildEdgeCell(t, role, pickMode));
     }
@@ -436,10 +394,8 @@ class TypesPanel {
   buildEdgeCell(t, role, pickMode) {
     const isPicking = pickMode && pickMode.kind === 'edge'
       && pickMode.typeId === t.id && pickMode.role === role;
-
     const c = document.createElement('div');
     c.className = 'edge-cell' + (isPicking ? ' picking' : '');
-
     const cur = t.edges[role] || 0;
 
     const preview = document.createElement('canvas');
@@ -453,24 +409,16 @@ class TypesPanel {
         const localID = cur - ts.firstgid;
         const col = localID % ts.columns;
         const row = Math.floor(localID / ts.columns);
-        g.drawImage(ts.image,
-          col * ts.tileW, row * ts.tileH, ts.tileW, ts.tileH,
-          0, 0, 20, 20);
-      } else {
-        g.fillStyle = '#333';
-        g.fillRect(0, 0, 20, 20);
-      }
+        g.drawImage(ts.image, col * ts.tileW, row * ts.tileH, ts.tileW, ts.tileH, 0, 0, 20, 20);
+      } else { g.fillStyle = '#333'; g.fillRect(0, 0, 20, 20); }
     } else {
-      g.fillStyle = '#0a0510';
-      g.fillRect(0, 0, 20, 20);
-      g.strokeStyle = '#2a2030';
-      g.strokeRect(0.5, 0.5, 19, 19);
+      g.fillStyle = '#0a0510'; g.fillRect(0, 0, 20, 20);
+      g.strokeStyle = '#2a2030'; g.strokeRect(0.5, 0.5, 19, 19);
     }
     c.appendChild(preview);
 
     const lbl = document.createElement('div');
-    lbl.className = 'edge-label';
-    lbl.textContent = role;
+    lbl.className = 'edge-label'; lbl.textContent = role;
     c.appendChild(lbl);
 
     const val = document.createElement('div');
@@ -482,7 +430,6 @@ class TypesPanel {
       if (isPicking) this.ctx.endPick();
       else this.ctx.startPick({ kind: 'edge', typeId: t.id, role });
     });
-
     return c;
   }
 }
