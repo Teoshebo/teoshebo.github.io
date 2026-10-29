@@ -83,13 +83,18 @@ class Generator {
     if (!best) return 0;
     const T = best.type;
 
-    // ─── ПРОВЕРКА: если на Ground лежит солид текущего типа T, край не ставим ───
-    const groundId = map.layers.Ground[ty * map.W + tx];
-    if (groundId) {
-      const isSolidOfT = T.solids.some(s => s.tileID === groundId);
-      if (isSolidOfT) return 0;
+    // ─── ДЕБАГ-ЛОГ (по запросу Дельта-9) ───
+    if (map.layers.Ground[ty * map.W + tx] === 132) {
+      console.log('Debug Cell 132:', {
+        groundId: map.layers.Ground[ty * map.W + tx],
+        selfType: this.typeAt(tx, ty) ? this.typeAt(tx, ty).name : null
+      });
     }
-    // ──────────────────────────────────────────────────────────────────────────
+    // ──────────────────────────────────────
+
+    // Базовая защита (из 0.6.6), откат 0.6.11
+    const selfType = this.typeAt(tx, ty);
+    if (selfType === T) return 0;
 
     const tN  = this.typeAt(tx,     ty - 1) === T;
     const tS  = this.typeAt(tx,     ty + 1) === T;
@@ -130,18 +135,8 @@ class Generator {
         const targetData = map.layers[targetLayer];
         if (!targetData) continue;
 
+        // Откат 0.6.11 (убран блок "Двойная страховка")
         let after = this.resolveEdge(x, y, best);
-        
-        // ─── Двойная страховка: если на Ground лежит солид текущего типа — не ставим край ───
-        if (best && best.type) {
-          const selfId = map.layers.Ground[idx];
-          if (selfId) {
-            const isSolidOfBest = best.type.solids.some(s => s.tileID === selfId);
-            if (isSolidOfBest) { after = 0; }
-          }
-        }
-        // ───────────────────────────────────────────────────────────────────────────────────
-
         const before = targetData[idx];
 
         if (before !== after) {
