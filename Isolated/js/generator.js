@@ -75,8 +75,7 @@ class Generator {
     return best;
   }
 
-  // [Patch 04.3] optional `best`
-  // [Patch 0.6.6] проверка selfType === T
+  // [Patch 0.6.6 / 0.6.10] — selfType === T блокирует края на своих солидах
   resolveEdge(tx, ty, bestOpt) {
     const map = this.getMap();
     if (!map) return 0;
@@ -85,9 +84,10 @@ class Generator {
     if (!best) return 0;
     const T = best.type;
 
-    // Проверяем, является ли клетка солидом ЭТОГО ЖЕ типа
+    // ─── ЖЕСТКИЙ ФИКС: Если на Ground лежит солид этого же типа, возвращаем 0 ───
     const selfType = this.typeAt(tx, ty);
     if (selfType === T) return 0;
+    // ─────────────────────────────────────────────────────────────────────────────
 
     const tN  = this.typeAt(tx,     ty - 1) === T;
     const tS  = this.typeAt(tx,     ty + 1) === T;
@@ -110,7 +110,6 @@ class Generator {
     return edges[role] || 0;
   }
 
-  // [Patch 04.3] Возвращает {layer, idx, before, after} и сам применяет
   generateRect(x0, y0, x1, y1) {
     const map = this.getMap();
     if (!map) return [];
@@ -131,7 +130,7 @@ class Generator {
 
         let after = this.resolveEdge(x, y, best);
         
-        // ─── НОВОЕ: Если на Ground лежит солид этого же типа, край не ставим ───
+        // Двойная страховка: если на Ground лежит солид этого же типа — не ставим край
         if (best && best.type) {
           const selfId = map.layers.Ground[idx];
           if (selfId !== 0) {
@@ -141,7 +140,6 @@ class Generator {
             }
           }
         }
-        // ──────────────────────────────────────────────────────────────────────
 
         const before = targetData[idx];
 
