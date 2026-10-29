@@ -5,6 +5,17 @@ Format: patch-level entries under each version line.
 
 ---
 
+## [0.6.10] — Фикс Items и Void
+
+### Fixed
+- **`app.js` → `importMiniTNSFromEntry`**: третий аргумент `entry.properties` передаётся в `importMiniTNS`.
+- **`app_files.js` → `importMiniTNS`**: принимает `properties` и через `Object.assign` записывает их в `ts.tiles[local].props` для каждого solid-тайла.
+
+### Result
+Теперь `void` из `.ini` доходит до солида, и `Wall Creator` в `endStroke` срабатывает (до этого `properties` из парсера просто отбрасывались).
+
+---
+
 ## [0.6.6] — Фикс TNS Edges
 
 ### Fixed
