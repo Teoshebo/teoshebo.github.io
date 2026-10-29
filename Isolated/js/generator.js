@@ -75,8 +75,8 @@ class Generator {
     return best;
   }
 
-  // [Patch 04.3] optional `best` — избегаем двойного pickDominant
-  // [Patch 0.6.6] — проверка selfType === T для предотвращения затирания
+  // [Patch 04.3] optional `best`
+  // [Patch 0.6.6] проверка selfType === T
   resolveEdge(tx, ty, bestOpt) {
     const map = this.getMap();
     if (!map) return 0;
@@ -85,10 +85,9 @@ class Generator {
     if (!best) return 0;
     const T = best.type;
 
-    // ─── ИСПРАВЛЕНИЕ: Проверяем, является ли клетка солидом ЭТОГО ЖЕ типа ───
+    // Проверяем, является ли клетка солидом ЭТОГО ЖЕ типа
     const selfType = this.typeAt(tx, ty);
-    if (selfType === T) return 0; // Если это тот же тип — край не нужен
-    // ──────────────────────────────────────────────────────────────────────
+    if (selfType === T) return 0;
 
     const tN  = this.typeAt(tx,     ty - 1) === T;
     const tS  = this.typeAt(tx,     ty + 1) === T;
@@ -130,7 +129,20 @@ class Generator {
         const targetData = map.layers[targetLayer];
         if (!targetData) continue;
 
-        const after = this.resolveEdge(x, y, best);
+        let after = this.resolveEdge(x, y, best);
+        
+        // ─── НОВОЕ: Если на Ground лежит солид этого же типа, край не ставим ───
+        if (best && best.type) {
+          const selfId = map.layers.Ground[idx];
+          if (selfId !== 0) {
+            const type = this.getTypeOfTile(selfId);
+            if (type && type.id === best.type.id) {
+              after = 0;
+            }
+          }
+        }
+        // ──────────────────────────────────────────────────────────────────────
+
         const before = targetData[idx];
 
         if (before !== after) {
