@@ -11,7 +11,6 @@ const ALLOWED_PROPS = new Set([
   'water', 'water-bridge', 'large-cliff', 'large-rock', 'lava'
 ]);
 
-// [Patch 04.3] 5-й токен строки ini — extraProp для краевых тайлов
 const EXTRA_PROPS = ['large-rock', 'cliff-soft', 'large-cliff'];
 
 let modalEl = null, gridEl = null, statusEl = null;
@@ -29,19 +28,26 @@ function parseIni(text) {
     const parts = line.split(/\s+/);
     if (!parts.length) continue;
 
-    // [Patch 04.3] выкусываем extraProp из последнего токена
+    // Сначала жестко проверяем наличие 5-го элемента (индекс 4)
     let extraProp = '';
-    if (parts.length > 2 && EXTRA_PROPS.includes(parts[parts.length - 1])) {
-      extraProp = parts.pop();
+    if (parts.length >= 5) {
+      const p5 = parts[4];
+      if (EXTRA_PROPS.includes(p5)) {
+        extraProp = p5;
+        parts.length = 4; // Обрезаем массив до 4 элементов, чтобы не мешал
+      }
     }
 
     const name = parts[0];
     const prio = parseInt(parts[1], 10);
-    let tagsTok = '', propsTok = '';
+    
+    let tagsTok = '';
+    let propsTok = '';
 
+    // Теперь работаем строго по индексам
     if (parts.length >= 4) {
       tagsTok = parts[2] || '';
-      propsTok = parts.slice(3).join(' ');
+      propsTok = parts[3] || '';
     } else if (parts.length === 3) {
       if (parts[2].indexOf('=') >= 0) propsTok = parts[2];
       else tagsTok = parts[2];
@@ -109,7 +115,7 @@ async function resolvePath() {
       const list = parseIni(text);
       if (!list.length) continue;
       return { base, url, list };
-    } catch (err) { /* следующий */ }
+    } catch (err) { }
   }
   return null;
 }
@@ -144,7 +150,7 @@ async function loadLibrary() {
           priority: e.priority,
           tags: e.tags,
           properties: e.properties,
-          extraProp: e.extraProp, // [Patch 04.3]
+          extraProp: e.extraProp,
           img, dataUrl, b64,
           _solidCanvas: null
         });
