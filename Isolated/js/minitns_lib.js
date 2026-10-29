@@ -8,7 +8,12 @@ const CANDIDATE_PATHS = [
 const INI_NAME = 'minitns.ini';
 
 const ALLOWED_PROPS = new Set([
-  'water', 'water-bridge', 'large-cliff', 'large-rock', 'lava'
+  'water',
+  'water-bridge',
+  'large-cliff',
+  'large-rock',
+  'lava',
+  'void' // <--- ДОБАВЛЕНО ДЛЯ WALL CREATOR
 ]);
 
 const EXTRA_PROPS = ['large-rock', 'cliff-soft', 'large-cliff'];
@@ -28,13 +33,13 @@ function parseIni(text) {
     const parts = line.split(/\s+/);
     if (!parts.length) continue;
 
-    // Сначала жестко проверяем наличие 5-го элемента (индекс 4)
+    // Строгая проверка 5-го элемента (индекс 4) для extraProp
     let extraProp = '';
     if (parts.length >= 5) {
       const p5 = parts[4];
       if (EXTRA_PROPS.includes(p5)) {
         extraProp = p5;
-        parts.length = 4; // Обрезаем массив до 4 элементов, чтобы не мешал
+        parts.length = 4; // Обрезаем массив до 4 элементов
       }
     }
 
@@ -44,7 +49,7 @@ function parseIni(text) {
     let tagsTok = '';
     let propsTok = '';
 
-    // Теперь работаем строго по индексам
+    // Строго по индексам
     if (parts.length >= 4) {
       tagsTok = parts[2] || '';
       propsTok = parts[3] || '';
