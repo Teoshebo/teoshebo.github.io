@@ -135,7 +135,7 @@ App.expandStrokeBound = function(tx, ty) {
   }
 };
 
-// [Patch 04.3] — routing по типу края
+// [Patch 04.3 / 04.4] — routing по типу края, resolveEdge сам обработает солиды
 App.updateTNSEdgesAround = function(tx, ty) {
   if (!App.generator || !App.mapModel) return;
   for (let dy = -1; dy <= 1; dy++) {
@@ -470,7 +470,7 @@ App.endStroke = function() {
   App.strokeChanges = null; App.strokeBound = null; App.lastPaintKey = null;
 };
 
-// FLOOD / RECT / PICKER / AUTOTILE (без изменений, кроме runAutotileDialog)
+// FLOOD / RECT / PICKER / AUTOTILE
 App.floodFill = function(tx, ty, newTile) {
   if (App.tempTypeFill) {
     const map = App.mapModel;
@@ -620,7 +620,6 @@ App.runAutotileDialog = function() {
   const changes = App.generator.generateRect(x0, y0, x1, y1);
   if (!changes.length) { if (App.statusEl) App.statusEl.textContent = 'Autotile: no changes'; return; }
 
-  // генератор уже записал; группируем по слою для undo
   const grouped = {};
   for (const c of changes) {
     if (!grouped[c.layer]) grouped[c.layer] = [];
@@ -780,7 +779,7 @@ App.invalidateEntry = function(entry) {
   }
 };
 
-// [Patch 02.6 + 04.3] MIRROR MAP — multi-layer edges + fix classic merge
+// [Patch 02.6 + 04.3] MIRROR MAP
 App.mirrorMap = function(mode, layersToMirror) {
   const map = App.mapModel;
   if (!map) return;
@@ -826,7 +825,6 @@ App.mirrorMap = function(mode, layersToMirror) {
     if (changes.length) undoData.push({ layer: layerName, changes });
   }
 
-  // [Patch 04.3] edges route по c.layer, не по map.layers.Items0
   if (layersToMirror.includes('Ground') && App.generator) {
     const edgeChanges = App.generator.generateRect(0, 0, W - 1, H - 1);
     const grouped = {};
@@ -852,7 +850,6 @@ App.mirrorMap = function(mode, layersToMirror) {
     }
   }
 
-  // classic pass — правка merge: сохраняем earliest `before`
   const anchor = App.resolveClassicAnchor();
   if (layersToMirror.includes('Ground') && anchor) {
     const ground = map.layers.Ground;
@@ -896,7 +893,7 @@ App.mirrorMap = function(mode, layersToMirror) {
   }
 };
 
-// GUIDES (без изменений — finalizeGuide, removeGuide, clearGuides, addGuideWithSymmetry)
+// GUIDES (без изменений)
 App.finalizeGuide = function() {
   if (!App.guideDrawStart) return;
   const s = App.guideDrawStart;
