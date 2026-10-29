@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>WebTiled — Documentation · Beta 0.6</title>
+<title>WebTiled — Documentation · Beta 0.7</title>
 <style>
 *{box-sizing:border-box}
 html,body{margin:0;padding:0}
@@ -74,7 +74,7 @@ hr.doc-sep{border:0;border-top:1px dashed #2a2a2a;margin:36px 0}
 
 <header id="topbar">
   <button id="btnMobileToc" class="mobile-only" title="Menu">☰</button>
-  <div class="logo">WEBTILED<span>DOCS · 0.6</span></div>
+  <div class="logo">WEBTILED<span>DOCS · 0.7</span></div>
   <div class="spacer"></div>
   <a class="discord-btn" href="https://discord.com/users/709138215935934525" target="_blank" rel="noopener noreferrer">
     Discord · <span class="dtext">teoshebo</span>
@@ -157,7 +157,7 @@ hr.doc-sep{border:0;border-top:1px dashed #2a2a2a;margin:36px 0}
 <div class="lang-content active" data-lang="en">
 
 <h1>WEBTILED</h1>
-<p class="subtitle">Map editor for <strong>Rusted Warfare</strong> · <code>.tmx</code> format · <b style="color:#8cf">Beta 0.6</b></p>
+<p class="subtitle">Map editor for <strong>Rusted Warfare</strong> · <code>.tmx</code> format · <b style="color:#8cf">Beta 0.7</b></p>
 
 <section id="en-s1">
 <h2>1. Overview</h2>
@@ -179,7 +179,8 @@ hr.doc-sep{border:0;border-top:1px dashed #2a2a2a;margin:36px 0}
 <tr><td><b>⚙ / ?</b></td><td>Settings / Help</td></tr>
 </tbody>
 </table>
-<div class="callout warn"><b>Changed in 0.6:</b> <code>Resize</code> and <code>Ref</code> are no longer in the top bar. They are in the <b>UTILS</b> modal on the left toolbar.</div>
+<div class="callout warn"><b>Changed in 0.6:</b> <code>Resize</code> and <code>Ref</code> are no longer in the top bar. They are in the <b>UTILS</b> modal on the left toolbar (see section 5).</div>
+<div class="callout ok"><b>New in 0.7:</b> When using the Wall Creator (painting <code>void</code> solids with <code>Shift</code> held), an <b>ACCEPT</b> button appears at the top center of the screen. Click it to apply the wall creation (clears the <code>Ground</code> layer under the walls).</div>
 
 <h3>Left toolbar</h3>
 <table>
@@ -199,7 +200,7 @@ hr.doc-sep{border:0;border-top:1px dashed #2a2a2a;margin:36px 0}
 </table>
 
 <h3>Right panel</h3>
-<p><strong>LAYERS</strong>: visibility, active layer, move up/down, clear, delete, solo, rename. <strong>BRUSH</strong>: tile group, <b>+EMPTY</b>, <b>FLOOD</b>, <b>CLEAR</b>, size, shape, weights, <b>CLASSIC TERRAIN</b>. When a GUIDE is selected, the right panel shows the list and properties of guide shapes.</p>
+<p><strong>LAYERS</strong>: visibility, active layer, move up/down, clear, delete, solo, rename. <strong>BRUSH</strong>: tile group, <b>+EMPTY</b>, <b>FLOOD</b>, <b>CLEAR</b>, size (<b>diameter</b>), shape, weights, <b>CLASSIC TERRAIN</b>. When a GUIDE is selected, the right panel shows the list and properties of guide shapes.</p>
 
 <h3>Bottom panel</h3>
 <p>Tabs: <b>ATLASES</b>, <b>TYPES</b>, <b>GENERATOR</b>, <b>3D</b>. The panel can be collapsed; when it opens, canvas logs are hidden.</p>
@@ -207,7 +208,7 @@ hr.doc-sep{border:0;border-top:1px dashed #2a2a2a;margin:36px 0}
 
 <section id="en-s3">
 <h2>3. Atlases</h2>
-<p>In Beta 0.6 atlas navigation uses a <b>dropdown list</b> plus <b>← / →</b> arrow buttons. Tileset deletion (<b>🗑</b>) is now in the header of the tileset itself.</p>
+<p>In Beta 0.7 atlas navigation uses a <b>dropdown list</b> plus <b>← / →</b> arrow buttons. Tileset deletion (<b>🗑</b>) is now in the header of the tileset itself.</p>
 <ul>
 <li>Choose a tileset from the dropdown.</li>
 <li>Use arrows to switch to the previous/next atlas.</li>
@@ -215,6 +216,7 @@ hr.doc-sep{border:0;border-top:1px dashed #2a2a2a;margin:36px 0}
 <li><b>+ Tileset</b> adds a PNG atlas.</li>
 <li><b>Edit</b>, <b>Show IDs</b>, <b>▶ Terrain</b> work as before.</li>
 </ul>
+<div class="callout warn"><b>Smart Deletion:</b> Deleting a tileset automatically removes its tiles from all TNS types and terrain masks. If a type loses some (but not all) tiles, it will be highlighted with a <b>yellow border</b> in the Types panel.</div>
 </section>
 
 <section id="en-s4">
@@ -227,6 +229,10 @@ hr.doc-sep{border:0;border-top:1px dashed #2a2a2a;margin:36px 0}
 <li><b>Library</b> — open the type library.</li>
 </ul>
 <p>Each type has Name, Priority, Color, Solids with weights, Edges (N/E/S/W + outer corners), and Inner corners.</p>
+<p><b>Auto-Open Atlas:</b> When you select a TNS type, the editor automatically opens the ATLASES tab and navigates to the tileset containing its first solid tile.</p>
+
+<h3>Wall Creator (Void)</h3>
+<p>If a solid has the <code>void</code> property, painting it normally places it on the Ground layer, calculates edges, and then erases the Ground tile. If you hold <b>Shift</b> while painting, the Ground tile is kept, and an <b>ACCEPT</b> button appears to apply the changes later.</p>
 </section>
 
 <section id="en-s5">
@@ -302,9 +308,10 @@ hr.doc-sep{border:0;border-top:1px dashed #2a2a2a;margin:36px 0}
 <thead><tr><th>Hotkey</th><th>Mode</th><th>Action</th></tr></thead>
 <tbody>
 <tr><td><span class="kbd">E</span> + <span class="kbd">F</span></td><td><b>Empty Fill</b></td><td>Flood-fill with empty tiles (0)</td></tr>
-<tr><td><span class="kbd">Shift</span> + <span class="kbd">F</span></td><td><b>Type Fill</b></td><td>Flood-fill a connected area using the same type</td></tr>
+<tr><td><span class="kbd">Shift</span> + <span class="kbd">F</span></td><td><b>Type Fill</b></td><td>Flood-fill a connected area of the clicked type with the currently selected TNS type</td></tr>
 </tbody>
 </table>
+<p><b>Shift + F (Type Fill)</b>: Flood-fills a connected area of the <i>clicked</i> type with the <i>currently selected</i> TNS type.</p>
 <p>These are temporary service modes: repeat the shortcut to return to the previous tool.</p>
 </section>
 
@@ -370,7 +377,8 @@ hr.doc-sep{border:0;border-top:1px dashed #2a2a2a;margin:36px 0}
 <tr><td><span class="kbd">R</span></td><td>Rect</td></tr>
 <tr><td><span class="kbd">F</span></td><td>Fill</td></tr>
 <tr><td><span class="kbd">E</span> + <span class="kbd">F</span></td><td>Empty Fill</td></tr>
-<tr><td><span class="kbd">Shift</span> + <span class="kbd">F</span></td><td>Type Fill</td></tr>
+<tr><td><span class="kbd">Shift</span> + <span class="kbd">F</span></td><td>Type Fill — fill the clicked TNS with the currently selected TNS</td></tr>
+<tr><td><span class="kbd">Shift</span> + Click</td><td>Wall Creator — defer <code>Ground</code> clearing (shows ACCEPT button)</td></tr>
 <tr><td><span class="kbd">I</span></td><td>Picker</td></tr>
 <tr><td><span class="kbd">P</span></td><td>Pan</td></tr>
 <tr><td><span class="kbd">Ctrl+Z</span> / <span class="kbd">Ctrl+Y</span></td><td>Undo / Redo</td></tr>
@@ -411,7 +419,7 @@ hr.doc-sep{border:0;border-top:1px dashed #2a2a2a;margin:36px 0}
 <div class="lang-content" data-lang="ru">
 
 <h1>WEBTILED</h1>
-<p class="subtitle">Редактор карт для <strong>Rusted Warfare</strong> · формат <code>.tmx</code> · <b style="color:#8cf">Beta 0.6</b></p>
+<p class="subtitle">Редактор карт для <strong>Rusted Warfare</strong> · формат <code>.tmx</code> · <b style="color:#8cf">Beta 0.7</b></p>
 
 <section id="ru-s1">
 <h2>1. Что это</h2>
@@ -433,7 +441,8 @@ hr.doc-sep{border:0;border-top:1px dashed #2a2a2a;margin:36px 0}
 <tr><td><b>⚙ / ?</b></td><td>Настройки / помощь</td></tr>
 </tbody>
 </table>
-<div class="callout warn"><b>Изменение 0.6:</b> <code>Resize</code> и <code>Ref</code> убраны с верхней панели. Они находятся в модальном окне <b>UTILS</b> на левой панели инструментов.</div>
+<div class="callout warn"><b>Изменение 0.6:</b> <code>Resize</code> и <code>Ref</code> убраны с верхней панели. Они находятся в модальном окне <b>UTILS</b> на левой панели инструментов (см. раздел 5).</div>
+<div class="callout ok"><b>Новое в 0.7:</b> При использовании Wall Creator (рисование солидов с пропом <code>void</code> с зажатым <code>Shift</code>) вверху по центру экрана появляется кнопка <b>ACCEPT</b>. Нажмите её, чтобы применить создание стен (очистит слой <code>Ground</code> под стенами).</div>
 
 <h3>Левая панель инструментов</h3>
 <table>
@@ -453,7 +462,7 @@ hr.doc-sep{border:0;border-top:1px dashed #2a2a2a;margin:36px 0}
 </table>
 
 <h3>Правая панель</h3>
-<p><strong>LAYERS</strong>: видимость, активный слой, перемещение, очистка, удаление, solo, переименование. <strong>BRUSH</strong>: группа тайлов, <b>+EMPTY</b>, <b>FLOOD</b>, <b>CLEAR</b>, размер, форма, веса, <b>CLASSIC TERRAIN</b>. При выбранной фигуре GUIDE правая панель показывает список и свойства фигур.</p>
+<p><strong>LAYERS</strong>: видимость, активный слой, перемещение, очистка, удаление, solo, переименование. <strong>BRUSH</strong>: группа тайлов, <b>+EMPTY</b>, <b>FLOOD</b>, <b>CLEAR</b>, размер (<b>диаметр</b>), форма, веса, <b>CLASSIC TERRAIN</b>. При выбранной фигуре GUIDE правая панель показывает список и свойства фигур.</p>
 
 <h3>Нижняя панель</h3>
 <p>Вкладки: <b>ATLASES</b>, <b>TYPES</b>, <b>GENERATOR</b>, <b>3D</b>. Панель можно свернуть; при её открытии логи на полотне скрываются.</p>
@@ -461,7 +470,7 @@ hr.doc-sep{border:0;border-top:1px dashed #2a2a2a;margin:36px 0}
 
 <section id="ru-s3">
 <h2>3. Атласы</h2>
-<p>В Beta 0.6 навигация по атласам выполнена через <b>выпадающий список</b> и кнопки-стрелки <b>← / →</b>. Кнопка удаления тайлсета (<b>🗑</b>) перенесена в шапку самого тайлсета.</p>
+<p>В Beta 0.7 навигация по атласам выполнена через <b>выпадающий список</b> и кнопки-стрелки <b>← / →</b>. Кнопка удаления тайлсета (<b>🗑</b>) перенесена в шапку самого тайлсета.</p>
 <ul>
 <li>Выбери тайлсет в выпадающем списке.</li>
 <li>Стрелки переключают на предыдущий/следующий атлас.</li>
@@ -469,6 +478,7 @@ hr.doc-sep{border:0;border-top:1px dashed #2a2a2a;margin:36px 0}
 <li><b>+ Tileset</b> добавляет PNG-атлас.</li>
 <li><b>Edit</b>, <b>Show IDs</b>, <b>▶ Terrain</b> работают как раньше.</li>
 </ul>
+<div class="callout warn"><b>Умное удаление:</b> При удалении тайлсета его тайлы автоматически вычищаются из всех TNS-типов и terrain-масок. Если тип потерял часть тайлов, но не все, он подсвечивается <b>желтой рамкой</b> в панели TYPES.</div>
 </section>
 
 <section id="ru-s4">
@@ -481,6 +491,10 @@ hr.doc-sep{border:0;border-top:1px dashed #2a2a2a;margin:36px 0}
 <li><b>Library</b> — открыть библиотеку типов.</li>
 </ul>
 <p>Каждый тип содержит имя, Priority, цвет, Solids с весами, Edges (N/E/S/W + внешние углы) и Inner corners.</p>
+<p><b>Авто-открытие атласа:</b> При выборе TNS-типа редактор автоматически открывает вкладку ATLASES и переходит к тайлсету, содержащему первый солид этого типа.</p>
+
+<h3>Wall Creator (Void)</h3>
+<p>Если у солида есть свойство <code>void</code>, при обычном рисовании он ставится на слой Ground, рассчитываются края, а затем тайл Ground стирается. Если зажать <b>Shift</b> при рисовании, тайл Ground сохраняется, а вверху появляется кнопка <b>ACCEPT</b> для отложенного применения изменений.</p>
 </section>
 
 <section id="ru-s5">
@@ -556,9 +570,10 @@ hr.doc-sep{border:0;border-top:1px dashed #2a2a2a;margin:36px 0}
 <thead><tr><th>Хоткей</th><th>Режим</th><th>Действие</th></tr></thead>
 <tbody>
 <tr><td><span class="kbd">E</span> + <span class="kbd">F</span></td><td><b>Empty Fill</b></td><td>Заливка пустотой (0)</td></tr>
-<tr><td><span class="kbd">Shift</span> + <span class="kbd">F</span></td><td><b>Type Fill</b></td><td>Заливка связной области тем же типом</td></tr>
+<tr><td><span class="kbd">Shift</span> + <span class="kbd">F</span></td><td><b>Type Fill</b></td><td>Заливает связную область кликнутого типа текущим выбранным TNS-типом</td></tr>
 </tbody>
 </table>
+<p><b>Shift + F (Type Fill)</b>: Заливает связную область <i>кликнутого</i> типа <i>текущим выбранным</i> TNS-типом.</p>
 <p>Это временные служебные режимы: повторное нажатие сочетания возвращает предыдущий инструмент.</p>
 </section>
 
@@ -624,7 +639,8 @@ hr.doc-sep{border:0;border-top:1px dashed #2a2a2a;margin:36px 0}
 <tr><td><span class="kbd">R</span></td><td>Rect</td></tr>
 <tr><td><span class="kbd">F</span></td><td>Fill</td></tr>
 <tr><td><span class="kbd">E</span> + <span class="kbd">F</span></td><td>Empty Fill</td></tr>
-<tr><td><span class="kbd">Shift</span> + <span class="kbd">F</span></td><td>Type Fill</td></tr>
+<tr><td><span class="kbd">Shift</span> + <span class="kbd">F</span></td><td>Type Fill — залить кликнутый TNS текущим выбранным TNS</td></tr>
+<tr><td><span class="kbd">Shift</span> + Клик</td><td>Wall Creator — отложить очистку <code>Ground</code> (появится кнопка ACCEPT)</td></tr>
 <tr><td><span class="kbd">I</span></td><td>Picker</td></tr>
 <tr><td><span class="kbd">P</span></td><td>Pan</td></tr>
 <tr><td><span class="kbd">Ctrl+Z</span> / <span class="kbd">Ctrl+Y</span></td><td>Undo / Redo</td></tr>
@@ -650,7 +666,7 @@ hr.doc-sep{border:0;border-top:1px dashed #2a2a2a;margin:36px 0}
 <li>Автосохранения нет.</li>
 <li>Склейка заменяет текущую карту без undo.</li>
 <li>GUIDES и Reference существуют только в редакторе и не сохраняются в карту.</li>
-<li>Переименование核心 слоёв может нарушить ожидаемую структуру.</li>
+<li>Переименование ключевых слоёв может нарушить ожидаемую структуру.</li>
 </ul>
 </section>
 
