@@ -76,20 +76,19 @@ class Generator {
   }
 
   // [Patch 04.3] optional `best` — избегаем двойного pickDominant
-  // [Patch 04.4] — не рисуем края на клетках, занятых солидом
+  // [Patch 0.6.6] — проверка selfType === T для предотвращения затирания
   resolveEdge(tx, ty, bestOpt) {
     const map = this.getMap();
     if (!map) return 0;
-    const ground = map.layers.Ground;
-    if (!ground) return 0;
-
-    // Если клетка уже занята солидом, не рисуем край
-    const selfId = ground[ty * map.W + tx];
-    if (selfId !== 0) return 0;
-
+    
     const best = bestOpt || this.pickDominant(tx, ty);
     if (!best) return 0;
     const T = best.type;
+
+    // ─── ИСПРАВЛЕНИЕ: Проверяем, является ли клетка солидом ЭТОГО ЖЕ типа ───
+    const selfType = this.typeAt(tx, ty);
+    if (selfType === T) return 0; // Если это тот же тип — край не нужен
+    // ──────────────────────────────────────────────────────────────────────
 
     const tN  = this.typeAt(tx,     ty - 1) === T;
     const tS  = this.typeAt(tx,     ty + 1) === T;
