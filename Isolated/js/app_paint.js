@@ -3,7 +3,7 @@
 const App = RW.App;
 
 // ═══════════════════════════════════════════════
-// CLASSIC AUTOTILE
+// CLASSIC AUTOTILE (без изменений)
 // ═══════════════════════════════════════════════
 App.resolveClassicAnchor = function() {
   if (!App.activeClassicTerrain || !App.mapModel) return null;
@@ -16,9 +16,6 @@ App.resolveClassicAnchor = function() {
   return { ts, tsIdx, terrIdx, terrType: ts.terrainTypes[terrIdx] };
 };
 
-// ═══════════════════════════════════════════════
-// PICK MODE
-// ═══════════════════════════════════════════════
 App.ensureAtlasesVisible = function() {
   const b = App.el('btnAtlasesTab');
   if (b) b.classList.add('active');
@@ -63,9 +60,6 @@ App.applyPick = function(globalID) {
   if (App.statusEl) App.statusEl.textContent = 'OK · #' + globalID;
 };
 
-// ═══════════════════════════════════════════════
-// BRUSH HELPERS
-// ═══════════════════════════════════════════════
 App.addToBrush = function(tileID, add) {
   if (tileID === 0 && !add) return;
   if (!add) App.brushGroup = [{ tileID, weight: 1 }];
@@ -121,9 +115,6 @@ App.brushCells = function(cx, cy) {
   return cells;
 };
 
-// ═══════════════════════════════════════════════
-// PAINTING
-// ═══════════════════════════════════════════════
 App.ensureStrokeChanges = function() { if (!App.strokeChanges) App.strokeChanges = new Map(); };
 
 App.recordChange = function(layer, idx, before, after) {
@@ -144,20 +135,25 @@ App.expandStrokeBound = function(tx, ty) {
   }
 };
 
+// [Patch 04.3] — routing по типу края
 App.updateTNSEdgesAround = function(tx, ty) {
   if (!App.generator || !App.mapModel) return;
-  const items0 = App.mapModel.layers.Items0;
-  if (!items0) return;
   for (let dy = -1; dy <= 1; dy++) {
     for (let dx = -1; dx <= 1; dx++) {
       const nx = tx + dx, ny = ty + dy;
       if (nx < 0 || ny < 0 || nx >= App.mapModel.W || ny >= App.mapModel.H) continue;
       const idx = ny * App.mapModel.W + nx;
-      const before = items0[idx];
-      const after = App.generator.resolveEdge(nx, ny);
+
+      const best = App.generator.pickDominant(nx, ny);
+      const targetLayer = (best && best.type.edgeLayer) ? best.type.edgeLayer : 'Items0';
+      const targetData = App.mapModel.layers[targetLayer];
+      if (!targetData) continue;
+
+      const before = targetData[idx];
+      const after = App.generator.resolveEdge(nx, ny, best);
       if (before !== after) {
-        items0[idx] = after;
-        App.recordChange('Items0', idx, before, after);
+        targetData[idx] = after;
+        App.recordChange(targetLayer, idx, before, after);
         App.renderer.invalidateCell(nx, ny);
       }
     }
@@ -213,7 +209,7 @@ App.paintTerrainCells = function(cx, cy) {
   if (touchedGround) App.invalidateMarkersCache();
 };
 
-// ─── CLASSIC AUTOTILE ───
+// CLASSIC AUTOTILE (без изменений)
 App.buildClassicMaskIndex = function(tsIdx) {
   const c = App.classicMaskCache.get(tsIdx);
   if (c) return c;
@@ -289,8 +285,7 @@ App.resolveClassicMask = function(tx, ty, tsIdx, targetTerr, emptyValue, solidTi
   const idx = App.buildClassicMaskIndex(tsIdx);
   if (idx.has(mask.join(','))) return mask;
 
-  let bestMask = mask;
-  let minDist = Infinity;
+  let bestMask = mask, minDist = Infinity;
   for (const [k, id] of idx.entries()) {
     const testMask = k.split(',').map(Number);
     let dist = 0;
@@ -330,7 +325,6 @@ App.paintClassicCell = function(tx, ty, anchor, layerData, forcedSolid, forcedEm
     }
     return;
   }
-
   if (forcedEmpty && forcedEmpty[i]) {
     const prev = layerData[i];
     if (prev !== 0) {
@@ -342,7 +336,6 @@ App.paintClassicCell = function(tx, ty, anchor, layerData, forcedSolid, forcedEm
     }
     return;
   }
-
   const before = layerData[i];
   if (before === solidTileId) return;
 
@@ -351,7 +344,6 @@ App.paintClassicCell = function(tx, ty, anchor, layerData, forcedSolid, forcedEm
   const ev = App.findEmptyValue(tsIdx, terrIdx);
   const mask = App.resolveClassicMask(tx, ty, tsIdx, terrIdx, ev, solidTileId, layerData);
   let tileID;
-
   if (mask[0] === terrIdx && mask[1] === terrIdx && mask[2] === terrIdx && mask[3] === terrIdx) {
     tileID = solidTileId;
   } else if (mask[0] === ev && mask[1] === ev && mask[2] === ev && mask[3] === ev) {
@@ -393,14 +385,11 @@ App.paintClassicCells = function(cx, cy) {
     App.renderer.invalidateCell(tx, ty);
     App.expandStrokeBound(tx, ty);
   }
-
   for (const c of cells) {
     const tx = c[0], ty = c[1];
     if (tx < 0 || ty < 0 || tx >= map.W || ty >= map.H) continue;
-    for (let dy = -1; dy <= 1; dy++) {
-      for (let dx = -1; dx <= 1; dx++) {
-        App.paintClassicCell(tx + dx, ty + dy, anchor);
-      }
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+      App.paintClassicCell(tx + dx, ty + dy, anchor);
     }
   }
 };
@@ -419,13 +408,12 @@ App.finalizeClassicForStroke = function() {
   const lookup = new Set();
   for (const i of painted) {
     const x = i % App.mapModel.W, y = Math.floor(i / App.mapModel.W);
-    for (let dy = -1; dy <= 1; dy++)
-      for (let dx = -1; dx <= 1; dx++) {
-        const nx = x + dx, ny = y + dy;
-        if (nx < 0 || ny < 0 || nx >= App.mapModel.W || ny >= App.mapModel.H) continue;
-        const nidx = ny * App.mapModel.W + nx;
-        if (!painted.has(nidx)) lookup.add(nidx);
-      }
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+      const nx = x + dx, ny = y + dy;
+      if (nx < 0 || ny < 0 || nx >= App.mapModel.W || ny >= App.mapModel.H) continue;
+      const nidx = ny * App.mapModel.W + nx;
+      if (!painted.has(nidx)) lookup.add(nidx);
+    }
   }
   for (const i of lookup) {
     const x = i % App.mapModel.W, y = Math.floor(i / App.mapModel.W);
@@ -433,19 +421,16 @@ App.finalizeClassicForStroke = function() {
   }
 };
 
+// [Patch 04.3] — генератор уже применил изменения, здесь только запись в undo
 App.finalizeAutotileForStroke = function() {
   if (!App.generator || !App.strokeBound) return;
   const b = App.strokeBound;
   const pad = 1 + (App.brushSettings.size || 0);
   const changes = App.generator.generateRect(b.x0 - pad, b.y0 - pad, b.x1 + pad, b.y1 + pad);
   if (!changes.length) return;
-  const data = App.mapModel.layers.Items0;
-  if (!data) return;
   for (const c of changes) {
-    data[c.idx] = c.after;
-    const x = c.idx % App.mapModel.W, y = Math.floor(c.idx / App.mapModel.W);
-    App.renderer.invalidateCell(x, y);
-    App.recordChange('Items0', c.idx, c.before, c.after);
+    App.renderer.invalidateCell(c.idx % App.mapModel.W, Math.floor(c.idx / App.mapModel.W));
+    App.recordChange(c.layer, c.idx, c.before, c.after);
   }
 };
 
@@ -471,7 +456,11 @@ App.endStroke = function() {
     total += real.length;
   }
   if (layers.length) {
-    map.undoStack.push({ type: 'multi', layers });
+    if (layers.length === 1) {
+      map.undoStack.push({ layer: layers[0].layer, changes: layers[0].changes });
+    } else {
+      map.undoStack.push({ type: 'multi', layers });
+    }
     if (map.undoStack.length > 50) map.undoStack.shift();
     map.redoStack.length = 0;
     if (App.statusEl) App.statusEl.textContent = total + ' cells changed';
@@ -481,9 +470,7 @@ App.endStroke = function() {
   App.strokeChanges = null; App.strokeBound = null; App.lastPaintKey = null;
 };
 
-// ═══════════════════════════════════════════════
-// FLOOD / RECT / PICKER / AUTOTILE
-// ═══════════════════════════════════════════════
+// FLOOD / RECT / PICKER / AUTOTILE (без изменений, кроме runAutotileDialog)
 App.floodFill = function(tx, ty, newTile) {
   if (App.tempTypeFill) {
     const map = App.mapModel;
@@ -495,9 +482,7 @@ App.floodFill = function(tx, ty, newTile) {
     if (!type) { if (App.statusEl) App.statusEl.textContent = 'Tile is not in any Type'; return; }
     const solidIds = new Set(type.solids.map(s => s.tileID));
     const newTileId = App.pickWeightedSolid(type);
-    const stack = [[tx, ty]];
-    const seen = new Set();
-    const changes = [];
+    const stack = [[tx, ty]], seen = new Set(), changes = [];
     while (stack.length) {
       const p = stack.pop();
       const x = p[0], y = p[1];
@@ -532,9 +517,7 @@ App.floodFill = function(tx, ty, newTile) {
   const data = map.layers[App.activeLayer];
   const target = data[ty * map.W + tx];
   if (target === newTile) return;
-  const stack = [[tx, ty]];
-  const seen = new Set();
-  const changes = [];
+  const stack = [[tx, ty]], seen = new Set(), changes = [];
   while (stack.length) {
     const p = stack.pop();
     const x = p[0], y = p[1];
@@ -626,30 +609,40 @@ App.pickerAt = function(tx, ty) {
   if (App.statusEl) App.statusEl.textContent = 'Picker: empty';
 };
 
+// [Patch 04.3] — multi-layer undo через группировку
 App.runAutotileDialog = function() {
   if (!App.mapModel || !App.generator) return;
   const x0 = parseInt(prompt('x0:', '0'), 10); if (isNaN(x0)) return;
   const y0 = parseInt(prompt('y0:', '0'), 10); if (isNaN(y0)) return;
   const x1 = parseInt(prompt('x1:', String(App.mapModel.W - 1)), 10); if (isNaN(x1)) return;
   const y1 = parseInt(prompt('y1:', String(App.mapModel.H - 1)), 10); if (isNaN(y1)) return;
+
   const changes = App.generator.generateRect(x0, y0, x1, y1);
   if (!changes.length) { if (App.statusEl) App.statusEl.textContent = 'Autotile: no changes'; return; }
-  const data = App.mapModel.layers.Items0;
-  if (!data) { if (App.statusEl) App.statusEl.textContent = 'No Items0 layer'; return; }
-  for (const c of changes) data[c.idx] = c.after;
+
+  // генератор уже записал; группируем по слою для undo
+  const grouped = {};
+  for (const c of changes) {
+    if (!grouped[c.layer]) grouped[c.layer] = [];
+    grouped[c.layer].push({ idx: c.idx, before: c.before, after: c.after });
+  }
+  const layersArr = Object.entries(grouped).map(([layer, changes]) => ({ layer, changes }));
+
   App.renderer.invalidateRange(x0, y0, x1, y1);
-  App.mapModel.undoStack.push({ layer: 'Items0', changes });
+  if (layersArr.length === 1) {
+    App.mapModel.undoStack.push({ layer: layersArr[0].layer, changes: layersArr[0].changes });
+  } else {
+    App.mapModel.undoStack.push({ type: 'multi', layers: layersArr });
+  }
   if (App.mapModel.undoStack.length > 50) App.mapModel.undoStack.shift();
   App.mapModel.redoStack.length = 0;
   App.invalidateMarkersCache();
   App.renderer.render();
-  if (App.layersPanel) App.layersPanel.flash('Items0');
+  if (App.layersPanel) for (const l of layersArr) App.layersPanel.flash(l.layer);
   if (App.statusEl) App.statusEl.textContent = 'Autotile: ' + changes.length + ' cells';
 };
 
-// ═══════════════════════════════════════════════
-// CONCENTRIC RING FILL (PYRAMID)
-// ═══════════════════════════════════════════════
+// CONCENTRIC RING FILL (без изменений)
 App.fillRing = function(tx, ty, solidTile) {
   const map = App.mapModel;
   if (!map || !App.activeLayer) return false;
@@ -700,8 +693,7 @@ App.fillRing = function(tx, ty, solidTile) {
   let head = 0;
   while (head < bfsQ.length) {
     const curr = bfsQ[head++];
-    const cx = curr % map.W;
-    const cy = Math.floor(curr / map.W);
+    const cx = curr % map.W, cy = Math.floor(curr / map.W);
     const cd = dist[curr];
     if (cd >= EXPAND_RADIUS) continue;
     for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
@@ -730,10 +722,7 @@ App.fillRing = function(tx, ty, solidTile) {
     const realIdx = y * map.W + x;
     const before = data[realIdx];
     const after = tempLayer[realIdx];
-    if (before !== after) {
-      data[realIdx] = after;
-      changes.push({ idx: realIdx, before, after });
-    }
+    if (before !== after) { data[realIdx] = after; changes.push({ idx: realIdx, before, after }); }
   }
   if (changes.length) {
     map.undoStack.push({ layer: App.activeLayer, changes });
@@ -747,9 +736,7 @@ App.fillRing = function(tx, ty, solidTile) {
   return false;
 };
 
-// ═══════════════════════════════════════════════
 // UNDO / REDO
-// ═══════════════════════════════════════════════
 App.doUndo = function() {
   if (!App.mapModel || !App.mapModel.canUndo()) { if (App.statusEl) App.statusEl.textContent = 'Nothing to undo'; return; }
   const entry = App.mapModel.undo();
@@ -793,16 +780,12 @@ App.invalidateEntry = function(entry) {
   }
 };
 
-// ═══════════════════════════════════════════════
-// [Patch 02.6] MAP MIRROR
-// ═══════════════════════════════════════════════
+// [Patch 02.6 + 04.3] MIRROR MAP — multi-layer edges + fix classic merge
 App.mirrorMap = function(mode, layersToMirror) {
   const map = App.mapModel;
   if (!map) return;
-  const W = map.W;
-  const H = map.H;
-  const halfW = Math.floor(W / 2);
-  const halfH = Math.floor(H / 2);
+  const W = map.W, H = map.H;
+  const halfW = Math.floor(W / 2), halfH = Math.floor(H / 2);
   const undoData = [];
 
   for (const layerName of layersToMirror) {
@@ -823,10 +806,7 @@ App.mirrorMap = function(mode, layersToMirror) {
       const srcIdx = sy * W + sx;
       const before = data[idx];
       const after = getNewTile(orig[srcIdx]);
-      if (before !== after) {
-        data[idx] = after;
-        changes.push({ idx, before, after });
-      }
+      if (before !== after) { data[idx] = after; changes.push({ idx, before, after }); }
     };
     if (mode === 'h') {
       for (let y = 0; y < H; y++) for (let x = 0; x < halfW; x++) apply(W - 1 - x, y, x, y);
@@ -846,29 +826,33 @@ App.mirrorMap = function(mode, layersToMirror) {
     if (changes.length) undoData.push({ layer: layerName, changes });
   }
 
-  if (layersToMirror.includes('Ground') && map.layers.Items0 && App.generator) {
-    const items0 = map.layers.Items0;
+  // [Patch 04.3] edges route по c.layer, не по map.layers.Items0
+  if (layersToMirror.includes('Ground') && App.generator) {
     const edgeChanges = App.generator.generateRect(0, 0, W - 1, H - 1);
-    const changesEdges = [];
+    const grouped = {};
     for (const c of edgeChanges) {
-      if (items0[c.idx] !== c.after) {
-        changesEdges.push({ idx: c.idx, before: items0[c.idx], after: c.after });
-        items0[c.idx] = c.after;
-      }
+      if (!grouped[c.layer]) grouped[c.layer] = [];
+      grouped[c.layer].push({ idx: c.idx, before: c.before, after: c.after });
     }
-    if (changesEdges.length) {
-      const existing = undoData.find(l => l.layer === 'Items0');
+    for (const [layerName, changes] of Object.entries(grouped)) {
+      if (!changes.length) continue;
+      const existing = undoData.find(l => l.layer === layerName);
       if (existing) {
         const merged = new Map();
         for (const c of existing.changes) merged.set(c.idx, c);
-        for (const c of changesEdges) merged.set(c.idx, c);
+        for (const c of changes) {
+          const prev = merged.get(c.idx);
+          if (prev) merged.set(c.idx, { idx: c.idx, before: prev.before, after: c.after });
+          else merged.set(c.idx, c);
+        }
         existing.changes = Array.from(merged.values());
       } else {
-        undoData.push({ layer: 'Items0', changes: changesEdges });
+        undoData.push({ layer: layerName, changes });
       }
     }
   }
 
+  // classic pass — правка merge: сохраняем earliest `before`
   const anchor = App.resolveClassicAnchor();
   if (layersToMirror.includes('Ground') && anchor) {
     const ground = map.layers.Ground;
@@ -885,7 +869,11 @@ App.mirrorMap = function(mode, layersToMirror) {
       if (existing) {
         const mapFinal = new Map();
         for (const c of existing.changes) mapFinal.set(c.idx, c);
-        for (const c of classicChanges) mapFinal.set(c.idx, c);
+        for (const c of classicChanges) {
+          const prev = mapFinal.get(c.idx);
+          if (prev) mapFinal.set(c.idx, { idx: c.idx, before: prev.before, after: c.after });
+          else mapFinal.set(c.idx, c);
+        }
         existing.changes = Array.from(mapFinal.values());
       } else {
         undoData.push({ layer: 'Ground', changes: classicChanges });
@@ -908,16 +896,13 @@ App.mirrorMap = function(mode, layersToMirror) {
   }
 };
 
-// ═══════════════════════════════════════════════
-// [Patch 02.2] GUIDES — finalize / remove / clear
-// ═══════════════════════════════════════════════
+// GUIDES (без изменений — finalizeGuide, removeGuide, clearGuides, addGuideWithSymmetry)
 App.finalizeGuide = function() {
   if (!App.guideDrawStart) return;
   const s = App.guideDrawStart;
   const c = App.guideDrawCurrent || s;
   const type = App.activeGuideType;
   let helper = null;
-
   if (type === 'line') {
     if (s.tx === c.x && s.ty === c.y) { App.guideDrawStart = null; App.guideDrawCurrent = null; return; }
     helper = { type: 'line', x1: s.tx, y1: s.ty, x2: c.x, y2: c.y, color: '#0ff' };
@@ -934,7 +919,6 @@ App.finalizeGuide = function() {
   } else if (type === 'point') {
     helper = { type: 'point', x: s.tx, y: s.ty, color: '#0ff' };
   }
-
   if (helper) {
     App.helpers.push(helper);
     if (typeof App.renderGuidesList === 'function') App.renderGuidesList();
@@ -962,45 +946,31 @@ App.clearGuides = function() {
   if (App.statusEl) App.statusEl.textContent = 'All guides cleared';
 };
 
-// ═══════════════════════════════════════════════
-// [Patch 03.2] GUIDES — Symmetry & Add
-// ═══════════════════════════════════════════════
 App.addGuideWithSymmetry = function(baseGuide) {
   const map = App.mapModel;
   if (!map) return;
-  const W = map.W;
-  const H = map.H;
-
+  const W = map.W, H = map.H;
   App.helpers.push(baseGuide);
-
   const getMirrored = (g, mode) => {
     const ng = JSON.parse(JSON.stringify(g));
     ng.opacity = 0.5;
-    ng.color = '#0a8'; // визуально отличаем зеркала от оригинала
-
+    ng.color = '#0a8';
     const mirrorPt = (pt) => {
-      const nx = pt.x;
-      const ny = pt.y;
+      const nx = pt.x, ny = pt.y;
       if (mode === 'h') pt.x = W - 1 - nx;
       if (mode === 'v') pt.y = H - 1 - ny;
       if (mode === 'd') { pt.x = ny; pt.y = nx; }
       if (mode === 'ad') { pt.x = H - 1 - ny; pt.y = W - 1 - nx; }
     };
-
     if (ng.type === 'line') {
-      const p1 = { x: ng.x1, y: ng.y1 };
-      const p2 = { x: ng.x2, y: ng.y2 };
+      const p1 = { x: ng.x1, y: ng.y1 }, p2 = { x: ng.x2, y: ng.y2 };
       mirrorPt(p1); mirrorPt(p2);
-      ng.x1 = p1.x; ng.y1 = p1.y;
-      ng.x2 = p2.x; ng.y2 = p2.y;
+      ng.x1 = p1.x; ng.y1 = p1.y; ng.x2 = p2.x; ng.y2 = p2.y;
     } else if (ng.type === 'rect' || ng.type === 'circle') {
-      const p1 = { x: ng.x, y: ng.y };
-      const p2 = { x: ng.x + ng.w, y: ng.y + ng.h };
+      const p1 = { x: ng.x, y: ng.y }, p2 = { x: ng.x + ng.w, y: ng.y + ng.h };
       mirrorPt(p1); mirrorPt(p2);
-      ng.x = Math.min(p1.x, p2.x);
-      ng.y = Math.min(p1.y, p2.y);
-      ng.w = Math.abs(p2.x - p1.x);
-      ng.h = Math.abs(p2.y - p1.y);
+      ng.x = Math.min(p1.x, p2.x); ng.y = Math.min(p1.y, p2.y);
+      ng.w = Math.abs(p2.x - p1.x); ng.h = Math.abs(p2.y - p1.y);
     } else if (ng.type === 'point') {
       const p = { x: ng.x, y: ng.y };
       mirrorPt(p);
@@ -1008,12 +978,10 @@ App.addGuideWithSymmetry = function(baseGuide) {
     }
     return ng;
   };
-
-  if (App.guideSymmetry.h)  App.helpers.push(getMirrored(baseGuide, 'h'));
-  if (App.guideSymmetry.v)  App.helpers.push(getMirrored(baseGuide, 'v'));
-  if (App.guideSymmetry.d)  App.helpers.push(getMirrored(baseGuide, 'd'));
+  if (App.guideSymmetry.h) App.helpers.push(getMirrored(baseGuide, 'h'));
+  if (App.guideSymmetry.v) App.helpers.push(getMirrored(baseGuide, 'v'));
+  if (App.guideSymmetry.d) App.helpers.push(getMirrored(baseGuide, 'd'));
   if (App.guideSymmetry.ad) App.helpers.push(getMirrored(baseGuide, 'ad'));
-
   if (typeof App.renderGuidesList === 'function') App.renderGuidesList();
   if (App.statusEl) App.statusEl.textContent = 'Guide added +' + App.helpers.length + ' helpers';
   App.renderer.render();
