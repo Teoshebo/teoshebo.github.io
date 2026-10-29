@@ -2,57 +2,35 @@
   'use strict';
   const App = RW.App = RW.App || {};
 
-  // ═══════════════════════════════════════════════
   // STATE
-  // ═══════════════════════════════════════════════
-  App.mapModel = null;
-  App.renderer = null;
-  App.layersPanel = null;
-  App.brushPanel = null;
-  App.tilesetTabs = null;
-  App.typesModel = new RW.TypesModel();
-  App.typesPanel = null;
-  App.generator = null;
-  App.activeTypeId = null;
-  App.activeTool = 'pan';
-  App.activeLayer = null;
-  App.brushGroup = [];
+  App.mapModel = null; App.renderer = null; App.layersPanel = null;
+  App.brushPanel = null; App.tilesetTabs = null;
+  App.typesModel = new RW.TypesModel(); App.typesPanel = null;
+  App.generator = null; App.activeTypeId = null; App.activeTool = 'pan';
+  App.activeLayer = null; App.brushGroup = [];
   App.brushSettings = { size: 0, shape: 'square' };
   App.activeClassicTerrain = null;
-  App.classicMaskCache = new Map();
-  App.classicEmptyCache = new Map();
-  App.pickMode = null;
-  App.drag = { active: false, x: 0, y: 0 };
-  App.painting = false;
-  App.strokeChanges = null;
-  App.strokeBound = null;
-  App.rectStart = null;
-  App.rectCurrent = null;
-  App.lastPaintKey = null;
+  App.classicMaskCache = new Map(); App.classicEmptyCache = new Map();
+  App.pickMode = null; App.drag = { active: false, x: 0, y: 0 };
+  App.painting = false; App.strokeChanges = null; App.strokeBound = null;
+  App.rectStart = null; App.rectCurrent = null; App.lastPaintKey = null;
   App._pendingImportTilesets = [];
 
-  // ─── GUIDES ───
-  App.helpers = [];
-  App.activeGuideType = 'line';
-  App.guideDrawStart = null;
-  App.guideDrawCurrent = null;
-  App.lastSelection = null;
-  App.guideMode = 'create';
+  // GUIDES
+  App.helpers = []; App.activeGuideType = 'line';
+  App.guideDrawStart = null; App.guideDrawCurrent = null;
+  App.lastSelection = null; App.guideMode = 'create';
   App.guideSymmetry = { h: false, v: false, d: false, ad: false };
-  App.selectedGuideIdx = -1;
-  App.activeGuideNode = null;
+  App.selectedGuideIdx = -1; App.activeGuideNode = null;
 
-  // ─── TEMP FILL MODES ───
-  App.tempEmptyFill = false;
-  App.tempTypeFill = false;
-  App.prevTool = null;
-  App.prevBrush = null;
+  // TEMP FILL
+  App.tempEmptyFill = false; App.tempTypeFill = false;
+  App.prevTool = null; App.prevBrush = null;
 
-  // ─── REFERENCE ───
-  App.refImage = null;
-  App.refHandle = null;
+  // REFERENCE
+  App.refImage = null; App.refHandle = null;
 
-  // ─── SETTINGS ───
+  // SETTINGS
   App.settings = RW.Storage.loadSettings();
   if (App.settings.showMarkers == null) App.settings.showMarkers = false;
   if (App.settings.markerScale == null) App.settings.markerScale = 1;
@@ -65,70 +43,43 @@
   if (App.settings.reference.mode == null) App.settings.reference.mode = 'overlay';
   RW.Storage.saveSettings(App.settings);
 
-  // ─── POINTER STATE ───
-  App.pointers = new Map();
-  App.drawingPointerId = null;
-  App.longTapTimer = null;
-  App.longTapFired = false;
-  App.longTapStart = { x: 0, y: 0 };
-  App.multiPointerActive = false;
-  App.lastPinchDist = 0;
-  App.lastPinchMidX = 0;
-  App.lastPinchMidY = 0;
-  App.pressedKeys = new Set();
-  App.panKeys = new Set();
-  App.panRaf = null;
+  // POINTER
+  App.pointers = new Map(); App.drawingPointerId = null;
+  App.longTapTimer = null; App.longTapFired = false;
+  App.longTapStart = { x: 0, y: 0 }; App.multiPointerActive = false;
+  App.lastPinchDist = 0; App.lastPinchMidX = 0; App.lastPinchMidY = 0;
+  App.pressedKeys = new Set(); App.panKeys = new Set(); App.panRaf = null;
 
   App._markersCache = null;
 
   App.mobile = {
     isMobile: () => window.matchMedia('(max-width: 820px), ((max-width: 1024px) and (pointer: coarse))').matches,
-    rightOpen: false,
-    bottomOpen: false
+    rightOpen: false, bottomOpen: false
   };
 
-  // ═══════════════════════════════════════════════
   // DOM REFS
-  // ═══════════════════════════════════════════════
   App.on = function(id, event, handler) {
     const e = document.getElementById(id);
     if (e) e.addEventListener(event, handler);
     return e;
   };
+  App.el = function(id) { return document.getElementById(id); };
 
-  App.el = function(id) {
-    return document.getElementById(id);
-  };
-
-  App.cv = App.el('cv');
-  App.wrap = App.el('wrap');
-  App.infoEl = App.el('info');
-  App.fpsEl = App.el('fps');
-  App.zoomVal = App.el('zoomVal');
-  App.layersEl = App.el('layers');
-  App.brushListEl = App.el('brushList');
-  App.brushTotalEl = App.el('brushTotal');
+  App.cv = App.el('cv'); App.wrap = App.el('wrap');
+  App.infoEl = App.el('info'); App.fpsEl = App.el('fps');
+  App.zoomVal = App.el('zoomVal'); App.layersEl = App.el('layers');
+  App.brushListEl = App.el('brushList'); App.brushTotalEl = App.el('brushTotal');
   App.brushSettingsEl = App.el('brushSettings');
-  App.classicListEl = App.el('classicList');
-  App.classicPanelEl = App.el('classicPanel');
-  App.tnsListEl = App.el('tnsList');
-  App.tnsPanelEl = App.el('tnsPanel');
-  App.tsTabsListEl = App.el('tsTabsList');
-  App.tsBodyEl = App.el('tsBody');
+  App.classicListEl = App.el('classicList'); App.classicPanelEl = App.el('classicPanel');
+  App.tnsListEl = App.el('tnsList'); App.tnsPanelEl = App.el('tnsPanel');
+  App.tsTabsListEl = App.el('tsTabsList'); App.tsBodyEl = App.el('tsBody');
   App.typesBodyEl = App.el('typesBody');
-  App.bottomEl = App.el('bottom');
-  App.bottomGrabberEl = App.el('bottomGrabber');
-  App.toolsEl = App.el('tools');
-  App.mapNameEl = App.el('mapName');
-  App.pickBannerEl = App.el('pickBanner');
-  App.pickBannerTextEl = App.el('pickBannerText');
-  App.warnBannerEl = App.el('warnBanner');
-  App.warnBannerTextEl = App.el('warnBannerText');
+  App.bottomEl = App.el('bottom'); App.bottomGrabberEl = App.el('bottomGrabber');
+  App.toolsEl = App.el('tools'); App.mapNameEl = App.el('mapName');
+  App.pickBannerEl = App.el('pickBanner'); App.pickBannerTextEl = App.el('pickBannerText');
+  App.warnBannerEl = App.el('warnBanner'); App.warnBannerTextEl = App.el('warnBannerText');
 
-  // ═══════════════════════════════════════════════
   // [Patch 03.4-fix] STATUS → PROXY
-  // Сохраняем DOM-методы старого элемента, перехватываем только textContent
-  // ═══════════════════════════════════════════════
   const logConsoleEl = document.getElementById('logConsole');
   let logs = [];
   const originalStatusEl = document.getElementById('status');
@@ -157,73 +108,59 @@
     }
   });
 
-  // toggle log console on #bottom collapse
   (function setupLogObserver() {
     const bottomEl = document.getElementById('bottom');
     if (!bottomEl) return;
-
     const applyVisibility = () => {
       if (!logConsoleEl) return;
       logConsoleEl.style.display = bottomEl.classList.contains('collapsed') ? 'flex' : 'none';
     };
-
     const observer = new MutationObserver(applyVisibility);
     observer.observe(bottomEl, { attributes: true, attributeFilter: ['class'] });
-
     requestAnimationFrame(applyVisibility);
   })();
 
   App.updateZoomLabels = function() {
     if (!App.renderer) return;
     const v = App.renderer.view.zoom.toFixed(2);
-    const d = App.el('zoomVal');
-    if (d) d.textContent = v;
-    const m = App.el('utilZoomVal');
-    if (m) m.textContent = v;
+    const d = App.el('zoomVal'); if (d) d.textContent = v;
+    const m = App.el('utilZoomVal'); if (m) m.textContent = v;
   };
-
   App.applyAtlasBg = function(v) {
     document.documentElement.style.setProperty('--atlas-bg', v || '#0a0a0a');
   };
 
-  // ═══════════════════════════════════════════════
-  // I18N
-  // ═══════════════════════════════════════════════
+  // I18N (сокращено для краткости — тексты те же)
   const I18N = {
     en: {
-      'title': 'WebTiled', 'btn.new': 'New', 'btn.open': 'Open', 'btn.save': 'Save',
-      'btn.resize': 'Size', 'btn.merge': 'Merge', 'btn.exportMap': '_map',
-      'btn.savePreview': 'Save Preview', 'btn.fit': 'Fit', 'btn.reset': '1:1', 'btn.ref': 'REF',
-      'btn.fullscreen': 'Fullscreen', 'btn.exitFullscreen': 'Exit Fullscreen',
-      'field.filename': 'Filename', 'field.zoom': 'Zoom', 'status.idle': 'Load .tmx file',
-      'tab.atlases': 'ATLASES', 'tab.types': 'TYPES', 'tab.gen': 'GENERATOR', 'tab.v3': '3D',
-      'settings.title': 'SETTINGS', 'settings.language': 'LANGUAGE', 'settings.appearance': 'APPEARANCE',
-      'settings.canvasBg': 'Editor background', 'settings.atlasBg': 'Atlas / tiles background',
-      'settings.markers': 'MARKERS', 'settings.showMarkers': 'Show markers',
-      'settings.markerSize': 'Marker size', 'settings.apply': 'APPLY', 'settings.cancel': 'CANCEL',
-      'settings.close': 'Close', 'ref.title': 'REFERENCE', 'ref.status': 'Status',
-      'ref.pick': 'Choose file', 'ref.clear': 'Remove', 'ref.opacity': 'Opacity',
-      'ref.underlay': 'Place under map (else overlay)',
-      'ref.hint': 'Reference is not saved into .tmx and not included in Save Preview. Chrome/Edge remember the file path between sessions.'
+      'title':'WebTiled','btn.new':'New','btn.open':'Open','btn.save':'Save','btn.resize':'Size',
+      'btn.merge':'Merge','btn.exportMap':'_map','btn.savePreview':'Save Preview','btn.fit':'Fit',
+      'btn.reset':'1:1','btn.ref':'REF','btn.fullscreen':'Fullscreen','btn.exitFullscreen':'Exit Fullscreen',
+      'field.filename':'Filename','field.zoom':'Zoom','status.idle':'Load .tmx file',
+      'tab.atlases':'ATLASES','tab.types':'TYPES','tab.gen':'GENERATOR','tab.v3':'3D',
+      'settings.title':'SETTINGS','settings.language':'LANGUAGE','settings.appearance':'APPEARANCE',
+      'settings.canvasBg':'Editor background','settings.atlasBg':'Atlas / tiles background',
+      'settings.markers':'MARKERS','settings.showMarkers':'Show markers','settings.markerSize':'Marker size',
+      'settings.apply':'APPLY','settings.cancel':'CANCEL','settings.close':'Close',
+      'ref.title':'REFERENCE','ref.status':'Status','ref.pick':'Choose file','ref.clear':'Remove',
+      'ref.opacity':'Opacity','ref.underlay':'Place under map (else overlay)',
+      'ref.hint':'Reference is not saved into .tmx and not included in Save Preview. Chrome/Edge remember the file path between sessions.'
     },
     ru: {
-      'title': 'WebTiled', 'btn.new': 'Новый', 'btn.open': 'Открыть', 'btn.save': 'Сохранить',
-      'btn.resize': 'Размер', 'btn.merge': 'Склейка', 'btn.exportMap': '_map',
-      'btn.savePreview': 'Скриншот', 'btn.fit': 'Fit', 'btn.reset': '1:1', 'btn.ref': 'REF',
-      'btn.fullscreen': 'На весь экран', 'btn.exitFullscreen': 'Выйти',
-      'field.filename': 'Имя файла', 'field.zoom': 'Зум', 'status.idle': 'Загрузи .tmx файл',
-      'tab.atlases': 'АТЛАСЫ', 'tab.types': 'ТИПЫ', 'tab.gen': 'ГЕНЕРАТОР', 'tab.v3': '3D',
-      'settings.title': 'НАСТРОЙКИ', 'settings.language': 'ЯЗЫК', 'settings.appearance': 'ВНЕШНИЙ ВИД',
-      'settings.canvasBg': 'Фон редактора', 'settings.atlasBg': 'Фон атласов',
-      'settings.markers': 'МАРКЕРЫ', 'settings.showMarkers': 'Показывать маркеры',
-      'settings.markerSize': 'Размер маркеров', 'settings.apply': 'ПРИМЕНИТЬ',
-      'settings.cancel': 'ОТМЕНА', 'settings.close': 'Закрыть', 'ref.title': 'РЕФЕРЕНС',
-      'ref.status': 'Статус', 'ref.pick': 'Выбрать файл', 'ref.clear': 'Удалить',
-      'ref.opacity': 'Прозрачность', 'ref.underlay': 'Под карту (иначе поверх)',
-      'ref.hint': 'Референс не сохраняется в .tmx и не попадает в Скриншот. Chrome/Edge запоминают путь между сессиями.'
+      'title':'WebTiled','btn.new':'Новый','btn.open':'Открыть','btn.save':'Сохранить','btn.resize':'Размер',
+      'btn.merge':'Склейка','btn.exportMap':'_map','btn.savePreview':'Скриншот','btn.fit':'Fit',
+      'btn.reset':'1:1','btn.ref':'REF','btn.fullscreen':'На весь экран','btn.exitFullscreen':'Выйти',
+      'field.filename':'Имя файла','field.zoom':'Зум','status.idle':'Загрузи .tmx файл',
+      'tab.atlases':'АТЛАСЫ','tab.types':'ТИПЫ','tab.gen':'ГЕНЕРАТОР','tab.v3':'3D',
+      'settings.title':'НАСТРОЙКИ','settings.language':'ЯЗЫК','settings.appearance':'ВНЕШНИЙ ВИД',
+      'settings.canvasBg':'Фон редактора','settings.atlasBg':'Фон атласов',
+      'settings.markers':'МАРКЕРЫ','settings.showMarkers':'Показывать маркеры','settings.markerSize':'Размер маркеров',
+      'settings.apply':'ПРИМЕНИТЬ','settings.cancel':'ОТМЕНА','settings.close':'Закрыть',
+      'ref.title':'РЕФЕРЕНС','ref.status':'Статус','ref.pick':'Выбрать файл','ref.clear':'Удалить',
+      'ref.opacity':'Прозрачность','ref.underlay':'Под карту (иначе поверх)',
+      'ref.hint':'Референс не сохраняется в .tmx и не попадает в Скриншот. Chrome/Edge запоминают путь между сессиями.'
     }
   };
-
   let currentLang = App.settings.lang || 'en';
 
   App.I18N = {
@@ -238,41 +175,36 @@
     },
     set(lang) {
       if (!I18N[lang]) return;
-      currentLang = lang; App.settings.lang = lang; RW.Storage.saveSettings(App.settings);
+      currentLang = lang; App.settings.lang = lang;
+      RW.Storage.saveSettings(App.settings);
       this.apply();
       if (typeof App.updateMobileBrushBtn === 'function') App.updateMobileBrushBtn();
       if (typeof App.updateFullscreenBtn === 'function') App.updateFullscreenBtn();
     }
   };
-
   RW.I18N = App.I18N;
 
-  // ═══════════════════════════════════════════════
   // CORE HELPERS
-  // ═══════════════════════════════════════════════
   App.checkTNSLayerWarning = function() {
     if (App.activeTool !== 'terrain') return;
     if (!App.mapModel) return;
     if (App.activeLayer && App.activeLayer !== 'Ground') {
       if (App.warnBannerTextEl) {
-        App.warnBannerTextEl.textContent = 'TYPE-инструмент рисует в Ground. Активный слой — "' + App.activeLayer + '". Поменяй на Ground или переключи инструмент — иначе склейка карт сломается.';
+        App.warnBannerTextEl.textContent = 'TYPE-инструмент рисует в Ground. Активный слой — "' +
+          App.activeLayer + '". Поменяй на Ground или переключи инструмент — иначе склейка карт сломается.';
       }
       if (App.warnBannerEl) App.warnBannerEl.classList.remove('hidden');
     }
   };
-
   App.getMarkersCached = function() {
     if (!App.mapModel) return { starts: [], respools: [] };
     if (App._markersCache) return App._markersCache;
     App._markersCache = RW.Markers.find(App.mapModel);
     return App._markersCache;
   };
-
   App.invalidateMarkersCache = function() { App._markersCache = null; };
 
-  // ═══════════════════════════════════════════════
   // INIT FROM PARSED
-  // ═══════════════════════════════════════════════
   App.initFromParsed = async function(parsed, filename) {
     App.mapModel = new RW.MapModel(parsed);
     App._markersCache = null;
@@ -298,8 +230,7 @@
     App.tempEmptyFill = false;
     App.tempTypeFill = false;
     if (App.pickBannerEl) App.pickBannerEl.classList.add('hidden');
-    App.classicMaskCache.clear();
-    App.classicEmptyCache.clear();
+    App.classicMaskCache.clear(); App.classicEmptyCache.clear();
     App.activeClassicTerrain = null;
 
     App.typesModel = new RW.TypesModel();
@@ -309,7 +240,10 @@
     }
     App.activeTypeId = App.typesModel.types.length ? App.typesModel.types[0].id : null;
 
-    App.generator = new RW.Generator(() => App.mapModel, (tileID) => App.typesModel.findBySolid(tileID));
+    App.generator = new RW.Generator(
+      () => App.mapModel,
+      (tileID) => App.typesModel.findBySolid(tileID)
+    );
 
     App.layersPanel = new RW.LayersPanel(App.layersEl, {
       getMap: () => App.mapModel, getRenderer: () => App.renderer,
@@ -330,7 +264,8 @@
           App.activeClassicTerrain = anchor;
           if (App.statusEl) {
             const a = App.resolveClassicAnchor();
-            if (a) App.statusEl.textContent = 'Classic: ' + a.ts.name + ' · ' + a.terrType.name + ' (local ' + a.terrType.tile + ' → global ' + (a.terrType.tile + a.ts.firstgid) + ')';
+            if (a) App.statusEl.textContent = 'Classic: ' + a.ts.name + ' · ' + a.terrType.name +
+              ' (local ' + a.terrType.tile + ' → global ' + (a.terrType.tile + a.ts.firstgid) + ')';
           }
         },
         onBrushChanged: () => { if (App.tilesetTabs) App.tilesetTabs.refreshSelection(); },
@@ -340,15 +275,18 @@
     });
 
     App.tilesetTabs = new RW.TilesetTabs(App.tsTabsListEl, App.tsBodyEl, App.bottomEl, {
-      getMap: () => App.mapModel, getRenderer: () => App.renderer, getBrush: () => App.brushGroup,
-      getModel: () => App.typesModel, getPickMode: () => App.pickMode,
-      addToBrush: (id, add) => App.addToBrush(id, add), applyPick: (id) => App.applyPick(id),
+      getMap: () => App.mapModel, getRenderer: () => App.renderer,
+      getBrush: () => App.brushGroup, getModel: () => App.typesModel,
+      getPickMode: () => App.pickMode,
+      addToBrush: (id, add) => App.addToBrush(id, add),
+      applyPick: (id) => App.applyPick(id),
       onAddTileset: () => { const t = App.el('tilesetInput'); if (t) t.click(); }
     });
 
     App.typesPanel = new RW.TypesPanel(App.typesBodyEl, {
       getModel: () => App.typesModel, getActiveType: () => App.activeTypeId,
-      setActiveType: (id) => { App.activeTypeId = id; }, getPickMode: () => App.pickMode,
+      setActiveType: (id) => { App.activeTypeId = id; },
+      getPickMode: () => App.pickMode,
       startPick: (mode) => App.startPick(mode), endPick: () => App.endPick(),
       findTileset: (id) => App.renderer.findTileset(id),
       onChanged: () => { App.typesPanel.build(); if (App.brushPanel) App.brushPanel.build(); },
@@ -356,14 +294,19 @@
       onOpenLibrary: () => App.openMiniTNSLibrary()
     });
 
-    App.layersPanel.build(); App.brushPanel.build(); App.tilesetTabs.build(); App.typesPanel.build();
+    App.layersPanel.build();
+    App.brushPanel.build();
+    App.tilesetTabs.build();
+    App.typesPanel.build();
     App.buildTools();
 
     if (App.mapNameEl) {
       const n = filename || parsed._restoredFilename || 'map.tmx';
-      App.mapNameEl.value = n; const m = App.el('mapNameMobile'); if (m) m.value = n;
+      App.mapNameEl.value = n;
+      const m = App.el('mapNameMobile'); if (m) m.value = n;
     }
-    App.renderer.fitView(); App.updateZoomLabels();
+    App.renderer.fitView();
+    App.updateZoomLabels();
     if (RW.HMApp) {
       RW.HMApp.onMapReady({
         getMap: () => App.mapModel, getTypesModel: () => App.typesModel,
@@ -372,9 +315,7 @@
     }
   };
 
-  // ═══════════════════════════════════════════════
-  // [Patch 01] MINI TNS LIBRARY
-  // ═══════════════════════════════════════════════
+  // MINI TNS LIBRARY
   App.openMiniTNSLibrary = function() {
     if (!RW.MiniTNSLib) {
       if (App.statusEl) App.statusEl.textContent = 'MiniTNSLib не загружен';
@@ -386,6 +327,7 @@
     });
   };
 
+  // [Patch 04.3] передаём entry.extraProp
   App.importMiniTNSFromEntry = async function(entry) {
     if (!App.mapModel) {
       if (App.statusEl) App.statusEl.textContent = 'Сначала открой карту';
@@ -397,7 +339,7 @@
     for (let i = 0; i < byteString.length; i++) ia[i] = byteString.charCodeAt(i);
     const blob = new Blob([ab], { type: 'image/png' });
     const file = new File([blob], entry.name + '.png', { type: 'image/png' });
-    await App.importMiniTNS(file);
+    await App.importMiniTNS(file, entry.extraProp);
     RW.MiniTNSLib.close();
   };
 
