@@ -75,9 +75,19 @@ class Generator {
     return best;
   }
 
-  // [Patch 04.3] optional `best` — избегаем двойного pickDominant в generateRect
-  resolveEdge(tx, ty, best) {
-    if (best === undefined) best = this.pickDominant(tx, ty);
+  // [Patch 04.3] optional `best` — избегаем двойного pickDominant
+  // [Patch 04.4] — не рисуем края на клетках, занятых солидом
+  resolveEdge(tx, ty, bestOpt) {
+    const map = this.getMap();
+    if (!map) return 0;
+    const ground = map.layers.Ground;
+    if (!ground) return 0;
+
+    // Если клетка уже занята солидом, не рисуем край
+    const selfId = ground[ty * map.W + tx];
+    if (selfId !== 0) return 0;
+
+    const best = bestOpt || this.pickDominant(tx, ty);
     if (!best) return 0;
     const T = best.type;
 
@@ -102,7 +112,7 @@ class Generator {
     return edges[role] || 0;
   }
 
-  // [Patch 04.3] Возвращает {layer, idx, before, after} и САМ применяет изменения
+  // [Patch 04.3] Возвращает {layer, idx, before, after} и сам применяет
   generateRect(x0, y0, x1, y1) {
     const map = this.getMap();
     if (!map) return [];
