@@ -1,8 +1,8 @@
 # WebTiled
 
-**Редактор карт для Rusted Warfare · формат `.tmx` · Beta 0.6**
+**Редактор карт для Rusted Warfare · формат `.tmx` · Beta 0.7**
 
-[![Version](https://img.shields.io/badge/version-0.6--beta-8cf.svg)](#)
+[![Version](https://img.shields.io/badge/version-0.7--beta-8cf.svg)](#)
 [![Format](https://img.shields.io/badge/format-.tmx-orange.svg)](#)
 [![Discord](https://img.shields.io/badge/Discord-teoshebo-5865F2.svg)](https://discord.com/users/709138215935934525)
 
@@ -14,27 +14,15 @@
 
 ---
 
-## Содержание
+## Что нового в 0.7
 
-- [Что нового в 0.6](#что-нового-в-06)
-- [Быстрый старт](#быстрый-старт)
-- [Ключевые возможности](#ключевые-возможности)
-- [Интерфейс кратко](#интерфейс-кратко)
-- [Горячие клавиши](#горячие-клавиши)
-- [Формат и ограничения](#формат-и-ограничения)
-- [English summary](#english-summary)
-
----
-
-## Что нового в 0.6
-
-- **Логи перенесены** в правый нижний угол игрового полотна. Они накладываются поверх карты, не мешают рисованию, показывают последние 5 действий и скрываются при открытии нижней панели.
-- **Навигация по атласам** — выпадающий список + кнопки «Влево» / «Вправо». Удаление тайлсета (🗑) теперь в шапке самого тайлсета.
-- **Навигация по типам** — выпадающий список + кнопки «Создать TnS», «Удалить», «Import MiniTNS», «Library».
-- **Меню UTILS** на левой панели инструментов. В нём собраны `Resize`, `Ref` и новое **зеркало карты**.
-- **Map Mirror** — отражение половины карты на другую половину. Оригинал не стирается, копия накладывается сверху. Режимы: Left→Right, Right→Left, Top→Bottom, Bottom→Top, Quad. Работают чекбоксы слоёв; солиды автоматически перемешиваются, края autotile пересчитываются.
-- **GUIDES** — CAD-слой только для редактора. Линии, прямоугольники, круги/эллипсы и точки с чёрной обводкой и подписями координат. Не сохраняется в `.tmx` и не попадает в PNG-экспорт. Есть режимы Create / Select и симметрия H-Sym, V-Sym, Diag, Anti-D.
-- **Заливки:** `E + F` — Empty Fill, `Shift + F` — Type Fill.
+- **Wall Creator (Defer Void)**: Если рисовать `void`-солиды с зажатым `Shift`, слой `Ground` больше не очищается мгновенно. Вместо этого изменения накапливаются, а вверху экрана появляется кнопка **ACCEPT** для применения очистки.
+- **Авто-открытие атласа**: При выборе TNS-типа в правой панели нижняя панель автоматически переключается на нужный атлас.
+- **Исправлен Type Fill**: `Shift + F` теперь заливает выбранный TNS поверх другого TNS (а не самого себя).
+- **Настройки кисти**: Размер и форма кисти теперь видны всегда. Размер изменен на **диаметр** (1 = 1 клетка, 3 = 3x3 и т.д.).
+- **Умное удаление атласов**: При удалении тайлсета из TNS/terrain вычищаются все его тайлы. Если тайлы пропали не все — тип подсвечивается **желтой рамкой**.
+- **MiniTNS Library (PC)**: Добавлено кэширование миниатюр и кнопка **REFRESH** для принудительного обновления библиотеки.
+- **Mobile Merge**: Превью карт в окне склейки сжимаются сильнее для корректного отображения на мобильных устройствах.
 
 ---
 
@@ -45,34 +33,21 @@
 3. Рисуй карту, используя панели ATLASES, TYPES, GENERATOR, 3D.
 4. Для служебных операций открой **UTILS** на левой панели.
 5. Сохрани карту кнопкой **💾 Save**.
-6. Открой результат в **Rusted Warfare** или **Tiled**.
 
 ---
 
 ## Ключевые возможности
 
 - **Types** — семантический автотайл по приоритетам: Solids, Edges, Inner corners.
+- **Wall Creator** — создание невидимых стен (`void`). С зажатым `Shift` откладывает очистку `Ground` до нажатия кнопки **ACCEPT**.
 - **Classic autotile (CLS)** — классический corner-autotile по terrain-маске.
 - **FLOOD** — заливка доминирующим типом по 3+ ортогональным соседям.
 - **Empty Fill / Type Fill** — быстрые служебные заливки.
 - **Generator** — heightmap, шум, симметрия, реки, auto points, импорт PNG.
 - **3D-вид** — изометрический предпросмотр с экспортом PNG.
 - **Merge** — склейка нескольких `.tmx` с приоритетами и снапом.
-- **Reference** — overlay / underlay картинка для обводки.
 - **GUIDES** — направляющие фигуры только для редактора.
 - **Map Mirror** — зеркалирование половины карты на другую половину.
-- **Маркеры** — старты команд и respool-точки на 2D и 3D.
-- **Скриншот** — экспорт превью 500×500 без референса и GUIDES.
-
----
-
-## Интерфейс кратко
-
-- **Верхняя панель:** Open, Save, Merge, Save Preview, Fit, 1:1, Zoom, Settings, Help. `Resize` и `Ref` теперь в **UTILS**.
-- **Левая панель:** PAN, BRUSH, TERRAIN, CLS, ERASE, RECT, FILL, PICK, AUTO, **GUIDE**, **UTILS**, UNDO, REDO.
-- **Правая панель:** LAYERS, BRUSH, свойства выбранной фигуры GUIDE.
-- **Нижняя панель:** ATLASES, TYPES, GENERATOR, 3D.
-- **Логи:** правый нижний угол полотна, последние 5 действий, скрываются при открытии нижней панели.
 
 ---
 
@@ -87,7 +62,8 @@
 | `R` | Rect |
 | `F` | Fill |
 | `E` + `F` | Empty Fill — заливка пустотой |
-| `Shift` + `F` | Type Fill — заливка по типам |
+| `Shift` + `F` | Type Fill — заливка выбранным TNS поверх другого |
+| `Shift` + `Клик` | Wall Creator: отложенная очистка Ground (Defer Void) |
 | `I` | Picker |
 | `P` | Pan |
 | `Ctrl+Z` / `Ctrl+Y` | Undo / Redo |
@@ -100,8 +76,7 @@
 
 - Формат карты: `.tmx` для Rusted Warfare.
 - Слои: `Ground`, `Items0`, `Units`, `Items1`, `Items2`, `Items`, далее при наличии.
-- `GUIDES` не сохраняется в `.tmx` и не попадает в PNG-экспорт.
-- `Reference` не сохраняется в `.tmx` и не попадает в Save Preview.
+- `GUIDES` и `Reference` не сохраняются в `.tmx` и не попадают в PNG-экспорт.
 - Автосохранения нет. Несохранённые изменения теряются при перезагрузке.
 - Склейка карт заменяет текущую карту без undo.
 
@@ -109,25 +84,13 @@
 
 ## English summary
 
-**WebTiled** is a browser-based map editor for **Rusted Warfare** (`.tmx`). It replaces NotTiled and adds semantic **Types**, a procedural generator, isometric 3D view, map merging, reference overlay, CAD **GUIDES**, and **Map Mirror**.
+**WebTiled** is a browser-based map editor for **Rusted Warfare** (`.tmx`).
 
-### What's new in 0.6
-
-- Logs moved to the bottom-right corner of the canvas: overlay, last 5 actions, hidden when the bottom panel is open.
-- Atlas navigation: dropdown + Left/Right buttons; tileset delete (🗑) is in the tileset header.
-- Type navigation: dropdown + Create TnS, Delete, Import MiniTNS, Library.
-- **UTILS** modal on the left toolbar: Resize, Ref, Map Mirror.
-- **Map Mirror**: mirror half of the map onto the other half; original is not erased; modes Left→Right, Right→Left, Top→Bottom, Bottom→Top, Quad; layer checkboxes; solids randomized; autotile edges recalculated.
-- **GUIDES**: editor-only CAD layer with lines, rectangles, circles/ellipses, points; black outline and coordinate labels; Create/Select; symmetry H-Sym, V-Sym, Diag, Anti-D; not saved in `.tmx` or PNG.
-- Fill hotkeys: `E + F` Empty Fill, `Shift + F` Type Fill.
-
-### Quick start
-
-1. Open `webtiled.html` in a modern browser.
-2. Click **📂 Open** or drag a `.tmx` onto the canvas.
-3. Edit the map using ATLASES, TYPES, GENERATOR, 3D.
-4. Use **UTILS** for Resize, Ref, and Mirror.
-5. Save with **💾 Save**.
-6. Open the result in **Rusted Warfare** or **Tiled**.
-
-Full documentation: **WebTiledDoc.html** — RU / EN.
+### What's new in 0.7
+- **Wall Creator (Defer Void)**: Hold `Shift` while painting `void` solids to defer `Ground` clearing. An **ACCEPT** button appears to apply the changes.
+- **Auto-Open Atlas**: Selecting a TNS type automatically opens its corresponding tileset in the bottom panel.
+- **Type Fill Fixed**: `Shift + F` now fills the target TNS with the currently selected TNS.
+- **Brush Settings**: Always visible. Size now means **diameter**.
+- **Smart Atlas Deletion**: Deleting a tileset cleans up TNS/Terrain tiles. Missing tiles highlight the type with a **yellow border**.
+- **MiniTNS Library**: Added caching and a **REFRESH** button for PC.
+- **Mobile Merge**: Compressed map previews for better performance on mobile.
