@@ -7,38 +7,20 @@ const CANDIDATE_PATHS = [
 ];
 const INI_NAME = 'minitns.ini';
 
-// Разрешённые properties для solid-тайлов MiniTNS.
-// Всё остальное из ini игнорируется.
 const ALLOWED_PROPS = new Set([
-  'water',
-  'water-bridge',
-  'large-cliff',
-  'large-rock',
-  'lava'
+  'water', 'water-bridge', 'large-cliff', 'large-rock', 'lava'
 ]);
 
-let modalEl = null;
-let gridEl = null;
-let statusEl = null;
-let searchInputEl = null;
-let sortBtnEl = null;
-let tagsBarEl = null;
-let onPickCb = null;
-let entries = [];
-let loaded = false;
-let loading = false;
-let activePath = CANDIDATE_PATHS[0];
+// [Patch 04.3] 5-й токен строки ini — extraProp для краевых тайлов
+const EXTRA_PROPS = ['large-rock', 'cliff-soft', 'large-cliff'];
 
-let searchQuery = '';
-let sortAsc = true;
+let modalEl = null, gridEl = null, statusEl = null;
+let searchInputEl = null, sortBtnEl = null, tagsBarEl = null;
+let onPickCb = null, entries = [], loaded = false, loading = false;
+let activePath = CANDIDATE_PATHS[0];
+let searchQuery = '', sortAsc = true;
 let activeTags = new Set();
 
-// ─── Парсер ini ───
-// Формат: name priority [tags] [properties]
-//   tags       — "rock,stone"
-//   properties — "water,team=0,unit=commandCenter"
-// Сокращение: name 5 X — если X содержит '=', это props, иначе теги.
-// В properties попадают ТОЛЬКО ключи из ALLOWED_PROPS.
 function parseIni(text) {
   const out = [];
   for (const raw of text.split(/\r?\n/)) {
@@ -46,26 +28,26 @@ function parseIni(text) {
     if (!line) continue;
     const parts = line.split(/\s+/);
     if (!parts.length) continue;
+
+    // [Patch 04.3] выкусываем extraProp из последнего токена
+    let extraProp = '';
+    if (parts.length > 2 && EXTRA_PROPS.includes(parts[parts.length - 1])) {
+      extraProp = parts.pop();
+    }
+
     const name = parts[0];
     const prio = parseInt(parts[1], 10);
-
-    let tagsTok = '';
-    let propsTok = '';
+    let tagsTok = '', propsTok = '';
 
     if (parts.length >= 4) {
       tagsTok = parts[2] || '';
       propsTok = parts.slice(3).join(' ');
     } else if (parts.length === 3) {
-      if (parts[2].indexOf('=') >= 0) {
-        propsTok = parts[2];
-      } else {
-        tagsTok = parts[2];
-      }
+      if (parts[2].indexOf('=') >= 0) propsTok = parts[2];
+      else tagsTok = parts[2];
     }
 
-    const tags = tagsTok
-      ? tagsTok.split(',').map(s => s.trim()).filter(Boolean)
-      : [];
+    const tags = tagsTok ? tagsTok.split(',').map(s => s.trim()).filter(Boolean) : [];
 
     const properties = {};
     if (propsTok) {
@@ -74,15 +56,9 @@ function parseIni(text) {
         if (!t) continue;
         const eq = t.indexOf('=');
         let k, v;
-        if (eq >= 0) {
-          k = t.slice(0, eq).trim();
-          v = t.slice(eq + 1).trim();
-        } else {
-          k = t;
-          v = '';
-        }
-        if (!k) continue;
-        if (!ALLOWED_PROPS.has(k)) continue;
+        if (eq >= 0) { k = t.slice(0, eq).trim(); v = t.slice(eq + 1).trim(); }
+        else { k = t; v = ''; }
+        if (!k || !ALLOWED_PROPS.has(k)) continue;
         properties[k] = v;
       }
     }
@@ -91,7 +67,8 @@ function parseIni(text) {
       name,
       priority: isNaN(prio) ? 0 : prio,
       tags,
-      properties
+      properties,
+      extraProp
     });
   }
   return out;
@@ -109,7 +86,6 @@ function joinPath(base, name) {
   return base + name;
 }
 
-// Проверка пустого тайла PNG: все пиксели alpha=0
 function isTileEmpty(img, tw, th, col, row) {
   const cv = document.createElement('canvas');
   cv.width = tw; cv.height = th;
@@ -133,9 +109,7 @@ async function resolvePath() {
       const list = parseIni(text);
       if (!list.length) continue;
       return { base, url, list };
-    } catch (err) {
-      // пробуем следующий
-    }
+    } catch (err) { /* следующий */ }
   }
   return null;
 }
@@ -145,11 +119,9 @@ async function loadLibrary() {
   loading = true;
   try {
     setStatus('Поиск minitns.ini...', 'warn');
-
     const resolved = await resolvePath();
     if (!resolved) {
-      throw new Error('minitns.ini не найден ни по одному пути: ' +
-        CANDIDATE_PATHS.join(' · '));
+      throw new Error('minitns.ini не найден ни по одному пути: ' + CANDIDATE_PATHS.join(' · '));
     }
     activePath = resolved.base;
     setStatus('Источник: ' + activePath + ' — загрузка PNG...', 'warn');
@@ -172,9 +144,8 @@ async function loadLibrary() {
           priority: e.priority,
           tags: e.tags,
           properties: e.properties,
-          img,
-          dataUrl,
-          b64,
+          extraProp: e.extraProp, // [Patch 04.3]
+          img, dataUrl, b64,
           _solidCanvas: null
         });
       } catch (err) {
@@ -184,61 +155,49 @@ async function loadLibrary() {
     }
 
     loaded = true;
-
-    if (!entries.length) {
-      setStatus('Найдено 0 PNG по пути ' + activePath, 'err');
-    } else {
-      setStatus('Загружено ' + entries.length + ' из ' + resolved.list.length +
-        (skipped ? ' (пропущено ' + skipped + ')' : '') +
-        ' · ' + activePath, 'ok');
-    }
+    if (!entries.length) setStatus('Найдено 0 PNG по пути ' + activePath, 'err');
+    else setStatus('Загружено ' + entries.length + ' из ' + resolved.list.length +
+      (skipped ? ' (пропущено ' + skipped + ')' : '') + ' · ' + activePath, 'ok');
   } finally {
     loading = false;
   }
 }
 
-// ── Solid-превью: рендерим local 4 (solid) один раз ──
 function getSolidCanvas(entry) {
   if (entry._solidCanvas) return entry._solidCanvas;
   const cv = document.createElement('canvas');
-  cv.width = 120;
-  cv.height = 200;
+  cv.width = 120; cv.height = 200;
   const g = cv.getContext('2d');
   g.imageSmoothingEnabled = false;
   const img = entry.img;
   const realTw = Math.round(img.naturalWidth / 3);
   const realTh = Math.round(img.naturalHeight / 5);
-  const sx = 1 * realTw, sy = 1 * realTh;
   const scale = Math.min(120 / realTw, 120 / realTh);
   const dw = Math.round(realTw * scale);
   const dh = Math.round(realTh * scale);
   const dx = Math.floor((120 - dw) / 2);
   const dy = Math.floor((200 - dh) / 2);
-  g.drawImage(img, sx, sy, realTw, realTh, dx, dy, dw, dh);
+  g.drawImage(img, 1 * realTw, 1 * realTh, realTw, realTh, dx, dy, dw, dh);
   entry._solidCanvas = cv;
   return cv;
 }
 
 function getFullCanvas(entry) {
   const cv = document.createElement('canvas');
-  cv.width = 120;
-  cv.height = 200;
+  cv.width = 120; cv.height = 200;
   const g = cv.getContext('2d');
   g.imageSmoothingEnabled = false;
   const img = entry.img;
   const iw = img.naturalWidth, ih = img.naturalHeight;
   const s = Math.min(120 / iw, 200 / ih);
-  const dw = Math.round(iw * s);
-  const dh = Math.round(ih * s);
-  const dx = Math.floor((120 - dw) / 2);
-  const dy = Math.floor((200 - dh) / 2);
+  const dw = Math.round(iw * s), dh = Math.round(ih * s);
+  const dx = Math.floor((120 - dw) / 2), dy = Math.floor((200 - dh) / 2);
   g.drawImage(img, 0, 0, iw, ih, dx, dy, dw, dh);
   return cv;
 }
 
 function ensureModal() {
   if (modalEl) return;
-
   modalEl = document.createElement('div');
   modalEl.id = 'miniLibModal';
   modalEl.className = 'hidden';
@@ -246,19 +205,16 @@ function ensureModal() {
   const dialog = document.createElement('div');
   dialog.className = 'mini-lib-dialog';
 
-  // header
   const header = document.createElement('div');
   header.className = 'mini-lib-header';
   const ttl = document.createElement('span');
   ttl.textContent = 'MINI TNS LIBRARY';
   const closeBtn = document.createElement('button');
-  closeBtn.textContent = '×';
-  closeBtn.title = 'Close';
+  closeBtn.textContent = '×'; closeBtn.title = 'Close';
   closeBtn.addEventListener('click', close);
   header.append(ttl, closeBtn);
   dialog.appendChild(header);
 
-  // filter bar (search + sort)
   const filterBar = document.createElement('div');
   filterBar.className = 'mini-lib-filterbar';
 
@@ -277,17 +233,14 @@ function ensureModal() {
   sortBtnEl = document.createElement('button');
   sortBtnEl.className = 'mini-lib-sort';
   sortBtnEl.textContent = 'Name ▲';
-  sortBtnEl.title = 'Sort by name';
   sortBtnEl.addEventListener('click', () => {
     sortAsc = !sortAsc;
     sortBtnEl.textContent = sortAsc ? 'Name ▲' : 'Name ▼';
     renderGrid();
   });
   filterBar.appendChild(sortBtnEl);
-
   dialog.appendChild(filterBar);
 
-  // body
   const body = document.createElement('div');
   body.className = 'mini-lib-body';
   gridEl = document.createElement('div');
@@ -295,22 +248,17 @@ function ensureModal() {
   body.appendChild(gridEl);
   dialog.appendChild(body);
 
-  // tags bar
   tagsBarEl = document.createElement('div');
   tagsBarEl.className = 'mini-lib-tagsbar';
   dialog.appendChild(tagsBarEl);
 
-  // status
   statusEl = document.createElement('div');
   statusEl.className = 'mini-lib-status';
   statusEl.textContent = 'Ready.';
   dialog.appendChild(statusEl);
 
   modalEl.appendChild(dialog);
-  modalEl.addEventListener('click', (e) => {
-    if (e.target === modalEl) close();
-  });
-
+  modalEl.addEventListener('click', (e) => { if (e.target === modalEl) close(); });
   document.body.appendChild(modalEl);
 }
 
@@ -322,12 +270,8 @@ function setStatus(text, cls) {
 function getFilteredEntries() {
   let list = entries.slice();
   if (searchQuery) list = list.filter(e => e.name.toLowerCase().includes(searchQuery));
-  if (activeTags.size) {
-    list = list.filter(e => e.tags.some(t => activeTags.has(t)));
-  }
-  list.sort((a, b) => sortAsc
-    ? a.name.localeCompare(b.name)
-    : b.name.localeCompare(a.name));
+  if (activeTags.size) list = list.filter(e => e.tags.some(t => activeTags.has(t)));
+  list.sort((a, b) => sortAsc ? a.name.localeCompare(b.name) : b.name.localeCompare(a.name));
   return list;
 }
 
@@ -335,37 +279,29 @@ function renderGrid() {
   if (!gridEl) return;
   gridEl.innerHTML = '';
   const list = getFilteredEntries();
-
   if (!list.length) {
     const em = document.createElement('div');
     em.className = 'mini-lib-empty';
-    em.textContent = entries.length
-      ? 'Ничего не найдено'
-      : (loaded ? 'Library пустая' : 'Loading...');
+    em.textContent = entries.length ? 'Ничего не найдено' : (loaded ? 'Library пустая' : 'Loading...');
     gridEl.appendChild(em);
     return;
   }
-
   for (const e of list) {
     const item = document.createElement('div');
     item.className = 'mini-lib-item';
     item.title = e.name + ' · priority ' + e.priority +
       (e.tags.length ? ' · #' + e.tags.join(' #') : '') +
-      (Object.keys(e.properties).length
-        ? ' · ' + Object.keys(e.properties).join(', ')
-        : '');
+      (e.extraProp ? ' · ' + e.extraProp : '') +
+      (Object.keys(e.properties).length ? ' · ' + Object.keys(e.properties).join(', ') : '');
 
     const preview = document.createElement('div');
     preview.className = 'mini-lib-preview-wrap';
-
     const solidCv = getSolidCanvas(e);
     solidCv.className = 'mini-lib-preview mini-lib-preview-solid';
     preview.appendChild(solidCv);
-
     const fullCv = getFullCanvas(e);
     fullCv.className = 'mini-lib-preview mini-lib-preview-full';
     preview.appendChild(fullCv);
-
     item.appendChild(preview);
 
     const nameEl = document.createElement('div');
@@ -375,7 +311,7 @@ function renderGrid() {
 
     const prioEl = document.createElement('div');
     prioEl.className = 'mini-lib-prio';
-    prioEl.textContent = 'P' + e.priority;
+    prioEl.textContent = 'P' + e.priority + (e.extraProp ? ' · ' + e.extraProp : '');
     item.appendChild(prioEl);
 
     if (e.tags.length) {
@@ -403,10 +339,7 @@ function renderGrid() {
       item.appendChild(propRow);
     }
 
-    item.addEventListener('click', () => {
-      if (onPickCb) onPickCb(e);
-    });
-
+    item.addEventListener('click', () => { if (onPickCb) onPickCb(e); });
     gridEl.appendChild(item);
   }
 }
@@ -415,7 +348,6 @@ function renderTags() {
   if (!tagsBarEl) return;
   tagsBarEl.innerHTML = '';
   if (!entries.length) return;
-
   const all = new Set();
   for (const e of entries) for (const t of e.tags) all.add(t);
   if (!all.size) return;
@@ -431,22 +363,19 @@ function renderTags() {
     btn.className = 'mini-lib-tag' + (activeTags.has(t) ? ' active' : '');
     btn.textContent = '#' + t;
     btn.addEventListener('click', () => {
-      if (activeTags.has(t)) activeTags.delete(t);
-      else activeTags.add(t);
+      if (activeTags.has(t)) activeTags.delete(t); else activeTags.add(t);
       renderGrid();
       renderTags();
     });
     tagsBarEl.appendChild(btn);
   }
-
   if (activeTags.size) {
     const clearBtn = document.createElement('button');
     clearBtn.className = 'mini-lib-tag-clear';
     clearBtn.textContent = 'clear';
     clearBtn.addEventListener('click', () => {
       activeTags.clear();
-      renderGrid();
-      renderTags();
+      renderGrid(); renderTags();
     });
     tagsBarEl.appendChild(clearBtn);
   }
@@ -456,18 +385,11 @@ function open(cb) {
   onPickCb = cb;
   ensureModal();
   modalEl.classList.remove('hidden');
-
-  if (loaded) {
-    renderGrid();
-    renderTags();
-    return;
-  }
-
+  if (loaded) { renderGrid(); renderTags(); return; }
   (async () => {
     try {
       await loadLibrary();
-      renderGrid();
-      renderTags();
+      renderGrid(); renderTags();
     } catch (err) {
       setStatus('Ошибка загрузки: ' + err.message, 'err');
       renderGrid();
@@ -475,19 +397,17 @@ function open(cb) {
   })();
 }
 
-function close() {
-  if (modalEl) modalEl.classList.add('hidden');
-}
+function close() { if (modalEl) modalEl.classList.add('hidden'); }
 
 RW.MiniTNSLib = {
-  open,
-  close,
+  open, close,
   isLoaded: () => loaded,
   entries: () => entries,
   reload: () => { loaded = false; entries = []; },
   currentPath: () => activePath,
   isTileEmpty,
-  ALLOWED_PROPS
+  ALLOWED_PROPS,
+  EXTRA_PROPS
 };
 
 })(window.RWEditor = window.RWEditor || {});
