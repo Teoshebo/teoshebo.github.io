@@ -2,28 +2,10 @@
 'use strict';
 const HM = RW.HM = RW.HM || {};
 
-// ─────────────────────────────────────────────
-// APPLY HEIGHTMAP → MAP
-//
-// opts = {
-//   mapModel, typesModel, generator,
-//   level: Uint8Array(w*h),
-//   w, h, levels,
-//   targetLayer: 'Ground',
-//   edgeLayer:   'Items0',
-//   levelToType: array[levels] of typeId (optional; null → default by priority)
-// }
-//
-// Возвращает:
-//   { ok: true, changesTarget, changesEdge, snapTarget, snapEdge }
-//   { ok: false, error: '...' }
-//
-// После вызова НЕ пишет в undoStack — это делает вызывающий код.
-// ─────────────────────────────────────────────
 HM.applyToMap = function(opts) {
   const { mapModel, typesModel, generator, level, w, h, levels } = opts;
   const targetLayer = opts.targetLayer || 'Ground';
-  const edgeLayer   = opts.edgeLayer   || 'Items0';
+  const edgeLayer = opts.edgeLayer || 'Items0';
 
   const target = mapModel.layers[targetLayer];
   if (!target) return { ok: false, error: 'Нет слоя ' + targetLayer };
@@ -35,18 +17,15 @@ HM.applyToMap = function(opts) {
   const typesByPrio = [...typesModel.types].sort((a, b) => b.priority - a.priority);
   if (!typesByPrio.length) return { ok: false, error: 'Нет типов в TypesModel' };
 
-  // Построить level → type
   const mapping = new Array(levels);
   for (let lv = 0; lv < levels; lv++) {
     if (opts.levelToType && opts.levelToType[lv]) {
       mapping[lv] = typesModel.get(opts.levelToType[lv]);
     } else {
-      // level 0 (пик) → тип с макс. priority; level N-1 (пол) → мин. priority
       const idx = Math.min(typesByPrio.length - 1, lv);
       mapping[lv] = typesByPrio[idx];
     }
   }
-  // Проверка, что у каждого уровня есть solid
   for (let lv = 0; lv < levels; lv++) {
     const t = mapping[lv];
     if (!t || !t.solids || !t.solids.length) {
@@ -54,12 +33,10 @@ HM.applyToMap = function(opts) {
     }
   }
 
-  // ─── Снапшоты для undo ───
   const snapTarget = new Uint32Array(target);
   const edgeData = mapModel.layers[edgeLayer];
   const snapEdge = edgeData ? new Uint32Array(edgeData) : null;
 
-  // ─── Pass 1: target layer ───
   const changesTarget = [];
   for (let i = 0; i < w*h; i++) {
     const t = mapping[level[i]];
@@ -69,41 +46,47 @@ HM.applyToMap = function(opts) {
     target[i] = tileID;
   }
 
-  // ─── Pass 2: edges через существующий generator ───
+  // [Patch 04.3] generateRect возвращает {layer, idx, before, after} и уже применил.
   const changesEdge = [];
-  if (edgeData && generator) {
+  if (generator) {
     const edgeChanges = generator.generateRect(0, 0, w - 1, h - 1);
     for (const c of edgeChanges) {
-      if (edgeData[c.idx] !== c.after) {
-        changesEdge.push({ idx: c.idx, before: edgeData[c.idx], after: c.after });
-        edgeData[c.idx] = c.after;
-      }
+      changesEdge.push({ layer: c.layer, idx: c.idx, before: c.before, after: c.after });
     }
   }
 
   return {
-    ok: true,
-    targetLayer, edgeLayer,
+    ok: true, targetLayer, edgeLayer,
     changesTarget, changesEdge,
     snapTarget, snapEdge
   };
 };
 
-// ─────────────────────────────────────────────
-// Применить результат (после подтверждения) к mapModel.undoStack.
-// Помещает ДВА undo-элемента: один на target, один на edge.
-// ─────────────────────────────────────────────
+// [Patch 04.3] группировка edge changes по c.layer
 HM.commitToUndo = function(mapModel, result) {
   if (!result || !result.ok) return 0;
   let n = 0;
+
   if (result.changesTarget.length) {
     mapModel.undoStack.push({ layer: result.targetLayer, changes: result.changesTarget });
     n += result.changesTarget.length;
   }
+
   if (result.changesEdge.length) {
-    mapModel.undoStack.push({ layer: result.edgeLayer, changes: result.changesEdge });
+    const grouped = {};
+    for (const c of result.changesEdge) {
+      if (!grouped[c.layer]) grouped[c.layer] = [];
+      grouped[c.layer].push({ idx: c.idx, before: c.before, after: c.after });
+    }
+    const layersArr = Object.entries(grouped).map(([layer, changes]) => ({ layer, changes }));
+    if (layersArr.length === 1) {
+      mapModel.undoStack.push({ layer: layersArr[0].layer, changes: layersArr[0].changes });
+    } else {
+      mapModel.undoStack.push({ type: 'multi', layers: layersArr });
+    }
     n += result.changesEdge.length;
   }
+
   if (mapModel.undoStack.length > 50) {
     mapModel.undoStack.splice(0, mapModel.undoStack.length - 50);
   }
@@ -111,18 +94,6 @@ HM.commitToUndo = function(mapModel, result) {
   return n;
 };
 
-// ─────────────────────────────────────────────
-// AUTO POINTS: генерация стартов и res-pool'ов на основании level-массива.
-//
-// opts = {
-//   level, w, h, levels,
-//   players: 2, homePerPlayer: 1, frontPts: 4,
-//   spread: 1.0, edgePct: 0.10, heightMargin: 10,
-//   seed: 0,
-// }
-//
-// Возвращает { starts: [{x,y,team}], respools: [{x,y}] }
-// ─────────────────────────────────────────────
 HM.generatePoints = function(opts) {
   const { level, w, h, levels } = opts;
   const P = Math.max(1, opts.players || 2);
@@ -133,7 +104,6 @@ HM.generatePoints = function(opts) {
   const heightMargin = Math.max(0, opts.heightMargin || 10);
   const seed = (opts.seed || 0) + 31337;
 
-  // RNG
   let s = seed >>> 0;
   const rnd = () => {
     s |= 0; s = s + 0x6D2B79F5 | 0;
@@ -143,7 +113,6 @@ HM.generatePoints = function(opts) {
   };
 
   const floorIdx = Math.max(0, levels - 1);
-  // distance field: сколько до ближайшей non-floor клетки
   const INF = 65535;
   const dist = new Uint16Array(w*h).fill(INF);
   for (let i = 0; i < w*h; i++) if (level[i] !== floorIdx) dist[i] = 0;
@@ -198,13 +167,11 @@ HM.generatePoints = function(opts) {
     return out;
   }
 
-  // 180° mirror для 2 команд
   const pickSide = (x, y) => ((x - cx) + (y - cy) < 0) ? 1 : 2;
   const mirror = (p) => ({ x: w-1-p.x, y: h-1-p.y });
 
   const t1 = playable.filter(p => pickSide(p.x, p.y) === 1);
-  t1.sort((a, b) =>
-    Math.hypot(b.x-cx, b.y-cy) - Math.hypot(a.x-cx, a.y-cy));
+  t1.sort((a, b) => Math.hypot(b.x-cx, b.y-cy) - Math.hypot(a.x-cx, a.y-cy));
   const s1 = pickFar(t1.slice(0, Math.max(P * 20, 60)), P, minD * 1.5);
   const s2 = s1.map(mirror);
 
@@ -220,7 +187,6 @@ HM.generatePoints = function(opts) {
     });
     for (const p of pickFar(near, K, minD*0.5)) respools.push({ x: p.x, y: p.y });
   }
-  // фронтальные respools вдоль оси 180°
   const axisFn = c => Math.abs((c.x-cx) + (c.y-cy)) / Math.SQRT2;
   const front = playable.slice().sort((a, b) => axisFn(a) - axisFn(b));
   const fronts = pickFar(front.slice(0, Math.max(F*30, 120)), F, minD*0.9);
