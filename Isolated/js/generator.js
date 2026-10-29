@@ -75,7 +75,6 @@ class Generator {
     return best;
   }
 
-  // [Patch 0.6.6 / 0.6.10] — selfType === T блокирует края на своих солидах
   resolveEdge(tx, ty, bestOpt) {
     const map = this.getMap();
     if (!map) return 0;
@@ -84,10 +83,13 @@ class Generator {
     if (!best) return 0;
     const T = best.type;
 
-    // ─── ЖЕСТКИЙ ФИКС: Если на Ground лежит солид этого же типа, возвращаем 0 ───
-    const selfType = this.typeAt(tx, ty);
-    if (selfType === T) return 0;
-    // ─────────────────────────────────────────────────────────────────────────────
+    // ─── ПРОВЕРКА: если на Ground лежит солид текущего типа T, край не ставим ───
+    const groundId = map.layers.Ground[ty * map.W + tx];
+    if (groundId) {
+      const isSolidOfT = T.solids.some(s => s.tileID === groundId);
+      if (isSolidOfT) return 0;
+    }
+    // ──────────────────────────────────────────────────────────────────────────
 
     const tN  = this.typeAt(tx,     ty - 1) === T;
     const tS  = this.typeAt(tx,     ty + 1) === T;
@@ -130,16 +132,15 @@ class Generator {
 
         let after = this.resolveEdge(x, y, best);
         
-        // Двойная страховка: если на Ground лежит солид этого же типа — не ставим край
+        // ─── Двойная страховка: если на Ground лежит солид текущего типа — не ставим край ───
         if (best && best.type) {
           const selfId = map.layers.Ground[idx];
-          if (selfId !== 0) {
-            const type = this.getTypeOfTile(selfId);
-            if (type && type.id === best.type.id) {
-              after = 0;
-            }
+          if (selfId) {
+            const isSolidOfBest = best.type.solids.some(s => s.tileID === selfId);
+            if (isSolidOfBest) { after = 0; }
           }
         }
+        // ───────────────────────────────────────────────────────────────────────────────────
 
         const before = targetData[idx];
 
