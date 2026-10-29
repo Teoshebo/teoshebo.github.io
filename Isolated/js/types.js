@@ -17,7 +17,7 @@ class TypesModel {
       color: '#' + Math.floor(Math.random() * 0xffffff).toString(16).padStart(6, '0'),
       solids: [],
       edges: {},
-      edgeLayer: 'Items0' // [Patch 04.3]
+      edgeLayer: 'Items0'
     };
     for (const r of EDGE_ROLES) t.edges[r] = 0;
     this.types.push(t);
@@ -31,11 +31,10 @@ class TypesModel {
 
   get(id) { return this.types.find(t => t.id === id); }
 
+  // [Patch 0.6.12] Приведение к числу для надежного поиска
   findBySolid(tileID) {
-    for (const t of this.types) {
-      for (const s of t.solids) if (s.tileID === tileID) return t;
-    }
-    return null;
+    const id = Number(tileID);
+    return this.types.find(t => t.solids.some(s => Number(s.tileID) === id)) || null;
   }
 
   toJSON() {
@@ -43,7 +42,7 @@ class TypesModel {
       version: 1,
       types: this.types.map(t => ({
         id: t.id, name: t.name, priority: t.priority, color: t.color,
-        edgeLayer: t.edgeLayer || 'Items0', // [Patch 04.3]
+        edgeLayer: t.edgeLayer || 'Items0',
         solids: t.solids.map(s => ({ tileID: s.tileID, weight: s.weight })),
         edges: Object.assign({}, t.edges)
       }))
@@ -60,7 +59,7 @@ class TypesModel {
         name: t.name || '',
         priority: t.priority ?? 0,
         color: t.color || '#888',
-        edgeLayer: t.edgeLayer || 'Items0', // [Patch 04.3]
+        edgeLayer: t.edgeLayer || 'Items0',
         solids: (t.solids || []).map(s => ({ tileID: s.tileID, weight: s.weight ?? 1 })),
         edges: {}
       };
@@ -230,7 +229,6 @@ class TypesPanel {
     lCol.appendChild(iCol);
     head.appendChild(lCol);
 
-    // [Patch 04.3] Edge Layer selection
     const lLayer = document.createElement('label');
     lLayer.textContent = 'Edge Layer';
     const sLayer = document.createElement('select');
