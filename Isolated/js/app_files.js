@@ -11,18 +11,13 @@ App.loadNewMap = async function() {
   try {
     const res = await fetch('new.tmx', { cache: 'no-cache' });
     if (!res.ok) throw new Error('HTTP ' + res.status + ' — проверь что new.tmx в корне');
-    
     const text = await res.text();
-    
-    // Защита от возврата HTML (если файл отсутствует)
     if (text.trim().startsWith('<!DOCTYPE') || text.trim().startsWith('<html')) {
       throw new Error('Получен HTML вместо TMX. Убедись, что файл new.tmx существует в корне.');
     }
-
     const parsed = RW.TMX.parse(text);
     await RW.TMX.loadImages(parsed);
     await App.initFromParsed(parsed, 'new.tmx');
-    
     if (App.statusEl) App.statusEl.textContent = 'New map: ' + App.mapModel.W + '×' + App.mapModel.H +
       ' · layers: ' + App.mapModel.layerOrder.length;
   } catch (err) {
@@ -105,28 +100,20 @@ App.openTmxImportModal = function(tilesets) {
   const modal = App.el('importTmxTilesetsModal');
   const list = App.el('importTmxList');
   if (!modal || !list) return;
-
   list.innerHTML = '';
   tilesets.forEach((ts, idx) => {
     const row = document.createElement('label');
     row.className = 'import-tmx-item';
-
     const cb = document.createElement('input');
     cb.type = 'checkbox';
     cb.checked = true;
     cb.dataset.idx = idx;
-
     const cnv = document.createElement('canvas');
     cnv.width = 40; cnv.height = 40;
     const g = cnv.getContext('2d');
     g.imageSmoothingEnabled = false;
-    if (ts.image) {
-      g.drawImage(ts.image, 0, 0, 40, 40);
-    } else {
-      g.fillStyle = '#333';
-      g.fillRect(0, 0, 40, 40);
-    }
-
+    if (ts.image) g.drawImage(ts.image, 0, 0, 40, 40);
+    else { g.fillStyle = '#333'; g.fillRect(0, 0, 40, 40); }
     const info = document.createElement('div');
     info.className = 'info';
     const name = document.createElement('b');
@@ -134,11 +121,9 @@ App.openTmxImportModal = function(tilesets) {
     const size = document.createElement('span');
     size.textContent = ts.tilecount + ' tiles · ' + ts.tileW + '×' + ts.tileH;
     info.append(name, size);
-
     row.append(cb, cnv, info);
     list.appendChild(row);
   });
-
   modal.classList.remove('hidden');
 };
 
@@ -154,61 +139,46 @@ App.on('importTmxAdd', 'click', () => {
   const checkboxes = document.querySelectorAll('#importTmxList input[type=checkbox]:checked');
   if (!checkboxes.length) { App.closeTmxImportModal(); return; }
   if (!App.mapModel) { alert('Open a map first'); App.closeTmxImportModal(); return; }
-
   let addedCount = 0;
-
   checkboxes.forEach(cb => {
     const idx = parseInt(cb.dataset.idx, 10);
     const srcTs = App._pendingImportTilesets[idx];
     if (!srcTs) return;
-
     let maxEnd = 1;
     for (const ts of App.mapModel.tilesets) {
       const end = ts.firstgid + ts.tilecount;
       if (end > maxEnd) maxEnd = end;
     }
-
     const newTs = {
-      firstgid: maxEnd,
-      name: srcTs.name,
-      columns: srcTs.columns,
-      tilecount: srcTs.tilecount,
-      tileW: srcTs.tileW,
-      tileH: srcTs.tileH,
-      image: srcTs.image,
-      imageDataUrl: srcTs.imageDataUrl,
+      firstgid: maxEnd, name: srcTs.name,
+      columns: srcTs.columns, tilecount: srcTs.tilecount,
+      tileW: srcTs.tileW, tileH: srcTs.tileH,
+      image: srcTs.image, imageDataUrl: srcTs.imageDataUrl,
       embeddedPngB64: srcTs.embeddedPngB64,
       imageSource: srcTs.imageSource,
-      imageW: srcTs.imageW,
-      imageH: srcTs.imageH,
+      imageW: srcTs.imageW, imageH: srcTs.imageH,
       terrainTypes: JSON.parse(JSON.stringify(srcTs.terrainTypes || [])),
       tiles: JSON.parse(JSON.stringify(srcTs.tiles || {})),
-      xmlStr: null,
-      _dirty: true
+      xmlStr: null, _dirty: true
     };
-
     let finalName = newTs.name;
     if (App.mapModel.tilesets.find(t => t.name === finalName)) {
       let i = 2;
       while (App.mapModel.tilesets.find(t => t.name === finalName + '_' + i)) i++;
       newTs.name = finalName + '_' + i;
     }
-
     App.mapModel.tilesets.push(newTs);
     addedCount++;
   });
-
   App.mapModel.tilesets.sort((a, b) => a.firstgid - b.firstgid);
-  
   if (App.tilesetTabs) {
     App.tilesetTabs.activeIdx = App.mapModel.tilesets.length - 1;
     App.tilesetTabs.build();
   }
   if (App.brushPanel) App.brushPanel.build();
   App.invalidateMarkersCache();
-  
   App.closeTmxImportModal();
-  if (App.statusEl) App.statusEl.textContent = `Imported ${addedCount} tilesets from TMX.`;
+  if (App.statusEl) App.statusEl.textContent = 'Imported ' + addedCount + ' tilesets from TMX.';
 });
 
 App.on('tilesetInput', 'change', async (e) => {
@@ -223,13 +193,11 @@ App.on('tilesetInput', 'change', async (e) => {
       const text = await file.text();
       const parsed = RW.TMX.parse(text);
       await RW.TMX.loadImages(parsed);
-      
       if (!parsed.tilesets || !parsed.tilesets.length) {
         alert('В этом .tmx нет тайлсетов.');
         if (App.statusEl) App.statusEl.textContent = 'No tilesets found in TMX';
         return;
       }
-
       App.openTmxImportModal(parsed.tilesets);
       if (App.statusEl) App.statusEl.textContent = 'Found ' + parsed.tilesets.length + ' tilesets';
     } catch (err) {
@@ -305,7 +273,8 @@ App.startMiniTNSImport = function() {
   inp.click();
 };
 
-App.importMiniTNS = async function(file) {
+// [Patch 04.3] extraProp — назначить свойства краевым тайлам + edgeLayer='Items'
+App.importMiniTNS = async function(file, extraProp) {
   const buf = await file.arrayBuffer();
   const bytes = new Uint8Array(buf);
   const b64 = U.bytesToB64(bytes);
@@ -345,22 +314,20 @@ App.importMiniTNS = async function(file) {
   const t = App.typesModel.add(typeName, App.typesModel.types.length);
   const g = (local) => firstgid + local;
 
-  const isTileEmpty = RW.MiniTNSLib && RW.MiniTNSLib.isTileEmpty
-    ? RW.MiniTNSLib.isTileEmpty
-    : function(img, tw, th, col, row) {
-        const c = document.createElement('canvas');
-        c.width = tw; c.height = th;
-        const ctx = c.getContext('2d', { willReadFrequently: true });
-        ctx.clearRect(0, 0, tw, th);
-        ctx.drawImage(img, col*tw, row*th, tw, th, 0, 0, tw, th);
-        const d = ctx.getImageData(0, 0, tw, th).data;
-        for (let i = 3; i < d.length; i += 4) if (d[i] !== 0) return false;
-        return true;
-      };
+  const isEmpty = (col, row) => {
+    const c = document.createElement('canvas');
+    c.width = tw; c.height = th;
+    const ctx = c.getContext('2d', { willReadFrequently: true });
+    ctx.clearRect(0, 0, tw, th);
+    ctx.drawImage(img, col*tw, row*th, tw, th, 0, 0, tw, th);
+    const d = ctx.getImageData(0, 0, tw, th).data;
+    for (let i = 3; i < d.length; i += 4) if (d[i] !== 0) return false;
+    return true;
+  };
 
   const solidLocals = [4];
-  if (!isTileEmpty(img, tw, th, 2, 3)) solidLocals.push(11);
-  if (!isTileEmpty(img, tw, th, 2, 4)) solidLocals.push(14);
+  if (!isEmpty(2, 3)) solidLocals.push(11);
+  if (!isEmpty(2, 4)) solidLocals.push(14);
 
   t.solids = [];
   for (const local of solidLocals) {
@@ -372,11 +339,28 @@ App.importMiniTNS = async function(file) {
   t.edges.SWo = g(6); t.edges.S = g(7); t.edges.SEo = g(8);
   t.edges.NWi = g(9); t.edges.NEi = g(10);
   t.edges.SWi = g(12); t.edges.SEi = g(13);
+
+  // [Patch 04.3] extraProp — краевые тайлы получают props[extraProp], тип → edgeLayer='Items'
+  if (extraProp) {
+    t.edgeLayer = 'Items';
+    const solidSet = new Set(solidLocals);
+    for (let local = 0; local < 15; local++) {
+      if (solidSet.has(local)) continue;
+      if (isEmpty(local % 3, Math.floor(local / 3))) continue;
+      if (!ts.tiles[local]) ts.tiles[local] = { terrain: null, props: {} };
+      if (!ts.tiles[local].props) ts.tiles[local].props = {};
+      ts.tiles[local].props[extraProp] = '';
+    }
+    ts._dirty = true;
+  }
+
   App.activeTypeId = t.id;
   if (App.typesPanel) App.typesPanel.build();
   if (App.brushPanel) App.brushPanel.build();
   App.invalidateMarkersCache();
-  if (App.statusEl) App.statusEl.textContent = 'MiniTNS: tileset "' + name + '" + type "' + typeName + '"';
+  if (App.statusEl) App.statusEl.textContent = 'MiniTNS: tileset "' + name + '" + type "' + typeName + '"' +
+    (extraProp ? ' · edge=' + extraProp + ' → Items' : '');
+  return t;
 };
 
 // ═══════════════════════════════════════════════
