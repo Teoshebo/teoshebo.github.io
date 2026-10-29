@@ -83,18 +83,21 @@ class Generator {
     if (!best) return 0;
     const T = best.type;
 
-    // ─── ДЕБАГ-ЛОГ (по запросу Дельта-9) ───
+    // ─── ДЕБАГ-ЛОГ ───
     if (map.layers.Ground[ty * map.W + tx] === 132) {
       console.log('Debug Cell 132:', {
         groundId: map.layers.Ground[ty * map.W + tx],
         selfType: this.typeAt(tx, ty) ? this.typeAt(tx, ty).name : null
       });
     }
-    // ──────────────────────────────────────
 
-    // Базовая защита (из 0.6.6), откат 0.6.11
-    const selfType = this.typeAt(tx, ty);
-    if (selfType === T) return 0;
+    // ─── ПРОВЕРКА: если на Ground лежит солид текущего типа T, край не ставим ───
+    const groundId = map.layers.Ground[ty * map.W + tx];
+    if (groundId) {
+      const isSolidOfT = T.solids.some(s => Number(s.tileID) === Number(groundId));
+      if (isSolidOfT) return 0;
+    }
+    // ───────────────────────────────────────────────────────────────────────────
 
     const tN  = this.typeAt(tx,     ty - 1) === T;
     const tS  = this.typeAt(tx,     ty + 1) === T;
@@ -131,12 +134,27 @@ class Generator {
       for (let x = minX; x <= maxX; x++) {
         const idx = y * map.W + x;
         const best = this.pickDominant(x, y);
-        const targetLayer = (best && best.type.edgeLayer) ? best.type.edgeLayer : 'Items0';
+        const self = this.typeAt(x, y);
+        
+        // Если best нет, значит мы внутри солида. Берем слой краев текущего типа (self)
+        const targetType = (best && best.type) ? best.type : self;
+        const targetLayer = (targetType && targetType.edgeLayer) ? targetType.edgeLayer : 'Items0';
+        
         const targetData = map.layers[targetLayer];
         if (!targetData) continue;
 
-        // Откат 0.6.11 (убран блок "Двойная страховка")
         let after = this.resolveEdge(x, y, best);
+
+        // ─── Двойная страховка ───
+        if (best && best.type) {
+          const selfId = map.layers.Ground[idx];
+          if (selfId) {
+            const isSolidOfBest = best.type.solids.some(s => Number(s.tileID) === Number(selfId));
+            if (isSolidOfBest) { after = 0; }
+          }
+        }
+        // ─────────────────────────
+
         const before = targetData[idx];
 
         if (before !== after) {

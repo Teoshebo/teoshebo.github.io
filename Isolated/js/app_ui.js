@@ -209,6 +209,51 @@ App.setupMobileUI = function() {
 };
 
 // ═══════════════════════════════════════════════
+// [Patch 0.7.2] ФУНКЦИИ WALL CREATOR (ACCEPT)
+// ═══════════════════════════════════════════════
+App.updateAcceptWallsVisibility = function() {
+  const btn = App.el('btnAcceptWalls');
+  if (!btn) return;
+  
+  // Кнопка видна ТОЛЬКО если выбран инструмент Terrain И есть необработанные изменения
+  if (App.activeTool === 'terrain' && App.pendingVoidChanges && App.pendingVoidChanges.length > 0) {
+    btn.style.display = 'block';
+    btn.classList.remove('hidden');
+  } else {
+    btn.style.display = 'none';
+    btn.classList.add('hidden');
+  }
+};
+
+App.on('btnAcceptWalls', 'click', () => {
+  if (!App.pendingVoidChanges || !App.pendingVoidChanges.length) return;
+  
+  const map = App.mapModel;
+  const groundData = map.layers.Ground;
+  
+  // 1. Возвращаем Ground в исходное состояние
+  for (const c of App.pendingVoidChanges) {
+    groundData[c.idx] = c.before;
+    const x = c.idx % map.W;
+    const y = Math.floor(c.idx / map.W);
+    App.renderer.invalidateCell(x, y);
+  }
+  
+  // 2. Формируем нормальный Undo-стек для этого действия
+  // Чтобы можно было отменить через Ctrl+Z
+  map.undoStack.push({ layer: 'Ground', changes: App.pendingVoidChanges });
+  if (map.undoStack.length > 50) map.undoStack.shift();
+  map.redoStack.length = 0;
+  
+  // 3. Очищаем и скрываем
+  App.pendingVoidChanges = [];
+  App.updateAcceptWallsVisibility();
+  App.renderer.render();
+  
+  if (App.statusEl) App.statusEl.textContent = 'Wall Creator: стены применены (Ground очищен)';
+});
+
+// ═══════════════════════════════════════════════
 // [Patch 04.0] ЕДИНЫЙ КОНТРОЛЛЕР ВКЛАДОК
 // ═══════════════════════════════════════════════
 App.updateBottomTabs = function(tabId) {
@@ -224,7 +269,6 @@ App.updateBottomTabs = function(tabId) {
   tabEl.classList.toggle('active', isActive);
 
   if (isMobile) {
-    // Мобилки: радио-режим (только одна панель открыта)
     if (isActive) {
       for (const t of allTabs) {
         if (t !== tabId) {
@@ -254,7 +298,6 @@ App.updateBottomTabs = function(tabId) {
       if (tabId === 'btnV3Tab') { const v3B = App.el('hmV3Body'); if (v3B) v3B.classList.add('hidden'); }
     }
   } else {
-    // ПК: независимое переключение (можно несколько открыть)
     if (tabId === 'btnAtlasesTab') {
       bottomEl.classList.toggle('atlases-hidden', !isActive);
       if (isActive && App.tilesetTabs) App.tilesetTabs.build();

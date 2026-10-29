@@ -31,7 +31,6 @@ class TypesModel {
 
   get(id) { return this.types.find(t => t.id === id); }
 
-  // [Patch 0.6.12] Приведение к числу для надежного поиска
   findBySolid(tileID) {
     const id = Number(tileID);
     return this.types.find(t => t.solids.some(s => Number(s.tileID) === id)) || null;
@@ -73,9 +72,6 @@ class TypesModel {
   }
 }
 
-// ═══════════════════════════════════════════════
-// TYPES PANEL
-// ═══════════════════════════════════════════════
 class TypesPanel {
   constructor(rootEl, ctx) {
     this.root = rootEl;
@@ -197,6 +193,7 @@ class TypesPanel {
   buildDetail(t, pickMode) {
     const el = document.createElement('div');
     el.className = 'type-detail';
+    if (t._missingTiles) el.classList.add('missing-tiles'); // [Patch 0.7.0]
 
     const head = document.createElement('div');
     head.className = 'type-head';

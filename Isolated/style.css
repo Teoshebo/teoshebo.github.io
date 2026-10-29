@@ -1576,3 +1576,10 @@ canvas#cv.crosshair{cursor:crosshair}
   .import-tmx-footer { padding: 14px 16px; gap: 10px; }
   .import-tmx-footer button { flex: 1; min-height: 48px; font-size: 13px; }
 }
+.missing-tiles {
+  border: 1px solid #fd4 !important;
+  box-shadow: 0 0 4px #fd4 !important;
+}
+#btnAcceptWalls.hidden {
+  display: none !important;
+}

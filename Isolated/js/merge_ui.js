@@ -8,25 +8,23 @@ function isMobile() {
 }
 
 let modalEl, stageEl, listEl, infoEl, fileInputEl, guidesEl, snapCb;
-let layout = [];                    // [{ parsed, name, x, y }]  x,y в ТАЙЛАХ
-let zoom = 1, panX = 0, panY = 0;   // screen-пространство
-let dragging = null;                // drag карты
-let panning = null;                 // drag панорамы
+let layout = [];
+let zoom = 1, panX = 0, panY = 0;
+let dragging = null;
+let panning = null;
 let onMergeCb = null;
-let activeGuides = [];              // [{type:'v'|'h', coord}]
+let activeGuides = [];
 const previewCache = new Map();
 
 const ZOOM_MIN = 0.1, ZOOM_MAX = 4;
-const SNAP_PX = 10;                 // порог снапа в экранных пикселях
+const SNAP_PX = 10;
 
-// ── Multi-touch state ──
 const pointers = new Map();
 let multiActive = false;
 let lastPinchDist = 0;
 let lastPinchMidX = 0;
 let lastPinchMidY = 0;
 
-// ═══════════════════════════════════════════════
 M.open = function(opts) {
   onMergeCb = opts.onMerge;
   ensureDom();
@@ -105,9 +103,6 @@ function ensureDom() {
   window.addEventListener('pointercancel', onPointerUp);
 }
 
-// ═══════════════════════════════════════════════
-// LAYOUT UTILS
-// ═══════════════════════════════════════════════
 function addMap(parsed, name) {
   const bbox = computeBBox();
   const x = bbox ? bbox.maxX : 0;
@@ -127,9 +122,6 @@ function computeBBox() {
   return { minX, minY, maxX, maxY, w: maxX - minX, h: maxY - minY };
 }
 
-// ═══════════════════════════════════════════════
-// VIEW
-// ═══════════════════════════════════════════════
 function fitView() {
   const bbox = computeBBox();
   const sr = stageEl.getBoundingClientRect();
@@ -143,7 +135,7 @@ function fitView() {
 }
 
 function onWheel(e) {
-  if (isMobile()) return;  // touch devices — pinch instead
+  if (isMobile()) return;
   e.preventDefault();
   const sr = stageEl.getBoundingClientRect();
   const mx = e.clientX - sr.left;
@@ -160,9 +152,6 @@ function onWheel(e) {
 function toScreenX(mapX) { return mapX * zoom + panX; }
 function toScreenY(mapY) { return mapY * zoom + panY; }
 
-// ═══════════════════════════════════════════════
-// RENDER
-// ═══════════════════════════════════════════════
 function renderAll() {
   renderStage();
   renderList();
@@ -223,7 +212,6 @@ function getPreviewCanvas(parsed) {
   return cv;
 }
 
-// 1 тайл = 1 px в превью-canvas. На мобиле — downscale ×0.5.
 function makePreviewCanvas(parsed) {
   const W = parsed.W, H = parsed.H;
   const cv = document.createElement('canvas');
@@ -296,10 +284,10 @@ function makePreviewCanvas(parsed) {
   }
   ctx.putImageData(img, 0, 0);
 
-  // ── На мобиле — даунскейл ×0.5 для меньшей памяти и быстрее рендер ──
+  // [Patch 0.7.0] Мобилки: сжатие 0.25
   if (isMobile()) {
-    const sw = Math.max(24, Math.round(W * 0.5));
-    const sh = Math.max(24, Math.round(H * 0.5));
+    const sw = Math.max(16, Math.round(W * 0.25));
+    const sh = Math.max(16, Math.round(H * 0.25));
     const small = document.createElement('canvas');
     small.width = sw;
     small.height = sh;
@@ -445,9 +433,6 @@ function rectsOverlap(a, b) {
            b.y + b.parsed.H <= a.y);
 }
 
-// ═══════════════════════════════════════════════
-// SNAP
-// ═══════════════════════════════════════════════
 function applySnap(movingIdx, proposedX, proposedY) {
   const res = { x: proposedX, y: proposedY, guides: [] };
   if (!snapCb || !snapCb.checked) return res;
@@ -497,16 +482,12 @@ function applySnap(movingIdx, proposedX, proposedY) {
   return res;
 }
 
-// ═══════════════════════════════════════════════
-// POINTER INPUT
-// ═══════════════════════════════════════════════
 function onStageDown(e) {
   if (e.button !== 0 && e.button !== 1) return;
 
   pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
   try { stageEl.setPointerCapture(e.pointerId); } catch (_) {}
 
-  // ── Два и больше пальцев → pinch / pan ──
   if (pointers.size >= 2) {
     dragging = null;
     panning = null;
@@ -522,7 +503,6 @@ function onStageDown(e) {
 
   const rect = e.target.closest('.merge-rect');
   if (rect && e.button === 0) {
-    // drag карты
     const i = parseInt(rect.dataset.idx, 10);
     dragging = {
       mapIdx: i,
@@ -531,7 +511,6 @@ function onStageDown(e) {
     };
     e.preventDefault();
   } else {
-    // pan
     panning = {
       startMouseX: e.clientX, startMouseY: e.clientY,
       startPanX: panX, startPanY: panY
@@ -547,18 +526,15 @@ function onPointerMove(e) {
   prev.x = e.clientX;
   prev.y = e.clientY;
 
-  // ── Multi-touch: pinch + pan ──
   if (pointers.size >= 2) {
     const arr = Array.from(pointers.values());
     const d = Math.hypot(arr[0].x - arr[1].x, arr[0].y - arr[1].y);
     const mx = (arr[0].x + arr[1].x) / 2;
     const my = (arr[0].y + arr[1].y) / 2;
 
-    // pan midpoint
     panX += mx - lastPinchMidX;
     panY += my - lastPinchMidY;
 
-    // zoom
     if (lastPinchDist > 8 && d > 8) {
       const k = d / lastPinchDist;
       if (Math.abs(k - 1) > 0.002) {
@@ -581,7 +557,6 @@ function onPointerMove(e) {
     return;
   }
 
-  // ── Single pointer ──
   if (dragging) {
     e.preventDefault();
     const dx = (e.clientX - dragging.startMouseX) / zoom;
@@ -633,9 +608,6 @@ function onPointerUp(e) {
   }
 }
 
-// ═══════════════════════════════════════════════
-// MERGE
-// ═══════════════════════════════════════════════
 async function doMerge() {
   if (layout.length < 2) { alert('Нужно минимум 2 карты'); return; }
   if (!confirm('Заменить текущую карту результатом merge?\n\nНесохранённые правки будут потеряны.')) return;

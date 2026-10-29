@@ -3,6 +3,70 @@
 All notable changes to WebTiled are documented here.
 Format: patch-level entries under each version line.
 
+# Changelog
+
+Все значимые изменения в проекте WebTiled.
+
+## [0.7.2] — Фикс видимости кнопки ACCEPT
+
+### Fixed
+- **`webtiled.html`**: Кнопке `#btnAcceptWalls` жестко прописан инлайн-стиль `display: none`.
+- **`style.css`**: Добавлено правило `#btnAcceptWalls.hidden { display: none !important; }`, блокирующее случайное появление.
+- **`app_ui.js`**: Функция `updateAcceptWallsVisibility` теперь напрямую меняет `style.display` (блок/нон), а не полагается только на класс.
+- **`app.js`**: В глобальные стейты добавлен `App.pendingVoidChanges = []`. При загрузке новой карты (`initFromParsed`) массив очищается, и вызывается `updateAcceptWallsVisibility`.
+- **`app_paint.js`**: В функциях `doUndo` и `doRedo` добавлена очистка `App.pendingVoidChanges` и вызов `updateAcceptWallsVisibility`. Отмененные действия больше не оставляют "висящую" кнопку.
+
+## [0.7.1] — Обновление логики Wall Creator / Accept
+
+### Changed
+- **`webtiled.html`**: Кнопка `#btnApplyWalls` заменена на `#btnAcceptWalls` (зеленый стиль, позиция top:60px).
+- **`app_paint.js`**: Массив `App.pendingVoidCells` заменен на `App.pendingVoidChanges` (формат `{idx, before, after}`). В `endStroke` при зажатом Shift изменения Ground копятся в этом массиве.
+- **`app_ui.js`**: Добавлена функция `App.updateAcceptWallsVisibility()`. Клик по кнопке `btnAcceptWalls` возвращает Ground в исходное состояние, пушит правильный Undo-евент и очищает массив.
+- **`app_input.js`**: Обработчики `keydown` и `keyup` для клавиши Shift вызывают `updateAcceptWallsVisibility`.
+- **`app_tools.js`**: В `handleToolClick` добавлен вызов `updateAcceptWallsVisibility`.
+
+## [0.7.0] — UX & Logic Overhaul
+
+### Added
+- **`app.js`**: Функция `App.setActiveType(id)` — при выборе типа автоматически открывает вкладку ATLASES с нужным тайлсетом.
+- **`webtiled.html`**: Скрытая кнопка `#btnApplyWalls` для отложенного применения стен (Wall Creator).
+- **`app_paint.js`**: В `endStroke` добавлена логика `Wall Creator (Void)` — при наличии пропа `void` на солиде слой Ground не откатывается сразу, а ждет подтверждения (если зажат Shift).
+- **`ui.js` / `types.js`**: Добавлен флаг `_missingTiles` и CSS-класс `.missing-tiles` (желтая подсветка) для типов, у которых были удалены тайлы вместе с атласом.
+
+### Changed
+- **`app_paint.js`**: `brushCells` теперь трактует `size` как диаметр (1 = 1 клетка, 2 = 2x2, 3 = 3x3 и т.д.).
+- **`app_files.js`**: `importMiniTNS` больше не вызывает `prompt()`. Имя берется из 4-го аргумента `defaultName` или из имени файла.
+- **`merge_ui.js`**: На мобильных устройствах превью карт в окне Merge сжимаются сильнее (0.25 вместо 0.5) для экономии памяти.
+
+### Fixed
+- **`app_paint.js`**: Исправлена логика `Shift+F` (Type Fill). Теперь заливка использует **активный** тип для покраски, а тип кликнутой клетки — только для определения области.
+- **`ui.js`**: При удалении тайлсета (`handleTilesetDelete`) типы очищаются от битых ID солидов и краев.
+
+## [0.6.14] — Умная очистка краев при отсутствии доминирующего типа
+
+### Fixed
+- **`generator.js`**: В `resolveEdge` добавлена прямая проверка `T.solids.some(s => Number(s.tileID) === Number(groundId))` с приведением к числу. 
+- **`generator.js`**: В `generateRect` (двойная страховка) аналогичная проверка с `Number()`. При `best === null` целевой слой определяется через `self` (тип текущего солида), а не сбрасывается в дефолт.
+- **`app_paint.js`**: `updateTNSEdgesAround` использует fallback на `self` для определения слоя очистки, предотвращая накопление мусорных краев.
+
+## [0.6.13] — Фикс сравнения ID солидов
+
+### Fixed
+- **`generator.js`**: Внедрено принудительное приведение к числу (`Number()`) при сравнении `s.tileID === groundId` в `resolveEdge` и `generateRect`, так как после импорта ID могут храниться как строки.
+
+## [0.6.12] — Критический фикс поиска солидов
+
+### Fixed
+- **`types.js`**: Функция `findBySolid` переведена на `Number()`, чтобы ID 125 совпадал со строкой "125".
+- **`app_files.js`**: При импорте MiniTNS `solids` сохраняются с явным приведением к `Number`.
+- **`generator.js`**: Откат предыдущих экспериментальных жестких проверок, возврат к `selfType === T`.
+
+## [0.6.10] — Фикс Items и Void
+
+### Fixed
+- **`app.js`**: `importMiniTNSFromEntry` теперь передает `entry.properties` третьим аргументом.
+- **`app_files.js`**: `importMiniTNS` принимает `properties` и применяет их к солидам (`Object.assign`). Теперь свойство `void` из ini-файла корректно записывается в тайл и срабатывает в Wall Creator.
+
 ---
 
 ## [0.6.10] — Фикс Items и Void

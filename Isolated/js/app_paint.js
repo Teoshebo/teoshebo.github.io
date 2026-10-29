@@ -100,15 +100,23 @@ App.pickWeightedSolid = function(type) {
 
 App.brushCells = function(cx, cy) {
   const size = App.brushSettings.size || 0;
+  if (size <= 1) return [[cx, cy]];
   const shape = App.brushSettings.shape;
-  if (size === 0) return [[cx, cy]];
+  const start = -Math.floor(size / 2);
+  const end = start + size - 1;
   const cells = [];
-  for (let dy = -size; dy <= size; dy++) {
-    for (let dx = -size; dx <= size; dx++) {
+  for (let dy = start; dy <= end; dy++) {
+    for (let dx = start; dx <= end; dx++) {
       let ok = false;
       if (shape === 'square') ok = true;
-      else if (shape === 'circle') ok = dx*dx + dy*dy <= size*size;
-      else if (shape === 'diamond') ok = Math.abs(dx) + Math.abs(dy) <= size;
+      else if (shape === 'circle') {
+        const offset = (size % 2 === 0) ? 0.5 : 0;
+        const r = size / 2;
+        ok = (dx + offset) * (dx + offset) + (dy + offset) * (dy + offset) <= r * r + 0.1;
+      } else if (shape === 'diamond') {
+        const r = Math.floor(size / 2) + (size % 2 === 0 ? 0 : 1);
+        ok = Math.abs(dx) + Math.abs(dy) <= r;
+      }
       if (ok) cells.push([cx + dx, cy + dy]);
     }
   }
@@ -144,7 +152,10 @@ App.updateTNSEdgesAround = function(tx, ty) {
       const idx = ny * App.mapModel.W + nx;
 
       const best = App.generator.pickDominant(nx, ny);
-      const targetLayer = (best && best.type.edgeLayer) ? best.type.edgeLayer : 'Items0';
+      const self = App.generator.typeAt(nx, ny);
+      const targetType = (best && best.type) ? best.type : self;
+      const targetLayer = (targetType && targetType.edgeLayer) ? targetType.edgeLayer : 'Items0';
+      
       const targetData = App.mapModel.layers[targetLayer];
       if (!targetData) continue;
 
@@ -432,7 +443,7 @@ App.finalizeAutotileForStroke = function() {
   }
 };
 
-// [Patch 0.6.5] — Wall Creator (Void) logic in endStroke
+// [Patch 0.7.1] endStroke — Wall Creator с отложенным применением (Shift)
 App.endStroke = function() {
   if (!App.strokeChanges || !App.strokeChanges.size) {
     App.strokeChanges = null; App.strokeBound = null;
@@ -440,17 +451,13 @@ App.endStroke = function() {
   }
   const map = App.mapModel;
 
-  // ─── ПРОВЕРКА НА VOID (WALL CREATOR) ───
   const activeType = App.typesModel.get(App.activeTypeId);
   let isVoid = false;
-  
   if (activeType && activeType.solids.length > 0) {
-    // Проверяем ВСЕ солиды типа, так как pickWeightedSolid может выбрать любой
     for (const s of activeType.solids) {
       const ts = App.renderer.findTileset(s.tileID);
       if (ts) {
         const t = ts.tiles[s.tileID - ts.firstgid];
-        // Если у солида есть проп 'void' (или 'wall'), считаем его невидимым
         if (t && t.props && (t.props.void !== undefined || t.props.wall !== undefined)) {
           isVoid = true;
           break;
@@ -460,23 +467,36 @@ App.endStroke = function() {
   }
 
   if (isVoid && App.strokeChanges.has('Ground')) {
-    const groundChanges = App.strokeChanges.get('Ground');
-    const groundData = map.layers.Ground;
-    
-    // 1. Возвращаем Ground в исходное состояние
-    for (const [idx, c] of groundChanges.entries()) {
-      groundData[idx] = c.before; 
-      const x = idx % map.W;
-      const y = Math.floor(idx / map.W);
-      App.renderer.invalidateCell(x, y);
+    if (App.deferVoidRevert) {
+      // Отложенное применение: сохраняем изменения и показываем кнопку ACCEPT
+      const groundChanges = App.strokeChanges.get('Ground');
+      for (const [idx, c] of groundChanges.entries()) {
+        if (c.before !== c.after) {
+          App.pendingVoidChanges.push({ idx, before: c.before, after: c.after });
+        }
+      }
+      
+      App.updateAcceptWallsVisibility();
+      App.deferVoidRevert = false; // сброс флага
+      
+      // Удаляем Ground из текущего undo, чтобы не дублировалось
+      App.strokeChanges.delete('Ground');
+      
+      if (App.statusEl) App.statusEl.textContent = 'Wall Creator: Нажми ACCEPT для применения';
+    } else {
+      // Старое поведение: откатываем Ground сразу
+      const groundChanges = App.strokeChanges.get('Ground');
+      const groundData = map.layers.Ground;
+      for (const [idx, c] of groundChanges.entries()) {
+        groundData[idx] = c.before;
+        const x = idx % map.W;
+        const y = Math.floor(idx / map.W);
+        App.renderer.invalidateCell(x, y);
+      }
+      App.strokeChanges.delete('Ground');
+      if (App.statusEl) App.statusEl.textContent = 'Wall Creator: Солиды скрыты, края сохранены';
     }
-    
-    // 2. Удаляем изменения Ground из корзины Undo, чтобы они не сохранились
-    App.strokeChanges.delete('Ground');
-    
-    if (App.statusEl) App.statusEl.textContent = 'Wall Creator: Солиды скрыты, края сохранены';
   }
-  // ──────────────────────────────────────────────
 
   const layers = [];
   let total = 0;
@@ -514,12 +534,18 @@ App.floodFill = function(tx, ty, newTile) {
     const map = App.mapModel;
     if (!map || !App.activeLayer) return;
     const data = map.layers[App.activeLayer];
-    const target = data[ty * map.W + tx];
-    if (!target) return;
-    const type = App.typesModel.findBySolid(target);
-    if (!type) { if (App.statusEl) App.statusEl.textContent = 'Tile is not in any Type'; return; }
-    const solidIds = new Set(type.solids.map(s => s.tileID));
-    const newTileId = App.pickWeightedSolid(type);
+    const targetId = data[ty * map.W + tx];
+    if (!targetId) return;
+    
+    const targetType = App.typesModel.findBySolid(targetId);
+    const activeType = App.typesModel.get(App.activeTypeId);
+    
+    if (!targetType || !activeType) { if (App.statusEl) App.statusEl.textContent = 'Type Fill: type not found'; return; }
+    if (targetType.id === activeType.id) { if (App.statusEl) App.statusEl.textContent = 'Type Fill: target and active types match'; return; }
+
+    const solidIds = new Set(targetType.solids.map(s => Number(s.tileID)));
+    const newTileId = App.pickWeightedSolid(activeType);
+
     const stack = [[tx, ty]], seen = new Set(), changes = [];
     while (stack.length) {
       const p = stack.pop();
@@ -533,6 +559,7 @@ App.floodFill = function(tx, ty, newTile) {
     }
     if (!changes.length) return;
     for (const c of changes) data[c.idx] = c.after;
+    
     let minX = map.W, maxX = 0, minY = map.H, maxY = 0;
     for (const c of changes) {
       const x = c.idx % map.W, y = Math.floor(c.idx / map.W);
@@ -777,6 +804,11 @@ App.doUndo = function() {
   if (!App.mapModel || !App.mapModel.canUndo()) { if (App.statusEl) App.statusEl.textContent = 'Nothing to undo'; return; }
   const entry = App.mapModel.undo();
   App.invalidateMarkersCache();
+  
+  // [Patch 0.7.2] Очистка pending при отмене
+  App.pendingVoidChanges = [];
+  if (typeof App.updateAcceptWallsVisibility === 'function') App.updateAcceptWallsVisibility();
+  
   if (entry.type === 'resize') {
     App.renderer.invalidate();
     App.renderer.fitView();
@@ -791,6 +823,11 @@ App.doRedo = function() {
   if (!App.mapModel || !App.mapModel.canRedo()) { if (App.statusEl) App.statusEl.textContent = 'Nothing to redo'; return; }
   const entry = App.mapModel.redo();
   App.invalidateMarkersCache();
+  
+  // [Patch 0.7.2] Очистка pending при повторе
+  App.pendingVoidChanges = [];
+  if (typeof App.updateAcceptWallsVisibility === 'function') App.updateAcceptWallsVisibility();
+  
   if (entry.type === 'resize') {
     App.renderer.invalidate();
     App.renderer.fitView();

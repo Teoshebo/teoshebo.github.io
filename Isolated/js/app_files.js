@@ -273,7 +273,8 @@ App.startMiniTNSImport = function() {
   inp.click();
 };
 
-App.importMiniTNS = async function(file, extraProp, properties) {
+// [Patch 0.7.0] Убран prompt, добавлен defaultName
+App.importMiniTNS = async function(file, extraProp, properties, defaultName) {
   const buf = await file.arrayBuffer();
   const bytes = new Uint8Array(buf);
   const b64 = U.bytesToB64(bytes);
@@ -288,9 +289,10 @@ App.importMiniTNS = async function(file, extraProp, properties) {
   const rows = Math.floor(img.naturalHeight / th);
   if (cols !== 3 || rows !== 5) throw new Error('PNG must be 3×5 tiles');
   const tilecount = 15;
-  const defName = (file.name || 'MiniTNS').replace(/\.png$/i, '');
-  const name = prompt('Tileset name:', defName);
-  if (!name) return;
+  const baseName = (defaultName || (file.name || 'MiniTNS').replace(/\.png$/i, '')).trim();
+  const name = baseName || 'MiniTNS';
+  const typeName = name;
+
   let firstgid = 1;
   for (const ts of App.mapModel.tilesets) {
     const end = ts.firstgid + ts.tilecount;
@@ -309,10 +311,8 @@ App.importMiniTNS = async function(file, extraProp, properties) {
     App.tilesetTabs.activeIdx = App.mapModel.tilesets.indexOf(ts);
     App.tilesetTabs.build();
   }
-  const typeName = prompt('Type name:', defName) || defName;
-  const t = App.typesModel.add(typeName, App.typesModel.types.length);
   
-  // [Patch 0.6.12] Использование Number() для глобального ID
+  const t = App.typesModel.add(typeName, App.typesModel.types.length);
   const g = (local) => Number(firstgid + local);
 
   const isEmpty = (col, row) => {
@@ -333,7 +333,6 @@ App.importMiniTNS = async function(file, extraProp, properties) {
   t.solids = [];
   for (const local of solidLocals) {
     t.solids.push({ tileID: g(local), weight: 1 });
-
     if (properties && Object.keys(properties).length > 0) {
       if (!ts.tiles[local]) ts.tiles[local] = { terrain: null, props: {} };
       if (!ts.tiles[local].props) ts.tiles[local].props = {};
@@ -360,7 +359,7 @@ App.importMiniTNS = async function(file, extraProp, properties) {
     ts._dirty = true;
   }
 
-  App.activeTypeId = t.id;
+  App.setActiveType(t.id);
   if (App.typesPanel) App.typesPanel.build();
   if (App.brushPanel) App.brushPanel.build();
   App.invalidateMarkersCache();

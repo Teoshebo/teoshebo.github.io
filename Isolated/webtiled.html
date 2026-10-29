@@ -67,7 +67,7 @@
       <img class="btn-ic" src="asset/icon/docs.png" data-emoji="📖" alt="">
     </button>
 
-    <span id="appVersion" style="color:#fd4; font-size:11px; margin-left:auto; font-weight:bold">v0.6.12</span>
+    <span id="appVersion" style="color:#fd4; font-size:11px; margin-left:auto; font-weight:bold">v0.7.2</span>
 
     <button id="btnMobileBrush" class="mobile-only" title="Brush tool">
       <span class="mtool-icon">🖌</span>
@@ -84,6 +84,9 @@
     <button id="btnMobileRightPanel" class="mobile-only" title="Panels">☰</button>
     <button id="btnMobileFullscreen" class="mobile-only" title="Fullscreen">⛶</button>
   </div>
+
+  <!-- [Patch 0.7.2] Фикс видимости кнопки ACCEPT -->
+  <button id="btnAcceptWalls" class="hidden" style="display: none; position:absolute; top:60px; left:50%; transform:translateX(-50%); z-index:100; background:#1a3a1a; border:1px solid #6c6; color:#cfc; padding:8px 16px; border-radius:4px; cursor:pointer; font-weight:bold; box-shadow:0 4px 12px rgba(0,0,0,0.5);">ACCEPT</button>
 
   <div id="main">
     <div id="tools"></div>
@@ -154,7 +157,6 @@
     </div>
   </div>
 
-  <!-- [Patch 04.0] стартуем с TYPES → atlases-hidden -->
   <div id="bottom" class="atlases-hidden">
     <div id="bottomGrabber" title="Drag to resize"></div>
     <div id="tsTabs">
@@ -398,7 +400,6 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js"></script>
-
 <script src="js/utils.js"></script>
 <script src="js/tmx.js"></script>
 <script src="js/map.js"></script>
@@ -416,7 +417,6 @@
 <script src="js/merge.js"></script>
 <script src="js/merge_ui.js"></script>
 <script src="js/minitns_lib.js"></script>
-
 <script src="js/app.js"></script>
 <script src="js/app_tools.js"></script>
 <script src="js/app_paint.js"></script>

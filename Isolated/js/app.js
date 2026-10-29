@@ -15,6 +15,7 @@
   App.painting = false; App.strokeChanges = null; App.strokeBound = null;
   App.rectStart = null; App.rectCurrent = null; App.lastPaintKey = null;
   App._pendingImportTilesets = [];
+  App.pendingVoidChanges = []; // [Patch 0.7.2]
 
   // GUIDES
   App.helpers = []; App.activeGuideType = 'line';
@@ -204,6 +205,27 @@
   };
   App.invalidateMarkersCache = function() { App._markersCache = null; };
 
+  App.setActiveType = function(id) {
+    App.activeTypeId = id;
+    const type = App.typesModel.get(id);
+    if (type && type.solids.length && App.renderer && App.mapModel) {
+      const solidId = type.solids[0].tileID;
+      const ts = App.renderer.findTileset(solidId);
+      if (ts) {
+        const idx = App.mapModel.tilesets.indexOf(ts);
+        if (idx >= 0) {
+          if (App.tilesetTabs) {
+            App.tilesetTabs.activeIdx = idx;
+            App.tilesetTabs.build();
+          }
+          if (typeof App.updateBottomTabs === 'function') {
+            App.updateBottomTabs('btnAtlasesTab');
+          }
+        }
+      }
+    }
+  };
+
   // INIT FROM PARSED
   App.initFromParsed = async function(parsed, filename) {
     App.mapModel = new RW.MapModel(parsed);
@@ -233,6 +255,12 @@
     App.classicMaskCache.clear(); App.classicEmptyCache.clear();
     App.activeClassicTerrain = null;
 
+    // [Patch 0.7.2] Очистка pendingVoidChanges при загрузке новой карты
+    App.pendingVoidChanges = [];
+    if (typeof App.updateAcceptWallsVisibility === 'function') {
+      App.updateAcceptWallsVisibility();
+    }
+
     App.typesModel = new RW.TypesModel();
     if (parsed.typesConfigRaw) {
       try { App.typesModel.fromJSON(JSON.parse(parsed.typesConfigRaw)); }
@@ -258,7 +286,7 @@
         getMap: () => App.mapModel, getRenderer: () => App.renderer,
         getBrush: () => App.brushGroup, getBrushSettings: () => App.brushSettings,
         getActiveTool: () => App.activeTool, getTypesModel: () => App.typesModel,
-        getActiveType: () => App.activeTypeId, setActiveType: (id) => { App.activeTypeId = id; },
+        getActiveType: () => App.activeTypeId, setActiveType: (id) => App.setActiveType(id),
         getActiveClassicTerrain: () => App.activeClassicTerrain,
         setActiveClassicTerrain: (anchor) => {
           App.activeClassicTerrain = anchor;
@@ -285,7 +313,7 @@
 
     App.typesPanel = new RW.TypesPanel(App.typesBodyEl, {
       getModel: () => App.typesModel, getActiveType: () => App.activeTypeId,
-      setActiveType: (id) => { App.activeTypeId = id; },
+      setActiveType: (id) => App.setActiveType(id),
       getPickMode: () => App.pickMode,
       startPick: (mode) => App.startPick(mode), endPick: () => App.endPick(),
       findTileset: (id) => App.renderer.findTileset(id),
@@ -327,7 +355,6 @@
     });
   };
 
-  // [Patch 0.6.10] передаём entry.properties третьим аргументом
   App.importMiniTNSFromEntry = async function(entry) {
     if (!App.mapModel) {
       if (App.statusEl) App.statusEl.textContent = 'Сначала открой карту';
@@ -340,7 +367,7 @@
     const blob = new Blob([ab], { type: 'image/png' });
     const file = new File([blob], entry.name + '.png', { type: 'image/png' });
 
-    const newType = await App.importMiniTNS(file, entry.extraProp, entry.properties);
+    const newType = await App.importMiniTNS(file, entry.extraProp, entry.properties, entry.name);
 
     RW.MiniTNSLib.close();
   };

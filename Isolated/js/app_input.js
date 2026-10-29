@@ -76,7 +76,7 @@ if (App.cv) App.cv.addEventListener('pointerdown', (e) => {
 
   if (!App.mapModel) return;
 
-  // [Patch 03.2] GUIDES — перехватываем до проверки activeLayer (guides не зависят от слоя)
+  // GUIDES — перехватываем до проверки activeLayer
   if (App.activeTool === 'guides') {
     App.drawingPointerId = e.pointerId;
     const pos = App.renderer.screenToTile(e.clientX, e.clientY);
@@ -91,7 +91,6 @@ if (App.cv) App.cv.addEventListener('pointerdown', (e) => {
     } else if (App.guideMode === 'select') {
       App.activeGuideNode = null;
 
-      // 1. Поиск узла у выбранной фигуры
       if (App.selectedGuideIdx >= 0 && App.helpers[App.selectedGuideIdx]) {
         const h = App.helpers[App.selectedGuideIdx];
         const hitRadius = 15 / App.renderer.view.zoom;
@@ -120,7 +119,6 @@ if (App.cv) App.cv.addEventListener('pointerdown', (e) => {
         if (App.activeGuideNode) { App.painting = true; App.renderer.render(); return; }
       }
 
-      // 2. Иначе — поиск ближайшей фигуры по bounding box
       App.selectedGuideIdx = -1;
       for (let i = App.helpers.length - 1; i >= 0; i--) {
         const h = App.helpers[i];
@@ -161,6 +159,7 @@ if (App.cv) App.cv.addEventListener('pointerdown', (e) => {
     App.lastPaintKey = tx + ',' + ty;
     App.renderer.render();
   } else if (App.activeTool === 'terrain') {
+    App.deferVoidRevert = e.shiftKey;
     App.painting = true; App.strokeChanges = null;
     App.paintTerrainCells(tx, ty);
     App.lastPaintKey = tx + ',' + ty;
@@ -255,7 +254,6 @@ if (App.cv) App.cv.addEventListener('pointermove', (e) => {
     return;
   }
 
-  // [Patch 03.2] GUIDES — отдельная ветка для create/select-drag
   if (App.activeTool === 'guides' && App.painting) {
     const pos = App.renderer.screenToTile(e.clientX, e.clientY);
     const tx = pos.tx, ty = pos.ty;
@@ -285,7 +283,6 @@ if (App.cv) App.cv.addEventListener('pointermove', (e) => {
           if (App.activeGuideNode === 'br') {
             h.w = tx - h.x; h.h = ty - h.y;
           }
-          // нормализация при отрицательных размерах
           if (h.w < 0) { h.x += h.w; h.w = -h.w; if (App.activeGuideNode === 'tl') App.activeGuideNode = 'tr'; else if (App.activeGuideNode === 'tr') App.activeGuideNode = 'tl'; else if (App.activeGuideNode === 'bl') App.activeGuideNode = 'br'; else if (App.activeGuideNode === 'br') App.activeGuideNode = 'bl'; }
           if (h.h < 0) { h.y += h.h; h.h = -h.h; if (App.activeGuideNode === 'tl') App.activeGuideNode = 'bl'; else if (App.activeGuideNode === 'tr') App.activeGuideNode = 'br'; else if (App.activeGuideNode === 'bl') App.activeGuideNode = 'tl'; else if (App.activeGuideNode === 'br') App.activeGuideNode = 'tr'; }
         } else if (h.type === 'point') {
@@ -345,7 +342,6 @@ if (App.cv) App.cv.addEventListener('pointerup', (e) => {
 
     if (App.painting) {
       if (App.activeTool === 'guides') {
-        // [Patch 03.2] создание финала через addGuideWithSymmetry
         if (App.guideMode === 'create' && App.guideDrawStart && App.guideDrawCurrent) {
           const start = App.guideDrawStart;
           const end = App.guideDrawCurrent;
@@ -474,7 +470,10 @@ window.addEventListener('keydown', (e) => {
 
   if (e.key === 'Escape') { if (App.pickMode) { App.endPick(); return; } }
 
-  // [Patch 03.2] Delete/Backspace — удалить выбранный guide
+  if (e.key === 'Shift' && App.activeTool === 'terrain') {
+    App.updateAcceptWallsVisibility();
+  }
+
   if ((e.code === 'Delete' || e.code === 'Backspace') && App.activeTool === 'guides' && App.selectedGuideIdx >= 0) {
     e.preventDefault();
     App.removeGuide(App.selectedGuideIdx);
@@ -516,6 +515,11 @@ window.addEventListener('keydown', (e) => {
 
 window.addEventListener('keyup', (e) => {
   if (App.pressedKeys) App.pressedKeys.delete(e.code);
+  
+  if (e.key === 'Shift' && App.activeTool === 'terrain') {
+    App.updateAcceptWallsVisibility();
+  }
+
   if (e.code === 'KeyW' || e.code === 'KeyA' || e.code === 'KeyS' || e.code === 'KeyD') {
     App.stopPanKey(e.code);
   }

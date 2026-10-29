@@ -9,9 +9,6 @@ function terrainColorCss(idx, alpha) {
   return 'hsla(' + terrainHue(idx) + ', 75%, 55%, ' + alpha + ')';
 }
 
-// ═══════════════════════════════════════════════
-// LAYERS
-// ═══════════════════════════════════════════════
 class LayersPanel {
   constructor(el, ctx) {
     this.el = el;
@@ -322,9 +319,6 @@ class LayersPanel {
   }
 }
 
-// ═══════════════════════════════════════════════
-// BRUSH PANEL
-// ═══════════════════════════════════════════════
 class BrushPanel {
   constructor(opts) {
     this.listEl = opts.listEl;
@@ -350,7 +344,9 @@ class BrushPanel {
     const isTNS = (tool === 'terrain');
     const isDefault = !isClassic && !isTNS;
 
+    // [Patch 0.7.0] Панель настроек всегда видима
     if (this.settingsEl) this.settingsEl.style.display = '';
+    
     if (this.listEl) this.listEl.style.display = isDefault ? '' : 'none';
     if (this.totalEl) this.totalEl.style.display = isDefault ? '' : 'none';
     if (this.classicPanelEl) this.classicPanelEl.style.display = isClassic ? '' : 'none';
@@ -597,6 +593,7 @@ class BrushPanel {
     for (const t of sorted) {
       const row = document.createElement('div');
       row.className = 'tns-row' + (t.id === activeTypeId ? ' active' : '');
+      if (t._missingTiles) row.classList.add('missing-tiles'); // [Patch 0.7.0]
 
       const cnv = document.createElement('canvas');
       cnv.className = 'tns-preview';
@@ -649,9 +646,6 @@ class BrushPanel {
   }
 }
 
-// ═══════════════════════════════════════════════
-// TILESET TABS  [Patch 03.6: arrows + dropdown]
-// ═══════════════════════════════════════════════
 class TilesetTabs {
   constructor(tabsListEl, bodyEl, bottomEl, ctx) {
     this.tabsListEl = tabsListEl;
@@ -688,7 +682,7 @@ class TilesetTabs {
 
     if (this.activeIdx < 0 || this.activeIdx >= map.tilesets.length) this.activeIdx = 0;
 
-    // 1. Блок навигации (стрелки + список)
+    // 1. Блок навигации (Стрелки + Список)
     const navWrap = document.createElement('div');
     navWrap.style.display = 'flex';
     navWrap.style.alignItems = 'center';
@@ -836,6 +830,40 @@ class TilesetTabs {
             if (map.redoStack) map.redoStack.length = 0;
           }
         }
+      }
+
+      // [Patch 0.7.0] Чистка типов при удалении атласа
+      const { firstgid, tilecount } = ts;
+      const minId = firstgid;
+      const maxIdEdge = firstgid + tilecount - 1;
+      const toRemove = [];
+
+      for (const t of RW.App.typesModel.types) {
+        const beforeSolids = t.solids.length;
+        t.solids = t.solids.filter(s => Number(s.tileID) < minId || Number(s.tileID) > maxIdEdge);
+        
+        for (const role in t.edges) {
+          const eid = Number(t.edges[role]);
+          if (eid >= minId && eid <= maxIdEdge) t.edges[role] = 0;
+        }
+
+        if (t.solids.length === 0) {
+          toRemove.push(t.id);
+        } else if (t.solids.length !== beforeSolids) {
+          t._missingTiles = true;
+        }
+      }
+
+      for (const id of toRemove) {
+        RW.App.typesModel.remove(id);
+      }
+      
+      // Если активный тип удален, переключаем на первый доступный
+      if (toRemove.includes(RW.App.activeTypeId)) {
+        const next = RW.App.typesModel.types.length ? RW.App.typesModel.types[0].id : null;
+        RW.App.setActiveType(next);
+      } else if (RW.App.typesPanel) {
+        RW.App.typesPanel.build();
       }
 
       if (typeof map.removeTileset === 'function') {

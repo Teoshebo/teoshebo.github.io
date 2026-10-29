@@ -140,7 +140,6 @@ App.handleToolClick = function(id) {
 
   if (id === 'utils') { App.openUtilityModal(); return; }
 
-  // [Patch 02.2] показать/скрыть панель GUIDES
   if (id === 'guides') {
     if (typeof App.showGuidesPanel === 'function') App.showGuidesPanel();
   } else {
@@ -165,6 +164,11 @@ App.handleToolClick = function(id) {
   App.updateMobileBrushBtn();
   App.checkTNSLayerWarning();
   App.autoSwitchBottomTabForTool(id);
+
+  // [Patch 0.7.1] Обновляем видимость кнопки ACCEPT
+  if (typeof App.updateAcceptWallsVisibility === 'function') {
+    App.updateAcceptWallsVisibility();
+  }
 };
 
 App.openToolPicker = function() {
