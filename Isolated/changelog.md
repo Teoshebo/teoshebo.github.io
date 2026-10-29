@@ -66,8 +66,3 @@ Format: patch-level entries under each version line.
 - **`app_files.js` → `importMiniTNS`**: при наличии 5-го параметра назначает краевым тайлам это свойство и ставит `edgeLayer = 'Items'`.
 - **`app_paint.js` / `hm_apply.js`**: обновлены вызовы `generateRect` под новый формат (group-by-layer для Undo).
 
-### Пи-3 — Фиксы
-- **`mirrorMap`** — защита от порчи `Items0`.
-- **`HM.commitToUndo`** — поддержка мульти-слоя.
-- **Classic-merge** — сохранение самого раннего `before`.
-- **`resolveEdge`** — оптимизация, передача `best`.
