@@ -3,7 +3,7 @@
 const App = RW.App;
 
 // ═══════════════════════════════════════════════
-// CLASSIC AUTOTILE (без изменений)
+// CLASSIC AUTOTILE
 // ═══════════════════════════════════════════════
 App.resolveClassicAnchor = function() {
   if (!App.activeClassicTerrain || !App.mapModel) return null;
@@ -135,7 +135,6 @@ App.expandStrokeBound = function(tx, ty) {
   }
 };
 
-// [Patch 04.3 / 04.4] — routing по типу края, resolveEdge сам обработает солиды
 App.updateTNSEdgesAround = function(tx, ty) {
   if (!App.generator || !App.mapModel) return;
   for (let dy = -1; dy <= 1; dy++) {
@@ -421,7 +420,6 @@ App.finalizeClassicForStroke = function() {
   }
 };
 
-// [Patch 04.3] — генератор уже применил изменения, здесь только запись в undo
 App.finalizeAutotileForStroke = function() {
   if (!App.generator || !App.strokeBound) return;
   const b = App.strokeBound;
@@ -818,7 +816,7 @@ App.invalidateEntry = function(entry) {
   }
 };
 
-// [Patch 02.6 + 04.3] MIRROR MAP
+// MIRROR MAP
 App.mirrorMap = function(mode, layersToMirror) {
   const map = App.mapModel;
   if (!map) return;
