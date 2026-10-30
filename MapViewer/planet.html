@@ -74,9 +74,9 @@
 <script>
 (function(){
   'use strict';
-  const mapCanvas = document.getElementById('mapCanvas');
+  const canvas = document.getElementById('mapCanvas');
+  const mapCtx = canvas.getContext('2d');
   const vecCanvas = document.getElementById('vectorCanvas');
-  const mapCtx = mapCanvas.getContext('2d');
   const vecCtx = vecCanvas.getContext('2d');
   
   const backdrop = document.getElementById('backdrop');
@@ -144,12 +144,17 @@
   }
 
   let isDragging = false, dragLastX = 0, dragLastY = 0, dragDist = 0;
-  const canvas = document.getElementById('mapCanvas');
   canvas.addEventListener('pointerdown', (e) => { canvas.setPointerCapture(e.pointerId); isDragging = true; dragLastX = e.clientX; dragLastY = e.clientY; dragDist = 0; });
   canvas.addEventListener('pointermove', (e) => {
     if (!isDragging) return;
     const dx = e.clientX - dragLastX, dy = e.clientY - dragLastY; dragDist += Math.abs(dx) + Math.abs(dy);
-    if (cam.mode === '3d') { cam.planetRotX -= dy * 0.005; cam.planetRotY += dx * 0.005; } else { cam.offsetX += dx; cam.offsetY += dy; }
+    if (cam.mode === '3d') { 
+      // ИСПРАВЛЕНО: Инвертированное управление
+      cam.planetRotX += dy * 0.005; 
+      cam.planetRotY -= dx * 0.005; 
+    } else { 
+      cam.offsetX += dx; cam.offsetY += dy; 
+    }
     dragLastX = e.clientX; dragLastY = e.clientY; render();
   });
   canvas.addEventListener('pointerup', () => { isDragging = false; });
@@ -181,7 +186,6 @@
   function openPopup(m) {
     document.getElementById('popupName').textContent = m.name || 'Без названия';
     
-    // Выводим размер в тайлах, если есть
     if (m.tw && m.th) document.getElementById('popupSize').textContent = `${m.tw}x${m.th} тайлов`;
     else document.getElementById('popupSize').textContent = `${m.w}x${m.h} px`;
 
