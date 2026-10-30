@@ -1,5 +1,5 @@
 /**
- * vector_editor.js — Векторный слой (Фон, Полигоны, Маркеры, Рука, 3D)
+ * vector_editor.js — Векторный слой (Без фона, только полигоны и маркеры)
  */
 (function(global) {
   'use strict';
@@ -39,21 +39,10 @@
     ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
     if (cam.mode !== '2d') return;
 
-    // 1. Фон
-    const tex = state.imageCache && state.imageCache.get('planet_tex');
-    if (tex && tex._ready) {
-      const sx = 0 * cam.scale + cam.offsetX;
-      const sy = 0 * cam.scale + cam.offsetY;
-      ctx.drawImage(tex, sx, sy, world.planet.widthPx * cam.scale, world.planet.heightPx * cam.scale);
-    } else {
-      ctx.fillStyle = '#0b1020';
-      ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-    }
-
-    // 2. Сетка
+    // 1. Сетка
     if (cam.scale > 0.003) drawWorldGrid2D(ctx, cam, world);
 
-    // 3. Полигоны
+    // 2. Полигоны
     if (world.polygons) {
       for (const poly of world.polygons) {
         if (!poly.points || poly.points.length < 2) continue;
@@ -82,7 +71,7 @@
       }
     }
 
-    // 4. Маркеры
+    // 3. Маркеры
     if (world.markers) {
       for (const m of world.markers) {
         const p = PlanetCamera.toScreen(cam, m.x, m.y);
@@ -97,7 +86,7 @@
       }
     }
 
-    // 5. Текущий путь
+    // 4. Текущий путь
     if (currentPath.length > 0) {
       ctx.beginPath();
       const p0 = PlanetCamera.toScreen(cam, currentPath[0].x, currentPath[0].y);
@@ -113,7 +102,7 @@
       }
     }
 
-    // 6. Точки вершин
+    // 5. Точки вершин
     if (mode === 'edit' && world.polygons) {
       for (const poly of world.polygons) {
         for (const pt of poly.points) {
