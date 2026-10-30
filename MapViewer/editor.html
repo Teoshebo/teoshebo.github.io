@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>WebTiled Planet — Editor v1.4</title>
+<title>WebTiled Planet — Editor v1.5</title>
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
   html, body { height:100%; overflow:hidden; background:#0b1020; color:#fff; font-family:'Segoe UI',system-ui,sans-serif; user-select:none; }
@@ -286,7 +286,6 @@
         VectorEditor.render(vecCtx, cam, world, state);
         PlanetView.renderMaps(mapCtx, cam, world, state);
       } else {
-        // В 3D режиме очищаем нижний слой и рисуем всё на верхнем (чтобы вектор был поверх)
         vecCtx.clearRect(0, 0, vecCanvas.width, vecCanvas.height);
         PlanetView.renderMaps(mapCtx, cam, world, state);
         VectorEditor.render3D(mapCtx, cam, world, state); 
@@ -412,8 +411,9 @@
 
     if (action === 'pan') {
       if (cam.mode === '3d') {
-        cam.planetRotX -= (p.y - dragLastY) * 0.005;
-        cam.planetRotY += (p.x - dragLastX) * 0.005;
+        // ИСПРАВЛЕНО: Инвертированное управление
+        cam.planetRotX += (p.y - dragLastY) * 0.005;
+        cam.planetRotY -= (p.x - dragLastX) * 0.005;
       } else {
         PlanetCamera.panBy(cam, p.x - dragLastX, p.y - dragLastY);
       }
