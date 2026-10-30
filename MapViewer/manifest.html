@@ -52,7 +52,7 @@
       
       pending++;
       
-      // 1. Сначала пытаемся прочитать размер из TMX
+      // Парсим TMX на размеры
       if (g.tmx) {
         const reader = new FileReader();
         reader.onload = (e) => {
@@ -69,7 +69,6 @@
         };
         reader.readAsText(g.tmx);
       } 
-      // 2. Если TMX нет, читаем PNG
       else if (g.png) {
         const img = new Image();
         img.onload = () => { m.w = img.naturalWidth; m.h = img.naturalHeight; m.status = 'OK (PNG)'; pending--; updateUI(); };
