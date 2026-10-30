@@ -7,44 +7,61 @@
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
   html, body { height:100%; overflow:hidden; background:#000; color:#fff; font-family:'Segoe UI',system-ui,sans-serif; user-select:none; }
-  canvas { position:absolute; inset:0; display:block; width:100%; height:100%; cursor: grab; }
-  canvas:active { cursor: grabbing; }
+  
+  #vectorCanvas { position:absolute; inset:0; display:block; z-index: 1; pointer-events: none; }
+  #mapCanvas { position:absolute; inset:0; display:block; z-index: 2; cursor: grab; background: transparent; }
+  #mapCanvas:active { cursor: grabbing; }
+  
   #ui { position:absolute; inset:0; z-index:10; pointer-events:none; }
   #ui > * { pointer-events:auto; }
+  
   .panel { position:absolute; background:rgba(20,20,30,0.85); backdrop-filter:blur(12px); border:1px solid rgba(255,255,255,0.1); border-radius:12px; padding:12px; font-size:14px; }
+  
   #header { top:20px; left:20px; }
   #header h1 { font-size:20px; font-weight:800; background:linear-gradient(135deg,#7c5cfc,#a07cff); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
-  #viewToggle { top:20px; right:20px; display:flex; gap:4px; padding:4px; }
-  .btn { background:transparent; border:none; color:#b0b0d0; padding:8px 16px; border-radius:8px; font-weight:600; font-size:13px; cursor:pointer; transition:0.2s; }
-  .btn:hover { background:rgba(255,255,255,0.1); color:#fff; }
+  
+  #viewToggle { top:20px; right:20px; display:flex; gap:4px; padding:4px; flex-wrap: wrap; justify-content: flex-end; max-width: 200px; }
+  .btn { background:rgba(60,60,80,0.9); border:none; color:#b0b0d0; padding:8px 12px; border-radius:8px; font-weight:600; font-size:12px; cursor:pointer; transition:0.2s; }
+  .btn:hover { background:rgba(90,90,120,0.9); color:#fff; }
   .btn.active { background:#7c5cfc; color:#fff; }
+  
   #searchBar { bottom:20px; left:50%; transform:translateX(-50%); width:300px; display:flex; gap:8px; padding:6px 12px; border-radius:30px; }
   #searchInput { flex:1; background:transparent; border:none; color:#fff; font-size:14px; outline:none; }
-  #mapPopup { position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); width:320px; background:rgba(25,25,35,0.95); backdrop-filter:blur(16px); border:1px solid rgba(255,255,255,0.15); border-radius:16px; padding:20px; display:none; flex-direction:column; gap:12px; box-shadow:0 16px 64px rgba(0,0,0,0.8); }
+  
+  #mapPopup { position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); width:320px; background:rgba(25,25,35,0.95); backdrop-filter:blur(16px); border:1px solid rgba(255,255,255,0.15); border-radius:16px; padding:20px; display:none; flex-direction:column; gap:12px; box-shadow:0 16px 64px rgba(0,0,0,0.8); z-index: 100; }
   #mapPopup img { width:100%; height:160px; object-fit:cover; border-radius:8px; background:#000; border:1px solid #333; }
   #mapPopup h2 { font-size:18px; font-weight:700; }
   .meta { font-size:12px; color:#888; display:flex; justify-content:space-between; }
   .actions { display:flex; gap:8px; margin-top:8px; }
   .btn-primary { background:#7c5cfc; color:#fff; border:none; padding:10px; border-radius:8px; font-weight:700; cursor:pointer; flex:1; text-align:center; text-decoration:none; transition:0.2s; }
   .btn-close { background:rgba(255,255,255,0.1); color:#fff; border:none; padding:10px; border-radius:8px; font-weight:700; cursor:pointer; transition:0.2s; }
-  .backdrop { position:absolute; inset:0; background:rgba(0,0,0,0.6); display:none; z-index:5; }
+  
+  .backdrop { position:absolute; inset:0; background:rgba(0,0,0,0.5); display:none; z-index: 90; }
 </style>
 </head>
 <body>
-<canvas id="canvasEl"></canvas>
+<canvas id="vectorCanvas"></canvas>
+<canvas id="mapCanvas"></canvas>
+
 <div id="ui">
-  <div class="panel" id="header"><h1>ТЕОНЕТ</h1><p style="color:#888; font-size:12px;">Карта мира Arasida</p></div>
+  <div class="panel" id="header"><h1>ТЕОНЕТ</h1><p style="color:#888; font-size:12px;">Карта мира</p></div>
+  
   <div class="panel" id="viewToggle">
     <button class="btn active" id="btn3d">3D Шар</button>
     <button class="btn" id="btn2d">2D Карта</button>
+    <button class="btn active" id="toggleBg" title="Показать/скрыть фон">Фон</button>
+    <button class="btn active" id="toggleVec" title="Показать/скрыть вектор">Вектор</button>
   </div>
+
   <div class="panel" id="searchBar">
     <span style="color:#888;">🔍</span><input type="text" id="searchInput" placeholder="Поиск карты...">
   </div>
+
   <div class="backdrop" id="backdrop"></div>
+
   <div id="mapPopup">
     <img id="popupImg" src="" alt="Map Preview">
-    <div><h2 id="popupName">Название</h2><div class="meta"><span>Регион: <span id="popupRegion">—</span></span><span id="popupSize">2000x2000</span></div></div>
+    <div><h2 id="popupName">Название</h2><div class="meta"><span>Регион: <span id="popupRegion">—</span></span><span id="popupSize">0x0</span></div></div>
     <div class="actions"><a href="#" target="_blank" id="popupDownload" class="btn-primary">Скачать .tmx</a><button class="btn-close" id="popupClose">✕</button></div>
   </div>
 </div>
@@ -52,11 +69,16 @@
 <script src="js/planet_core.js"></script>
 <script src="js/planet_camera.js"></script>
 <script src="js/planet_view.js"></script>
+<script src="js/vector_editor.js"></script>
+
 <script>
 (function(){
   'use strict';
-  const canvas = document.getElementById('canvasEl');
-  const ctx = canvas.getContext('2d');
+  const mapCanvas = document.getElementById('mapCanvas');
+  const vecCanvas = document.getElementById('vectorCanvas');
+  const mapCtx = mapCanvas.getContext('2d');
+  const vecCtx = vecCanvas.getContext('2d');
+  
   const backdrop = document.getElementById('backdrop');
   const popup = document.getElementById('mapPopup');
 
@@ -64,7 +86,10 @@
   const cam = PlanetCamera.createCamera(world);
   cam.mode = '3d'; cam.scale = 2.5; 
 
-  const state = { imageCache: new Map(), guides: [], lod: null };
+  const state = { 
+    imageCache: new Map(), guides: [], lod: null,
+    showBackground: true, showVectors: true 
+  };
 
   function init() {
     resize();
@@ -92,16 +117,34 @@
     img.src = url; state.imageCache.set(id, img);
   }
 
-  function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; PlanetCamera.setViewport(cam, canvas.width, canvas.height); render(); }
+  function resize() { 
+    canvas.width = window.innerWidth; canvas.height = window.innerHeight; 
+    vecCanvas.width = canvas.width; vecCanvas.height = canvas.height;
+    PlanetCamera.setViewport(cam, canvas.width, canvas.height); render(); 
+  }
   window.addEventListener('resize', resize);
 
   let rafPending = false;
   function render() {
     if (rafPending) return; rafPending = true;
-    requestAnimationFrame(() => { rafPending = false; state.lod = PlanetView.getLODLevel(cam.scale); PlanetView.renderMaps(ctx, cam, world, state); });
+    requestAnimationFrame(() => { 
+      rafPending = false; 
+      state.lod = PlanetView.getLODLevel(cam.scale); 
+      
+      if (cam.mode === '2d') {
+        if (state.showVectors) VectorEditor.render(vecCtx, cam, world, state);
+        else vecCtx.clearRect(0, 0, vecCanvas.width, vecCanvas.height);
+        PlanetView.renderMaps(mapCtx, cam, world, state);
+      } else {
+        vecCtx.clearRect(0, 0, vecCanvas.width, vecCanvas.height);
+        PlanetView.renderMaps(mapCtx, cam, world, state);
+        if (state.showVectors) VectorEditor.render3D(mapCtx, cam, world, state); 
+      }
+    });
   }
 
   let isDragging = false, dragLastX = 0, dragLastY = 0, dragDist = 0;
+  const canvas = document.getElementById('mapCanvas');
   canvas.addEventListener('pointerdown', (e) => { canvas.setPointerCapture(e.pointerId); isDragging = true; dragLastX = e.clientX; dragLastY = e.clientY; dragDist = 0; });
   canvas.addEventListener('pointermove', (e) => {
     if (!isDragging) return;
@@ -137,7 +180,11 @@
 
   function openPopup(m) {
     document.getElementById('popupName').textContent = m.name || 'Без названия';
-    document.getElementById('popupSize').textContent = `${m.w}x${m.h}`;
+    
+    // Выводим размер в тайлах, если есть
+    if (m.tw && m.th) document.getElementById('popupSize').textContent = `${m.tw}x${m.th} тайлов`;
+    else document.getElementById('popupSize').textContent = `${m.w}x${m.h} px`;
+
     let regName = 'Неизвестно';
     if (m.regionId && world.regions) { const reg = world.regions.find(r => r.id === m.regionId); if (reg) regName = reg.name; }
     document.getElementById('popupRegion').textContent = regName;
@@ -160,6 +207,9 @@
   document.getElementById('btn3d').onclick = () => { cam.mode = '3d'; document.getElementById('btn3d').classList.add('active'); document.getElementById('btn2d').classList.remove('active'); render(); };
   document.getElementById('btn2d').onclick = () => { cam.mode = '2d'; document.getElementById('btn2d').classList.add('active'); document.getElementById('btn3d').classList.remove('active'); render(); };
 
+  document.getElementById('toggleBg').onclick = function() { state.showBackground = !state.showBackground; this.classList.toggle('active'); render(); };
+  document.getElementById('toggleVec').onclick = function() { state.showVectors = !state.showVectors; this.classList.toggle('active'); render(); };
+
   document.getElementById('searchInput').addEventListener('change', (e) => {
     const q = e.target.value.toLowerCase(); if (!q) return;
     const m = world.maps.find(map => map.name.toLowerCase().includes(q));
@@ -168,6 +218,7 @@
       else { openPopup(m); }
     }
   });
+
   init();
 })();
 </script>
