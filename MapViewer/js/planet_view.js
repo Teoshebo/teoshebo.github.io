@@ -1,10 +1,11 @@
 /**
- * planet_view.js — рендер (только карты и связи)
+ * planet_view.js — рендер (LOD, сфера, фон)
  */
 (function(global) {
   'use strict';
 
-  const LOD = { PLANET: 0.002, REGION: 0.01, DOT: 0.05 };
+  // LOD пороги (REGION сдвинут в 5 раз дальше)
+  const LOD = { PLANET: 0.0004, REGION: 0.002, DOT: 0.05 };
   const HYSTERESIS = 0.15;
   let _lastLod = null;
   const ORDER = ['planet', 'region', 'dot', 'thumb'];
@@ -31,7 +32,7 @@
     const lod = state.lod || getLODLevel(cam.scale);
     const view = PlanetCamera.getVisibleBounds(cam);
 
-    if (lod === 'dot' || lod === 'thumb') renderLinks2D(ctx, cam, world);
+    if (state.showVectors !== false && (lod === 'dot' || lod === 'thumb')) renderLinks2D(ctx, cam, world);
     renderRegions2D(ctx, cam, world, view, lod);
 
     const maps = PlanetCore.sortMapsByZ(world.maps);
@@ -129,22 +130,30 @@
     ctx.save();
     ctx.beginPath(); ctx.arc(cx, cy, radius, 0, 2*Math.PI); ctx.clip();
     
-    // Текстура вращается вместе с камерой
+    // 1. Фон планеты (натянутая текстура)
     const tex = state.imageCache && state.imageCache.get('planet_tex');
-    if (tex && tex._ready) {
+    if (state.showBackground !== false && tex && tex._ready) {
+      ctx.save();
       ctx.translate(cx, cy);
+      const texW = tex.width, texH = tex.height;
+      const scaleToFit = Math.max((radius*2)/texW, (radius*2)/texH);
       ctx.rotate(-cam.planetRotY);
-      ctx.drawImage(tex, -radius*1.5, -radius*1.5, radius*3, radius*3);
+      ctx.scale(scaleToFit, scaleToFit);
+      ctx.drawImage(tex, -texW/2, -texH/2);
+      ctx.restore();
     } else {
       ctx.fillStyle = '#1E90FF'; ctx.fillRect(cx - radius, cy - radius, radius*2, radius*2);
     }
 
-    // Сферическое затенение
+    // 2. Сферическое затенение (объем)
     const shadeGrad = ctx.createRadialGradient(cx - radius*0.3, cy - radius*0.3, radius*0.1, cx, cy, radius);
-    shadeGrad.addColorStop(0, 'rgba(255,255,255,0.4)'); shadeGrad.addColorStop(0.5, 'rgba(0,0,0,0)'); shadeGrad.addColorStop(1, 'rgba(0,0,0,0.9)');
+    shadeGrad.addColorStop(0, 'rgba(255,255,255,0.3)'); 
+    shadeGrad.addColorStop(0.5, 'rgba(0,0,0,0)'); 
+    shadeGrad.addColorStop(1, 'rgba(0,0,0,0.85)');
     ctx.fillStyle = shadeGrad; ctx.fillRect(cx - radius, cy - radius, radius*2, radius*2);
     ctx.restore();
 
+    // 3. Контур
     ctx.beginPath(); ctx.arc(cx, cy, radius, 0, 2*Math.PI);
     ctx.strokeStyle = '#87CEFA'; ctx.lineWidth = 3; ctx.shadowColor = '#87CEFA'; ctx.shadowBlur = 15; ctx.stroke(); ctx.shadowBlur = 0;
 
