@@ -91,19 +91,57 @@
     showBackground: true, showVectors: true 
   };
 
+  // ПАРСЕР ВНЕШНЕГО ФАЙЛА
+  async function loadExternalManifest() {
+    const url = 'https://raw.githubusercontent.com/Teoshebo/maps/refs/heads/main/rep.txt';
+    try {
+      const response = await fetch(url);
+      if (!response.ok) throw new Error('Network response was not ok');
+      const text = await response.text();
+      const lines = text.split('\n');
+      const maps = [];
+      
+      for (let line of lines) {
+        line = line.trim();
+        if (!line || line.startsWith('#')) continue;
+        const parts = line.split('|');
+        if (parts.length >= 4) {
+          maps.push({
+            id: parts[0].trim(), name: parts[1].trim(),
+            pngUrl: parts[2].trim(), tmxUrl: parts[3].trim(),
+            w: parseInt(parts[4]) || 2000, h: parseInt(parts[5]) || 2000
+          });
+        }
+      }
+      return { format: 'webtiled-manifest', version: 1, maps };
+    } catch (err) {
+      console.error('Ошибка загрузки внешнего манифеста:', err);
+      return null;
+    }
+  }
+
   function init() {
     resize();
     Promise.all([
       fetch('data/world.json').then(r => r.ok ? r.json() : null).catch(() => null),
-      fetch('data/maps_manifest.json').then(r => r.ok ? r.json() : null).catch(() => null)
+      loadExternalManifest()
     ]).then(([wdata, manifest]) => {
       if (wdata) {
         world = PlanetCore.loadWorld(wdata);
         cam.worldW = world.planet.widthPx; cam.worldH = world.planet.heightPx;
         if (world.planet.textureUrl) ensureImage('planet_tex', world.planet.textureUrl);
       }
-      if (manifest && manifest.maps) for (const entry of manifest.maps) if (entry.id && entry.pngUrl) ensureImage(entry.id, entry.pngUrl);
-      for (const m of world.maps) if (m.id && m.pngUrl) ensureImage(m.id, m.pngUrl);
+      
+      // Подгружаем картинки из внешнего манифеста
+      if (manifest && manifest.maps) {
+        for (const entry of manifest.maps) {
+          if (entry.id && entry.pngUrl) ensureImage(entry.id, entry.pngUrl);
+        }
+      }
+      // И те, что уже размещены на карте (world.json)
+      for (const m of world.maps) {
+        if (m.id && m.pngUrl) ensureImage(m.id, m.pngUrl);
+      }
       
       PlanetCamera.fitBounds(cam, { x1: 0, y1: 0, x2: cam.worldW, y2: cam.worldH }, 50);
       render();
@@ -149,7 +187,6 @@
     if (!isDragging) return;
     const dx = e.clientX - dragLastX, dy = e.clientY - dragLastY; dragDist += Math.abs(dx) + Math.abs(dy);
     if (cam.mode === '3d') { 
-      // ИСПРАВЛЕНО: Инвертированное управление
       cam.planetRotX += dy * 0.005; 
       cam.planetRotY -= dx * 0.005; 
     } else { 
@@ -186,6 +223,7 @@
   function openPopup(m) {
     document.getElementById('popupName').textContent = m.name || 'Без названия';
     
+    // Размер в тайлах
     if (m.tw && m.th) document.getElementById('popupSize').textContent = `${m.tw}x${m.th} тайлов`;
     else document.getElementById('popupSize').textContent = `${m.w}x${m.h} px`;
 
