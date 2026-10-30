@@ -4,36 +4,94 @@
 <meta charset="UTF-8">
 <title>Генератор манифеста</title>
 <style>
-  body { background:#0a0a12; color:#fff; font-family:sans-serif; padding:40px; display:flex; justify-content:center; }
+  body { background:#0a0a12; color:#fff; font-family:'Segoe UI',system-ui,sans-serif; padding:40px; display:flex; justify-content:center; margin: 0; }
   .box { width:100%; max-width:800px; background:rgba(20,20,30,0.9); border:1px solid #333; border-radius:16px; padding:30px; }
-  .dropzone { border:2px dashed #7c5cfc; border-radius:12px; padding:40px; text-align:center; cursor:pointer; background:rgba(124,92,252,0.05); margin-bottom:20px; }
-  .dropzone:hover { background:rgba(124,92,252,0.15); }
-  .config { display:flex; gap:10px; margin-bottom:20px; }
-  .config input { flex:1; padding:10px; border-radius:8px; border:1px solid #444; background:#000; color:#fff; }
+  h1 { font-size: 24px; margin-bottom: 10px; background: linear-gradient(135deg,#7c5cfc,#a07cff); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+  p { color:#888; margin-bottom:20px; font-size: 14px; }
+  .dropzone { border:2px dashed #7c5cfc; border-radius:12px; padding:40px; text-align:center; cursor:pointer; background:rgba(124,92,252,0.05); margin-bottom:20px; transition: 0.2s; }
+  .dropzone:hover, .dropzone.dragover { background:rgba(124,92,252,0.15); border-color: #a07cff; }
+  .config { display:flex; gap:10px; margin-bottom:20px; align-items: center; }
+  .config label { font-size: 13px; color: #b0b0d0; white-space: nowrap; }
+  .config input { flex:1; padding:10px; border-radius:8px; border:1px solid #444; background:#000; color:#fff; outline: none; }
+  .config input:focus { border-color: #7c5cfc; }
   table { width:100%; border-collapse:collapse; margin-bottom:20px; display:none; }
   th, td { padding:10px; border-bottom:1px solid #333; text-align:left; font-size:13px; }
-  th { color:#888; }
-  .btn { background:#7c5cfc; color:#fff; border:none; padding:12px; border-radius:8px; font-weight:bold; cursor:pointer; width:100%; }
+  th { color:#888; background: rgba(0,0,0,0.3); position: sticky; top: 0; }
+  .btn { background:#7c5cfc; color:#fff; border:none; padding:12px; border-radius:8px; font-weight:bold; cursor:pointer; width:100%; transition: 0.2s; font-size: 14px; }
+  .btn:hover { background: #a07cff; }
   .btn:disabled { opacity:0.5; cursor:not-allowed; }
+  .status-ok { color: #4caf50; }
+  .status-err { color: #f44336; }
+  .status-warn { color: #ff9800; }
 </style>
 </head>
 <body>
 <div class="box">
   <h1>Генератор манифеста</h1>
-  <p style="color:#888; margin-bottom:20px;">Перетащи PNG и TMX файлы, укажи базовый путь и скачай JSON.</p>
-  <div class="dropzone" id="dropzone">Перетащите файлы сюда<br><small>или нажмите</small><input type="file" id="fileInput" multiple hidden></div>
-  <div class="config"><input type="text" id="basePath" value="assets/TCW-Arasida/"></div>
-  <table id="listTable"><thead><tr><th>ID / Название</th><th>Размер</th><th>Статус</th></tr></thead><tbody id="tbody"></tbody></table>
+  <p>Перетащи PNG и TMX файлы. Скрипт прочитает реальный размер карты из TMX, возьмет длинную сторону и подгонит под неё пропорции превью.</p>
+  
+  <div class="dropzone" id="dropzone">
+    <b>Перетащите файлы сюда</b><br><small>или нажмите для выбора</small>
+    <input type="file" id="fileInput" multiple accept=".png,.tmx" hidden>
+  </div>
+
+  <div class="config">
+    <label>Базовый путь:</label>
+    <input type="text" id="basePath" value="assets/TCW-Arasida/" placeholder="assets/folder/">
+  </div>
+
+  <div style="max-height: 400px; overflow-y: auto; margin-bottom: 20px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);">
+    <table id="listTable">
+      <thead><tr><th>ID / Название</th><th>Размер (WxH)</th><th>Статус</th></tr></thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
+
   <button class="btn" id="downloadBtn" disabled>Скачать maps_manifest.json</button>
 </div>
 <script>
   let parsed = [], pending = 0;
   const dropzone = document.getElementById('dropzone'), fileInput = document.getElementById('fileInput'), tbody = document.getElementById('tbody'), table = document.getElementById('listTable');
+  
   dropzone.onclick = () => fileInput.click();
-  dropzone.ondragover = (e) => { e.preventDefault(); dropzone.style.borderColor = '#a07cff'; };
-  dropzone.ondragleave = () => { dropzone.style.borderColor = '#7c5cfc'; };
-  dropzone.ondrop = (e) => { e.preventDefault(); dropzone.style.borderColor = '#7c5cfc'; handle(e.dataTransfer.files); };
+  dropzone.ondragover = (e) => { e.preventDefault(); dropzone.classList.add('dragover'); };
+  dropzone.ondragleave = () => { dropzone.classList.remove('dragover'); };
+  dropzone.ondrop = (e) => { e.preventDefault(); dropzone.classList.remove('dragover'); handle(e.dataTransfer.files); };
   fileInput.onchange = (e) => handle(e.target.files);
+
+  // Хелпер для чтения TMX (возвращает {w, h} в пикселях)
+  function readTmx(file) {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const text = e.target.result;
+        const match = text.match(/width="(\d+)"\s+height="(\d+)"\s+tilewidth="(\d+)"\s+tileheight="(\d+)"/);
+        if (match) {
+          resolve({ 
+            w: parseInt(match[1]) * parseInt(match[3]), 
+            h: parseInt(match[2]) * parseInt(match[4]) 
+          });
+        } else {
+          resolve(null);
+        }
+      };
+      reader.onerror = () => resolve(null);
+      reader.readAsText(file);
+    });
+  }
+
+  // Хелпер для чтения размеров PNG
+  function readPng(file) {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        resolve({ w: img.naturalWidth, h: img.naturalHeight });
+        URL.revokeObjectURL(img.src);
+      };
+      img.onerror = () => resolve(null);
+      img.src = URL.createObjectURL(file);
+    });
+  }
 
   function handle(files) {
     const groups = {};
@@ -42,51 +100,83 @@
       if (ext !== 'png' && ext !== 'tmx') return;
       let base = f.name.substring(0, f.name.lastIndexOf('.'));
       if (ext === 'png' && base.endsWith('_map')) base = base.slice(0, -4);
+      
       if (!groups[base]) groups[base] = { base, png: null, tmx: null };
       if (ext === 'png') groups[base].png = f; else groups[base].tmx = f;
     });
 
     Object.values(groups).forEach(g => {
       if (parsed.some(p => p.base === g.base)) return;
-      let m = { id: g.base.toLowerCase().replace(/[^a-z0-9]/g, '_'), name: g.base.replace(/_/g, ' '), base: g.base, w: 0, h: 0, png: g.png, tmx: g.tmx, status: 'Загрузка...' };
       
+      let m = { 
+        id: g.base.toLowerCase().replace(/[^a-z0-9]/g, '_'), 
+        name: g.base.replace(/_/g, ' '), 
+        base: g.base, 
+        w: 2000, 
+        h: 2000, 
+        png: g.png, 
+        tmx: g.tmx, 
+        status: '<span class="status-warn">Загрузка...</span>' 
+      };
+      
+      parsed.push(m);
       pending++;
       
-      // Парсим TMX на размеры
-      if (g.tmx) {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          const text = e.target.result;
-          const match = text.match(/width="(\d+)"\s+height="(\d+)"\s+tilewidth="(\d+)"\s+tileheight="(\d+)"/);
-          if (match) {
-            m.w = parseInt(match[1]) * parseInt(match[3]);
-            m.h = parseInt(match[2]) * parseInt(match[4]);
-            m.status = 'OK (TMX)';
+      const promises = [];
+      if (g.tmx) promises.push(readTmx(g.tmx));
+      else promises.push(Promise.resolve(null));
+      
+      if (g.png) promises.push(readPng(g.png));
+      else promises.push(Promise.resolve(null));
+
+      Promise.all(promises).then(([tmxSize, pngSize]) => {
+        if (tmxSize && pngSize) {
+          // Если есть и TMX, и PNG — сохраняем пропорции PNG, подгоняя длинную сторону под TMX
+          const tmxMax = Math.max(tmxSize.w, tmxSize.h);
+          const pngRatio = pngSize.w / pngSize.h;
+          
+          if (pngSize.w >= pngSize.h) {
+            m.w = tmxMax;
+            m.h = Math.round(tmxMax / pngRatio);
           } else {
-            m.status = 'Ошибка TMX';
+            m.h = tmxMax;
+            m.w = Math.round(tmxMax * pngRatio);
           }
-          pending--; updateUI();
-        };
-        reader.readAsText(g.tmx);
-      } 
-      else if (g.png) {
-        const img = new Image();
-        img.onload = () => { m.w = img.naturalWidth; m.h = img.naturalHeight; m.status = 'OK (PNG)'; pending--; updateUI(); };
-        img.src = URL.createObjectURL(g.png);
-      } else {
-        m.status = 'Нет файлов';
-        pending--;
-      }
-      parsed.push(m);
+          m.status = '<span class="status-ok">Готово (TMX+PNG)</span>';
+        } 
+        else if (tmxSize) {
+          // Если только TMX
+          m.w = tmxSize.w;
+          m.h = tmxSize.h;
+          m.status = '<span class="status-ok">Готово (TMX)</span>';
+        } 
+        else if (pngSize) {
+          // Если только PNG
+          m.w = pngSize.w;
+          m.h = pngSize.h;
+          m.status = '<span class="status-warn">Только PNG</span>';
+        } 
+        else {
+          m.status = '<span class="status-err">Ошибка чтения</span>';
+        }
+        
+        pending--; 
+        updateUI();
+      });
     });
     updateUI();
   }
 
   function updateUI() {
     if (!parsed.length) return;
-    table.style.display = 'table'; tbody.innerHTML = '';
+    table.style.display = 'table'; 
+    tbody.innerHTML = '';
     parsed.sort((a,b) => a.base.localeCompare(b.base)).forEach(m => {
-      tbody.innerHTML += `<tr><td><b>${m.name}</b><br><small>${m.id}</small></td><td>${m.w ? m.w+'x'+m.h : '—'}</td><td>${m.status}</td></tr>`;
+      tbody.innerHTML += `<tr>
+        <td><b>${m.name}</b><br><small style="color:#666">${m.id}</small></td>
+        <td><b>${m.w}x${m.h}</b></td>
+        <td>${m.status}</td>
+      </tr>`;
     });
     document.getElementById('downloadBtn').disabled = pending > 0;
   }
@@ -94,12 +184,24 @@
   document.getElementById('downloadBtn').onclick = () => {
     let path = document.getElementById('basePath').value.trim();
     if (!path.endsWith('/')) path += '/';
+    
     const man = { format: 'webtiled-manifest', version: 1, maps: [] };
     parsed.forEach(m => {
-      man.maps.push({ id: m.id, name: m.name, pngUrl: m.png ? path + m.png.name : "", tmxUrl: m.tmx ? path + m.tmx.name : "", w: m.w || 2000, h: m.h || 2000 });
+      man.maps.push({ 
+        id: m.id, 
+        name: m.name, 
+        pngUrl: m.png ? path + m.png.name : "", 
+        tmxUrl: m.tmx ? path + m.tmx.name : "", 
+        w: m.w, 
+        h: m.h 
+      });
     });
+    
     const blob = new Blob([JSON.stringify(man, null, 2)], { type: 'application/json' });
-    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'maps_manifest.json'; a.click();
+    const a = document.createElement('a'); 
+    a.href = URL.createObjectURL(blob); 
+    a.download = 'maps_manifest.json'; 
+    a.click();
   };
 </script>
 </body>
