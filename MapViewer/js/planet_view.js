@@ -122,42 +122,19 @@
     const W = ctx.canvas.width, H = ctx.canvas.height, cx = W/2, cy = H/2;
     const radius = (Math.min(W, H) * 0.4) * cam.scale;
 
-    const bgGrad = ctx.createRadialGradient(cx, cy, radius*0.8, cx, cy, radius*1.5);
-    bgGrad.addColorStop(0, '#0a1020'); bgGrad.addColorStop(1, '#000000');
-    ctx.fillStyle = bgGrad; ctx.fillRect(0, 0, W, H);
+    ctx.clearRect(0, 0, W, H); // Прозрачный фон для WebGL
 
+    // Сферическое затенение (БЕЗ БЛИКА)
     ctx.save();
     ctx.beginPath(); ctx.arc(cx, cy, radius, 0, 2*Math.PI); ctx.clip();
-    
-    // 1. Фон планеты (натянутая текстура)
-    const tex = state.imageCache && state.imageCache.get('planet_tex');
-    if (state.showBackground !== false && tex && tex._ready) {
-      ctx.save();
-      ctx.translate(cx, cy);
-      
-      // Псевдо-3D наклон текстуры
-      ctx.rotate(cam.planetRotY); 
-      const scaleY = Math.abs(Math.cos(cam.planetRotX));
-      ctx.scale(1, scaleY > 0.1 ? scaleY : 0.1);
-      
-      // Рисуем картинку с запасом, чтобы не было пустых краев
-      ctx.drawImage(tex, -radius*1.5, -radius*1.5, radius*3, radius*3);
-      ctx.restore();
-    } else {
-      // Темный цвет, если фон выключен
-      ctx.fillStyle = '#0b1b2b'; 
-      ctx.fillRect(cx - radius, cy - radius, radius*2, radius*2);
-    }
-
-    // 2. Сферическое затенение (БЕЗ БЛИКА)
-    const shadeGrad = ctx.createRadialGradient(cx, cy, radius*0.2, cx, cy, radius);
+    const shadeGrad = ctx.createRadialGradient(cx, cy, radius*0.3, cx, cy, radius);
     shadeGrad.addColorStop(0, 'rgba(0,0,0,0)'); 
-    shadeGrad.addColorStop(0.6, 'rgba(0,0,0,0.4)'); 
-    shadeGrad.addColorStop(1, 'rgba(0,0,0,0.9)'); // Сильное затемнение краев
+    shadeGrad.addColorStop(0.7, 'rgba(0,0,0,0.5)'); 
+    shadeGrad.addColorStop(1, 'rgba(0,0,0,0.95)'); // Сильное затемнение краев
     ctx.fillStyle = shadeGrad; ctx.fillRect(cx - radius, cy - radius, radius*2, radius*2);
     ctx.restore();
 
-    // 3. Контур
+    // Контур
     ctx.beginPath(); ctx.arc(cx, cy, radius, 0, 2*Math.PI);
     ctx.strokeStyle = '#4a7a9e'; ctx.lineWidth = 2; ctx.shadowColor = '#4a7a9e'; ctx.shadowBlur = 10; ctx.stroke(); ctx.shadowBlur = 0;
 
