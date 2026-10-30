@@ -28,7 +28,7 @@
 <body>
 <div class="box">
   <h1>Генератор манифеста</h1>
-  <p>Перетащи PNG и TMX файлы. Скрипт прочитает реальный размер карты из TMX, возьмет длинную сторону и подгонит под неё пропорции превью.</p>
+  <p>Перетащи PNG и TMX файлы. Скрипт прочитает реальный размер карты из TMX (в тайлах и пикселях) и подгонит пропорции превью.</p>
   
   <div class="dropzone" id="dropzone">
     <b>Перетащите файлы сюда</b><br><small>или нажмите для выбора</small>
@@ -42,7 +42,7 @@
 
   <div style="max-height: 400px; overflow-y: auto; margin-bottom: 20px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);">
     <table id="listTable">
-      <thead><tr><th>ID / Название</th><th>Размер (WxH)</th><th>Статус</th></tr></thead>
+      <thead><tr><th>ID / Название</th><th>Размер (Тайлы / Пиксели)</th><th>Статус</th></tr></thead>
       <tbody id="tbody"></tbody>
     </table>
   </div>
@@ -59,7 +59,6 @@
   dropzone.ondrop = (e) => { e.preventDefault(); dropzone.classList.remove('dragover'); handle(e.dataTransfer.files); };
   fileInput.onchange = (e) => handle(e.target.files);
 
-  // Хелпер для чтения TMX (возвращает {w, h} в пикселях)
   function readTmx(file) {
     return new Promise((resolve) => {
       const reader = new FileReader();
@@ -67,27 +66,20 @@
         const text = e.target.result;
         const match = text.match(/width="(\d+)"\s+height="(\d+)"\s+tilewidth="(\d+)"\s+tileheight="(\d+)"/);
         if (match) {
-          resolve({ 
-            w: parseInt(match[1]) * parseInt(match[3]), 
-            h: parseInt(match[2]) * parseInt(match[4]) 
-          });
-        } else {
-          resolve(null);
-        }
+          const tw = parseInt(match[1]), th = parseInt(match[2]);
+          const tileW = parseInt(match[3]), tileH = parseInt(match[4]);
+          resolve({ tw, th, w: tw * tileW, h: th * tileH });
+        } else resolve(null);
       };
       reader.onerror = () => resolve(null);
       reader.readAsText(file);
     });
   }
 
-  // Хелпер для чтения размеров PNG
   function readPng(file) {
     return new Promise((resolve) => {
       const img = new Image();
-      img.onload = () => {
-        resolve({ w: img.naturalWidth, h: img.naturalHeight });
-        URL.revokeObjectURL(img.src);
-      };
+      img.onload = () => { resolve({ w: img.naturalWidth, h: img.naturalHeight }); URL.revokeObjectURL(img.src); };
       img.onerror = () => resolve(null);
       img.src = URL.createObjectURL(file);
     });
@@ -110,58 +102,34 @@
       
       let m = { 
         id: g.base.toLowerCase().replace(/[^a-z0-9]/g, '_'), 
-        name: g.base.replace(/_/g, ' '), 
-        base: g.base, 
-        w: 2000, 
-        h: 2000, 
-        png: g.png, 
-        tmx: g.tmx, 
-        status: '<span class="status-warn">Загрузка...</span>' 
+        name: g.base.replace(/_/g, ' '), base: g.base, 
+        w: 2000, h: 2000, tw: 100, th: 100, 
+        png: g.png, tmx: g.tmx, status: '<span class="status-warn">Загрузка...</span>' 
       };
       
-      parsed.push(m);
-      pending++;
+      parsed.push(m); pending++;
       
-      const promises = [];
-      if (g.tmx) promises.push(readTmx(g.tmx));
-      else promises.push(Promise.resolve(null));
-      
-      if (g.png) promises.push(readPng(g.png));
-      else promises.push(Promise.resolve(null));
+      const promises = [g.tmx ? readTmx(g.tmx) : Promise.resolve(null), g.png ? readPng(g.png) : Promise.resolve(null)];
 
-      Promise.all(promises).then(([tmxSize, pngSize]) => {
-        if (tmxSize && pngSize) {
-          // Если есть и TMX, и PNG — сохраняем пропорции PNG, подгоняя длинную сторону под TMX
-          const tmxMax = Math.max(tmxSize.w, tmxSize.h);
-          const pngRatio = pngSize.w / pngSize.h;
-          
-          if (pngSize.w >= pngSize.h) {
-            m.w = tmxMax;
-            m.h = Math.round(tmxMax / pngRatio);
-          } else {
-            m.h = tmxMax;
-            m.w = Math.round(tmxMax * pngRatio);
-          }
+      Promise.all(promises).then(([tmx, png]) => {
+        if (tmx && png) {
+          m.tw = tmx.tw; m.th = tmx.th;
+          // Сохраняем пропорции картинки, подгоняя длинную сторону под длинную сторону TMX
+          const tmxMax = Math.max(tmx.w, tmx.h);
+          const pngRatio = png.w / png.h;
+          if (png.w >= png.h) { m.w = tmxMax; m.h = Math.round(tmxMax / pngRatio); } 
+          else { m.h = tmxMax; m.w = Math.round(tmxMax * pngRatio); }
           m.status = '<span class="status-ok">Готово (TMX+PNG)</span>';
-        } 
-        else if (tmxSize) {
-          // Если только TMX
-          m.w = tmxSize.w;
-          m.h = tmxSize.h;
+        } else if (tmx) {
+          m.w = tmx.w; m.h = tmx.h; m.tw = tmx.tw; m.th = tmx.th;
           m.status = '<span class="status-ok">Готово (TMX)</span>';
-        } 
-        else if (pngSize) {
-          // Если только PNG
-          m.w = pngSize.w;
-          m.h = pngSize.h;
+        } else if (png) {
+          m.w = png.w; m.h = png.h; m.tw = 100; m.th = 100;
           m.status = '<span class="status-warn">Только PNG</span>';
-        } 
-        else {
+        } else {
           m.status = '<span class="status-err">Ошибка чтения</span>';
         }
-        
-        pending--; 
-        updateUI();
+        pending--; updateUI();
       });
     });
     updateUI();
@@ -169,12 +137,11 @@
 
   function updateUI() {
     if (!parsed.length) return;
-    table.style.display = 'table'; 
-    tbody.innerHTML = '';
+    table.style.display = 'table'; tbody.innerHTML = '';
     parsed.sort((a,b) => a.base.localeCompare(b.base)).forEach(m => {
       tbody.innerHTML += `<tr>
         <td><b>${m.name}</b><br><small style="color:#666">${m.id}</small></td>
-        <td><b>${m.w}x${m.h}</b></td>
+        <td><b>${m.tw}x${m.th}</b> тайлов<br><small style="color:#666">${m.w}x${m.h} px</small></td>
         <td>${m.status}</td>
       </tr>`;
     });
@@ -188,20 +155,15 @@
     const man = { format: 'webtiled-manifest', version: 1, maps: [] };
     parsed.forEach(m => {
       man.maps.push({ 
-        id: m.id, 
-        name: m.name, 
+        id: m.id, name: m.name, 
         pngUrl: m.png ? path + m.png.name : "", 
         tmxUrl: m.tmx ? path + m.tmx.name : "", 
-        w: m.w, 
-        h: m.h 
+        w: m.w, h: m.h, tw: m.tw, th: m.th 
       });
     });
     
     const blob = new Blob([JSON.stringify(man, null, 2)], { type: 'application/json' });
-    const a = document.createElement('a'); 
-    a.href = URL.createObjectURL(blob); 
-    a.download = 'maps_manifest.json'; 
-    a.click();
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'maps_manifest.json'; a.click();
   };
 </script>
 </body>
