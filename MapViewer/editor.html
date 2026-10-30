@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>WebTiled Planet — Editor v1.7</title>
+<title>WebTiled Planet — Editor v1.8</title>
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
   html, body { height:100%; overflow:hidden; background:#05080f; color:#fff; font-family:'Segoe UI',system-ui,sans-serif; user-select:none; }
@@ -227,7 +227,7 @@
 
   const state = { imageCache: new Map(), guides: [], lod: null, selectedMapId: null, selectedRegionId: null };
 
-  // === THREE.JS ИНИЦИАЛИЗАЦИЯ ===
+  // === THREE.JS ===
   const scene = new THREE.Scene();
   const threeCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 10);
   threeCam.position.z = 5;
@@ -247,9 +247,13 @@
       sphereMat.map = texture;
       sphereMat.color.setHex(0xffffff);
       sphereMat.needsUpdate = true;
+      render(); // Принудительно перерисовываем после загрузки!
+    }, undefined, (err) => {
+      console.warn('Ошибка загрузки текстуры:', err);
     });
   }
 
+  // === ПАРСЕР EXTERNAL rep.txt ===
   async function loadExternalManifest() {
     const url = 'https://raw.githubusercontent.com/Teoshebo/maps/refs/heads/main/rep.txt';
     try {
@@ -258,15 +262,40 @@
       const text = await response.text();
       const lines = text.split('\n');
       const maps = [];
+      let worldConfig = { widthPx: 2000000, heightPx: 2000000, textureUrl: '' };
+
       for (let line of lines) {
         line = line.trim();
         if (!line || line.startsWith('#')) continue;
+        
         const parts = line.split('|');
-        if (parts.length >= 4) {
-          maps.push({ id: parts[0].trim(), name: parts[1].trim(), pngUrl: parts[2].trim(), tmxUrl: parts[3].trim(), w: parseInt(parts[4]) || 2000, h: parseInt(parts[5]) || 2000 });
+        
+        if (parts[0] === 'WORLD') {
+            // Формат: WORLD|Ширина|Высота|Ссылка_на_текстуру
+            worldConfig.widthPx = parseInt(parts[1]) || 2000000;
+            worldConfig.heightPx = parseInt(parts[2]) || 2000000;
+            worldConfig.textureUrl = parts[3] ? parts[3].trim() : '';
+        } else if (parts[0] === 'MAP') {
+            // Формат: MAP|ID|Название|Ссылка_PNG|Ссылка_TMX|Ширина|Высота
+            if (parts.length >= 7) {
+                maps.push({
+                    id: parts[1].trim(), name: parts[2].trim(),
+                    pngUrl: parts[3].trim(), tmxUrl: parts[4].trim(),
+                    w: parseInt(parts[5]) || 2000, h: parseInt(parts[6]) || 2000
+                });
+            }
+        } else {
+            // Старый формат: ID|Название|Ссылка_PNG|Ссылка_TMX|Ширина|Высота
+            if (parts.length >= 6) {
+                maps.push({
+                    id: parts[0].trim(), name: parts[1].trim(),
+                    pngUrl: parts[2].trim(), tmxUrl: parts[3].trim(),
+                    w: parseInt(parts[4]) || 2000, h: parseInt(parts[5]) || 2000
+                });
+            }
         }
       }
-      return { format: 'webtiled-manifest', version: 1, maps };
+      return { format: 'webtiled-manifest', version: 1, maps, worldConfig };
     } catch (err) { return null; }
   }
 
@@ -280,9 +309,23 @@
       loadExternalManifest()
     ]).then(([wdata, mdata]) => {
       if (wdata) {
-        applyWorld(PlanetCore.loadWorld(wdata));
-        if (world.planet.textureUrl) loadSphereTexture(world.planet.textureUrl);
+        world = PlanetCore.loadWorld(wdata);
       }
+      
+      // Применяем настройки мира из rep.txt (если есть)
+      if (mdata && mdata.worldConfig) {
+        if (mdata.worldConfig.widthPx) world.planet.widthPx = mdata.worldConfig.widthPx;
+        if (mdata.worldConfig.heightPx) world.planet.heightPx = mdata.worldConfig.heightPx;
+        if (mdata.worldConfig.textureUrl) world.planet.textureUrl = mdata.worldConfig.textureUrl;
+      }
+
+      cam.worldW = world.planet.widthPx; 
+      cam.worldH = world.planet.heightPx;
+
+      if (world.planet.textureUrl) {
+        loadSphereTexture(world.planet.textureUrl);
+      }
+
       if (mdata) { manifest = mdata; buildPalette(); refreshAllImages(); }
       render();
     });
@@ -320,18 +363,14 @@
         webglCanvas.style.display = 'block';
         vecCtx.clearRect(0, 0, vecCanvas.width, vecCanvas.height);
         
-        // Синхронизация 3D-сферы
+        // Синхронизация Three.js сферы
         const radius = (Math.min(mapCanvas.width, mapCanvas.height) * 0.4) * cam.scale;
         sphereMesh.scale.set(radius, radius, radius);
         sphereMesh.rotation.x = cam.planetRotX;
         sphereMesh.rotation.y = cam.planetRotY;
         
-        // Обновляем матрицу камеры Three.js, чтобы соответствовать масштабу
         const aspect = mapCanvas.width / mapCanvas.height;
-        threeCam.left = -aspect;
-        threeCam.right = aspect;
-        threeCam.top = 1;
-        threeCam.bottom = -1;
+        threeCam.left = -aspect; threeCam.right = aspect; threeCam.top = 1; threeCam.bottom = -1;
         threeCam.updateProjectionMatrix();
         
         renderer.setSize(mapCanvas.width, mapCanvas.height);
