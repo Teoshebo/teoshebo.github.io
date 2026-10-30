@@ -112,6 +112,9 @@
       sphereMat.map = texture;
       sphereMat.color.setHex(0xffffff);
       sphereMat.needsUpdate = true;
+      render();
+    }, undefined, (err) => {
+      console.warn('Ошибка загрузки текстуры:', err);
     });
   }
 
@@ -123,15 +126,28 @@
       const text = await response.text();
       const lines = text.split('\n');
       const maps = [];
+      let worldConfig = { widthPx: 2000000, heightPx: 2000000, textureUrl: '' };
+
       for (let line of lines) {
         line = line.trim();
         if (!line || line.startsWith('#')) continue;
         const parts = line.split('|');
-        if (parts.length >= 4) {
-          maps.push({ id: parts[0].trim(), name: parts[1].trim(), pngUrl: parts[2].trim(), tmxUrl: parts[3].trim(), w: parseInt(parts[4]) || 2000, h: parseInt(parts[5]) || 2000 });
+        
+        if (parts[0] === 'WORLD') {
+            worldConfig.widthPx = parseInt(parts[1]) || 2000000;
+            worldConfig.heightPx = parseInt(parts[2]) || 2000000;
+            worldConfig.textureUrl = parts[3] ? parts[3].trim() : '';
+        } else if (parts[0] === 'MAP') {
+            if (parts.length >= 7) {
+                maps.push({ id: parts[1].trim(), name: parts[2].trim(), pngUrl: parts[3].trim(), tmxUrl: parts[4].trim(), w: parseInt(parts[5]) || 2000, h: parseInt(parts[6]) || 2000 });
+            }
+        } else {
+            if (parts.length >= 6) {
+                maps.push({ id: parts[0].trim(), name: parts[1].trim(), pngUrl: parts[2].trim(), tmxUrl: parts[3].trim(), w: parseInt(parts[4]) || 2000, h: parseInt(parts[5]) || 2000 });
+            }
         }
       }
-      return { format: 'webtiled-manifest', version: 1, maps };
+      return { format: 'webtiled-manifest', version: 1, maps, worldConfig };
     } catch (err) { return null; }
   }
 
@@ -143,8 +159,18 @@
     ]).then(([wdata, manifest]) => {
       if (wdata) {
         world = PlanetCore.loadWorld(wdata);
-        cam.worldW = world.planet.widthPx; cam.worldH = world.planet.heightPx;
-        if (world.planet.textureUrl) loadSphereTexture(world.planet.textureUrl);
+      }
+      
+      if (manifest && manifest.worldConfig) {
+        if (manifest.worldConfig.widthPx) world.planet.widthPx = manifest.worldConfig.widthPx;
+        if (manifest.worldConfig.heightPx) world.planet.heightPx = manifest.worldConfig.heightPx;
+        if (manifest.worldConfig.textureUrl) world.planet.textureUrl = manifest.worldConfig.textureUrl;
+      }
+
+      cam.worldW = world.planet.widthPx; cam.worldH = world.planet.heightPx;
+      
+      if (world.planet.textureUrl) {
+        loadSphereTexture(world.planet.textureUrl);
       }
       
       if (manifest && manifest.maps) {
@@ -187,7 +213,6 @@
         webglCanvas.style.display = 'block';
         vecCtx.clearRect(0, 0, vecCanvas.width, vecCanvas.height);
         
-        // 3D Сфера
         const radius = (Math.min(canvas.width, canvas.height) * 0.4) * cam.scale;
         sphereMesh.scale.set(radius, radius, radius);
         sphereMesh.rotation.x = cam.planetRotX;
