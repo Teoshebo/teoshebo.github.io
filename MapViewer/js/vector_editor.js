@@ -1,5 +1,5 @@
 /**
- * vector_editor.js — Векторный слой (Фон, Полигоны, Маркеры, Рука)
+ * vector_editor.js — Векторный слой (Фон, Полигоны, Маркеры, Рука, 3D)
  */
 (function(global) {
   'use strict';
@@ -39,7 +39,7 @@
     ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
     if (cam.mode !== '2d') return;
 
-    // 1. Фон (Картинка планеты)
+    // 1. Фон
     const tex = state.imageCache && state.imageCache.get('planet_tex');
     if (tex && tex._ready) {
       const sx = 0 * cam.scale + cam.offsetX;
@@ -72,9 +72,7 @@
           ctx.fillStyle = poly.color1 || 'rgba(124,92,252,0.3)';
         }
         ctx.fill();
-        ctx.strokeStyle = '#7c5cfc';
-        ctx.lineWidth = 2;
-        ctx.stroke();
+        ctx.strokeStyle = '#7c5cfc'; ctx.lineWidth = 2; ctx.stroke();
 
         if (cutStart && poly.points.includes(cutStart)) {
           const p = PlanetCamera.toScreen(cam, cutStart.x, cutStart.y);
@@ -122,6 +120,57 @@
           const p = PlanetCamera.toScreen(cam, pt.x, pt.y);
           ctx.beginPath(); ctx.arc(p.x, p.y, 6, 0, Math.PI * 2);
           ctx.fillStyle = '#fff'; ctx.fill(); ctx.strokeStyle = '#7c5cfc'; ctx.lineWidth = 2; ctx.stroke();
+        }
+      }
+    }
+  }
+
+  function render3D(ctx, cam, world, state) {
+    // Полигоны в 3D
+    if (world.polygons) {
+      for (const poly of world.polygons) {
+        if (!poly.points || poly.points.length < 2) continue;
+        ctx.beginPath();
+        let started = false;
+        let visibleCount = 0;
+        for (const pt of poly.points) {
+          const proj = PlanetCamera.project3D(cam, pt.x, pt.y);
+          if (proj.z > 0) {
+            if (!started) { ctx.moveTo(proj.x, proj.y); started = true; }
+            else ctx.lineTo(proj.x, proj.y);
+            visibleCount++;
+          } else {
+            started = false;
+          }
+        }
+        if (visibleCount > 2) {
+          ctx.closePath();
+          if (poly.color1) {
+            ctx.fillStyle = poly.color1;
+            ctx.globalAlpha = 0.5;
+            ctx.fill();
+            ctx.globalAlpha = 1;
+          }
+          ctx.strokeStyle = '#7c5cfc';
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
+        }
+      }
+    }
+
+    // Маркеры в 3D
+    if (world.markers) {
+      for (const m of world.markers) {
+        const proj = PlanetCamera.project3D(cam, m.x, m.y);
+        if (proj.z > 0) {
+          ctx.font = `${m.size || 20}px Arial`;
+          ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+          ctx.fillText(m.emoji || '📍', proj.x, proj.y);
+          if (m.label) {
+            ctx.font = '12px sans-serif'; ctx.fillStyle = 'white';
+            ctx.shadowColor = 'black'; ctx.shadowBlur = 4;
+            ctx.fillText(m.label, proj.x, proj.y - 20); ctx.shadowBlur = 0;
+          }
         }
       }
     }
@@ -260,7 +309,7 @@
   }
 
   global.VectorEditor = {
-    setMode, render, handlePointerDown, handlePointerMove, handlePointerUp, finishCurrentPath,
+    setMode, render, render3D, handlePointerDown, handlePointerMove, handlePointerUp, finishCurrentPath,
     setModalCallback: (cb) => { onRequestModal = cb; },
     getMode: () => mode
   };
