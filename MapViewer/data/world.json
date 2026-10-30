@@ -3,41 +3,19 @@
   "version": 1,
   "planet": {
     "name": "Terra",
-    "widthPx": 1600000,
+    "widthPx": 2000000,
     "heightPx": 2000000,
     "kmPerUnit": 30,
     "textureUrl": "https://psv4.userapi.com/s/v1/d2/4PA1X85_VRd91frUQhH3AcdRuHNMBVDhwYg2TBUVH1En1695-Grm-4e2EzjTyniFUZ1qxhpzZP1HgwmmzfZuhCZjTUJqRnd2mKM0ipObXU36w5EaH1SF_cpZJ8h1bAnBnHZtIZkpSYjB/lumeria13.png"
   },
   "camera": {
-    "offsetX": -5174.40386007952,
-    "offsetY": -2453.0825776803963,
-    "scale": 0.005302389929113551,
+    "offsetX": -1262.9953007366853,
+    "offsetY": -495.6440805604914,
+    "scale": 0.001949785984411037,
     "mode": "2d"
   },
   "regions": [],
   "maps": [
-    {
-      "id": "map_mvvbfmv1_6",
-      "name": "TCW-012(4p)IronWay",
-      "x": 757922,
-      "y": 360558,
-      "w": 5000,
-      "h": 5000,
-      "pngUrl": "assets/TCW-Arasida/TCW-012(4p)IronWay_map.png",
-      "tmxUrl": "assets/TCW-Arasida/TCW-012(4p)IronWay.tmx",
-      "z": 0
-    },
-    {
-      "id": "map_mvvbfonq_7",
-      "name": "TCW-013(4p)BloodOnSnow",
-      "x": 767637,
-      "y": 362487,
-      "w": 5000,
-      "h": 3000,
-      "pngUrl": "assets/TCW-Arasida/TCW-013(4p)BloodOnSnow_map.png",
-      "tmxUrl": "assets/TCW-Arasida/TCW-013(4p)BloodOnSnow.tmx",
-      "z": 1
-    },
     {
       "id": "map_mvvbgblx_9",
       "name": "TCW-014(10p)MaggotSwarm",
@@ -48,13 +26,107 @@
       "pngUrl": "assets/TCW-Arasida/TCW-014(10p)MaggotSwarm_map.png",
       "tmxUrl": "assets/TCW-Arasida/TCW-014(10p)MaggotSwarm.tmx",
       "z": 2
+    },
+    {
+      "id": "map_mvvdrp4b_1",
+      "name": "Coffin (6p)",
+      "x": 758734,
+      "y": 367033,
+      "w": 2000,
+      "h": 2000,
+      "pngUrl": "https://raw.githubusercontent.com/Teoshebo/maps/refs/heads/main/TheCoffinWay/TCW-000(6p)Coffin_map.png",
+      "tmxUrl": "https://raw.githubusercontent.com/Teoshebo/maps/refs/heads/main/TheCoffinWay/TCW-000(6p)Coffin.tmx",
+      "z": 3
+    },
+    {
+      "id": "map_mvvdrqmd_2",
+      "name": "FaceToFace (2p)",
+      "x": 779532,
+      "y": 369497,
+      "w": 2000,
+      "h": 2000,
+      "pngUrl": "https://raw.githubusercontent.com/Teoshebo/maps/refs/heads/main/TheCoffinWay/TCW-001(2p)FaceToFace_map.png",
+      "tmxUrl": "https://raw.githubusercontent.com/Teoshebo/maps/refs/heads/main/TheCoffinWay/TCW-001(2p)FaceToFace.tmx",
+      "z": 4
+    },
+    {
+      "id": "map_mvvdrsxn_3",
+      "name": "BloodOnSnow (4p)",
+      "x": 774697,
+      "y": 363345,
+      "w": 2000,
+      "h": 2000,
+      "pngUrl": "https://raw.githubusercontent.com/Teoshebo/maps/refs/heads/main/TCW-Arasida/TCW-013(4p)BloodOnSnow_map.png",
+      "tmxUrl": "https://raw.githubusercontent.com/Teoshebo/maps/refs/heads/main/TCW-Arasida/TCW-013(4p)BloodOnSnow.tmx",
+      "z": 5
+    },
+    {
+      "id": "map_mvvdruqr_4",
+      "name": "IronWay (4p)",
+      "x": 753290,
+      "y": 353359,
+      "w": 2000,
+      "h": 2000,
+      "pngUrl": "https://raw.githubusercontent.com/Teoshebo/maps/refs/heads/main/TCW-Arasida/TCW-012(4p)IronWay_map.png",
+      "tmxUrl": "https://raw.githubusercontent.com/Teoshebo/maps/refs/heads/main/TCW-Arasida/TCW-012(4p)IronWay.tmx",
+      "z": 6
+    },
+    {
+      "id": "map_mvvdrxeb_5",
+      "name": "MaggotSwarm (10p)",
+      "x": 802456,
+      "y": 336963,
+      "w": 2000,
+      "h": 2000,
+      "pngUrl": "https://raw.githubusercontent.com/Teoshebo/maps/refs/heads/main/TCW-Arasida/TCW-014(10p)MaggotSwarm_map.png",
+      "tmxUrl": "https://raw.githubusercontent.com/Teoshebo/maps/refs/heads/main/TCW-Arasida/TCW-014(10p)MaggotSwarm.tmx",
+      "z": 7
+    },
+    {
+      "id": "map_mvvds085_6",
+      "name": "BloodRiver (4p)",
+      "x": 1016851,
+      "y": 488441,
+      "w": 2000,
+      "h": 2000,
+      "pngUrl": "https://raw.githubusercontent.com/Teoshebo/maps/refs/heads/main/TheCoffinWay/TCW-003(4p)BloodRiver_map.png",
+      "tmxUrl": "https://raw.githubusercontent.com/Teoshebo/maps/refs/heads/main/TheCoffinWay/TCW-003(4p)BloodRiver.tmx",
+      "z": 8
+    },
+    {
+      "id": "map_mvvds6yb_7",
+      "name": "TheOverside (6p)",
+      "x": 843330,
+      "y": 532629,
+      "w": 2000,
+      "h": 2000,
+      "pngUrl": "https://raw.githubusercontent.com/Teoshebo/maps/refs/heads/main/TheCoffinWay/TCW-004(6p)TheOverside_map.png",
+      "tmxUrl": "https://raw.githubusercontent.com/Teoshebo/maps/refs/heads/main/TheCoffinWay/TCW-004(6p)TheOverside.tmx",
+      "z": 9
+    },
+    {
+      "id": "map_mvvds8q5_8",
+      "name": "ThePassage (4p)",
+      "x": 617765,
+      "y": 708879,
+      "w": 2000,
+      "h": 2000,
+      "pngUrl": "https://raw.githubusercontent.com/Teoshebo/maps/refs/heads/main/TheCoffinWay/TCW-005(4p)ThePassage_map.png",
+      "tmxUrl": "https://raw.githubusercontent.com/Teoshebo/maps/refs/heads/main/TheCoffinWay/TCW-005(4p)ThePassage.tmx",
+      "z": 10
     }
   ],
   "links": [
     {
-      "id": "ln_mvvbg2d3_8",
-      "from": "map_mvvbfonq_7",
-      "to": "map_mvvbfmv1_6",
+      "id": "ln_mvvdsk8c_9",
+      "from": "map_mvvds8q5_8",
+      "to": "map_mvvds6yb_7",
+      "color": "#88ccff"
+    },
+    {
+      "id": "ln_mvvdsu9g_a",
+      "from": "map_mvvds085_6",
+      "to": "map_mvvds6yb_7",
       "color": "#88ccff"
     }
   ],
