@@ -27,8 +27,7 @@
 
   function renderMaps2D(ctx, cam, world, state) {
     state = state || {};
-    ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height); // Очищаем, НЕ заливаем фоном
-
+    ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
     const lod = state.lod || getLODLevel(cam.scale);
     const view = PlanetCamera.getVisibleBounds(cam);
 
@@ -77,9 +76,8 @@
     }
 
     const img = state.imageCache && state.imageCache.get(m.id);
-    if (img && img._ready) {
-      ctx.drawImage(img, sx, sy, sw, sh);
-    } else {
+    if (img && img._ready) ctx.drawImage(img, sx, sy, sw, sh);
+    else {
       ctx.fillStyle = 'rgba(124,92,252,0.4)'; ctx.fillRect(sx, sy, sw, sh);
       if (sw > 60 && sh > 30) {
         ctx.fillStyle = 'rgba(255,255,255,0.75)'; ctx.font = '12px sans-serif';
@@ -130,10 +128,18 @@
 
     ctx.save();
     ctx.beginPath(); ctx.arc(cx, cy, radius, 0, 2*Math.PI); ctx.clip();
+    
+    // Текстура вращается вместе с камерой
     const tex = state.imageCache && state.imageCache.get('planet_tex');
-    if (tex && tex._ready) ctx.drawImage(tex, cx - radius, cy - radius, radius*2, radius*2);
-    else { ctx.fillStyle = '#1E90FF'; ctx.fillRect(cx - radius, cy - radius, radius*2, radius*2); }
+    if (tex && tex._ready) {
+      ctx.translate(cx, cy);
+      ctx.rotate(-cam.planetRotY);
+      ctx.drawImage(tex, -radius*1.5, -radius*1.5, radius*3, radius*3);
+    } else {
+      ctx.fillStyle = '#1E90FF'; ctx.fillRect(cx - radius, cy - radius, radius*2, radius*2);
+    }
 
+    // Сферическое затенение
     const shadeGrad = ctx.createRadialGradient(cx - radius*0.3, cy - radius*0.3, radius*0.1, cx, cy, radius);
     shadeGrad.addColorStop(0, 'rgba(255,255,255,0.4)'); shadeGrad.addColorStop(0.5, 'rgba(0,0,0,0)'); shadeGrad.addColorStop(1, 'rgba(0,0,0,0.9)');
     ctx.fillStyle = shadeGrad; ctx.fillRect(cx - radius, cy - radius, radius*2, radius*2);
