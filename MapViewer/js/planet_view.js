@@ -4,7 +4,6 @@
 (function(global) {
   'use strict';
 
-  // LOD пороги (REGION сдвинут в 5 раз дальше)
   const LOD = { PLANET: 0.0004, REGION: 0.002, DOT: 0.05 };
   const HYSTERESIS = 0.15;
   let _lastLod = null;
@@ -135,27 +134,32 @@
     if (state.showBackground !== false && tex && tex._ready) {
       ctx.save();
       ctx.translate(cx, cy);
-      const texW = tex.width, texH = tex.height;
-      const scaleToFit = Math.max((radius*2)/texW, (radius*2)/texH);
-      ctx.rotate(-cam.planetRotY);
-      ctx.scale(scaleToFit, scaleToFit);
-      ctx.drawImage(tex, -texW/2, -texH/2);
+      
+      // Псевдо-3D наклон текстуры
+      ctx.rotate(cam.planetRotY); 
+      const scaleY = Math.abs(Math.cos(cam.planetRotX));
+      ctx.scale(1, scaleY > 0.1 ? scaleY : 0.1);
+      
+      // Рисуем картинку с запасом, чтобы не было пустых краев
+      ctx.drawImage(tex, -radius*1.5, -radius*1.5, radius*3, radius*3);
       ctx.restore();
     } else {
-      ctx.fillStyle = '#1E90FF'; ctx.fillRect(cx - radius, cy - radius, radius*2, radius*2);
+      // Темный цвет, если фон выключен
+      ctx.fillStyle = '#0b1b2b'; 
+      ctx.fillRect(cx - radius, cy - radius, radius*2, radius*2);
     }
 
-    // 2. Сферическое затенение (объем)
-    const shadeGrad = ctx.createRadialGradient(cx - radius*0.3, cy - radius*0.3, radius*0.1, cx, cy, radius);
-    shadeGrad.addColorStop(0, 'rgba(255,255,255,0.3)'); 
-    shadeGrad.addColorStop(0.5, 'rgba(0,0,0,0)'); 
-    shadeGrad.addColorStop(1, 'rgba(0,0,0,0.85)');
+    // 2. Сферическое затенение (БЕЗ БЛИКА)
+    const shadeGrad = ctx.createRadialGradient(cx, cy, radius*0.2, cx, cy, radius);
+    shadeGrad.addColorStop(0, 'rgba(0,0,0,0)'); 
+    shadeGrad.addColorStop(0.6, 'rgba(0,0,0,0.4)'); 
+    shadeGrad.addColorStop(1, 'rgba(0,0,0,0.9)'); // Сильное затемнение краев
     ctx.fillStyle = shadeGrad; ctx.fillRect(cx - radius, cy - radius, radius*2, radius*2);
     ctx.restore();
 
     // 3. Контур
     ctx.beginPath(); ctx.arc(cx, cy, radius, 0, 2*Math.PI);
-    ctx.strokeStyle = '#87CEFA'; ctx.lineWidth = 3; ctx.shadowColor = '#87CEFA'; ctx.shadowBlur = 15; ctx.stroke(); ctx.shadowBlur = 0;
+    ctx.strokeStyle = '#4a7a9e'; ctx.lineWidth = 2; ctx.shadowColor = '#4a7a9e'; ctx.shadowBlur = 10; ctx.stroke(); ctx.shadowBlur = 0;
 
     drawSphereGrid3D(ctx, cam);
 
