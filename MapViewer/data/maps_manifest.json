@@ -1,0 +1,30 @@
+{
+  "format": "webtiled-manifest",
+  "version": 1,
+  "maps": [
+    {
+      "id": "tcw_012_4p_ironway",
+      "name": "TCW-012(4p)IronWay",
+      "pngUrl": "assets/TCW-Arasida/TCW-012(4p)IronWay_map.png",
+      "tmxUrl": "assets/TCW-Arasida/TCW-012(4p)IronWay.tmx",
+      "w": 5000,
+      "h": 5000
+    },
+    {
+      "id": "tcw_013_4p_bloodonsnow",
+      "name": "TCW-013(4p)BloodOnSnow",
+      "pngUrl": "assets/TCW-Arasida/TCW-013(4p)BloodOnSnow_map.png",
+      "tmxUrl": "assets/TCW-Arasida/TCW-013(4p)BloodOnSnow.tmx",
+      "w": 5000,
+      "h": 3000
+    },
+    {
+      "id": "tcw_014_10p_maggotswarm",
+      "name": "TCW-014(10p)MaggotSwarm",
+      "pngUrl": "assets/TCW-Arasida/TCW-014(10p)MaggotSwarm_map.png",
+      "tmxUrl": "assets/TCW-Arasida/TCW-014(10p)MaggotSwarm.tmx",
+      "w": 8000,
+      "h": 8000
+    }
+  ]
+}

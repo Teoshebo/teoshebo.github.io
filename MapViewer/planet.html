@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>WebTiled Planet — Исследование</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html, body { height:100%; overflow:hidden; background:#000; color:#fff; font-family:'Segoe UI',system-ui,sans-serif; user-select:none; }
+  canvas { position:absolute; inset:0; display:block; width:100%; height:100%; cursor: grab; }
+  canvas:active { cursor: grabbing; }
+  #ui { position:absolute; inset:0; z-index:10; pointer-events:none; }
+  #ui > * { pointer-events:auto; }
+  .panel { position:absolute; background:rgba(20,20,30,0.85); backdrop-filter:blur(12px); border:1px solid rgba(255,255,255,0.1); border-radius:12px; padding:12px; font-size:14px; }
+  #header { top:20px; left:20px; }
+  #header h1 { font-size:20px; font-weight:800; background:linear-gradient(135deg,#7c5cfc,#a07cff); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+  #viewToggle { top:20px; right:20px; display:flex; gap:4px; padding:4px; }
+  .btn { background:transparent; border:none; color:#b0b0d0; padding:8px 16px; border-radius:8px; font-weight:600; font-size:13px; cursor:pointer; transition:0.2s; }
+  .btn:hover { background:rgba(255,255,255,0.1); color:#fff; }
+  .btn.active { background:#7c5cfc; color:#fff; }
+  #searchBar { bottom:20px; left:50%; transform:translateX(-50%); width:300px; display:flex; gap:8px; padding:6px 12px; border-radius:30px; }
+  #searchInput { flex:1; background:transparent; border:none; color:#fff; font-size:14px; outline:none; }
+  #mapPopup { position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); width:320px; background:rgba(25,25,35,0.95); backdrop-filter:blur(16px); border:1px solid rgba(255,255,255,0.15); border-radius:16px; padding:20px; display:none; flex-direction:column; gap:12px; box-shadow:0 16px 64px rgba(0,0,0,0.8); }
+  #mapPopup img { width:100%; height:160px; object-fit:cover; border-radius:8px; background:#000; border:1px solid #333; }
+  #mapPopup h2 { font-size:18px; font-weight:700; }
+  .meta { font-size:12px; color:#888; display:flex; justify-content:space-between; }
+  .actions { display:flex; gap:8px; margin-top:8px; }
+  .btn-primary { background:#7c5cfc; color:#fff; border:none; padding:10px; border-radius:8px; font-weight:700; cursor:pointer; flex:1; text-align:center; text-decoration:none; transition:0.2s; }
+  .btn-close { background:rgba(255,255,255,0.1); color:#fff; border:none; padding:10px; border-radius:8px; font-weight:700; cursor:pointer; transition:0.2s; }
+  .backdrop { position:absolute; inset:0; background:rgba(0,0,0,0.6); display:none; z-index:5; }
+</style>
+</head>
+<body>
+<canvas id="canvasEl"></canvas>
+<div id="ui">
+  <div class="panel" id="header"><h1>ТЕОНЕТ</h1><p style="color:#888; font-size:12px;">Карта мира Arasida</p></div>
+  <div class="panel" id="viewToggle">
+    <button class="btn active" id="btn3d">3D Шар</button>
+    <button class="btn" id="btn2d">2D Карта</button>
+  </div>
+  <div class="panel" id="searchBar">
+    <span style="color:#888;">🔍</span><input type="text" id="searchInput" placeholder="Поиск карты...">
+  </div>
+  <div class="backdrop" id="backdrop"></div>
+  <div id="mapPopup">
+    <img id="popupImg" src="" alt="Map Preview">
+    <div><h2 id="popupName">Название</h2><div class="meta"><span>Регион: <span id="popupRegion">—</span></span><span id="popupSize">2000x2000</span></div></div>
+    <div class="actions"><a href="#" target="_blank" id="popupDownload" class="btn-primary">Скачать .tmx</a><button class="btn-close" id="popupClose">✕</button></div>
+  </div>
+</div>
+
+<script src="js/planet_core.js"></script>
+<script src="js/planet_camera.js"></script>
+<script src="js/planet_view.js"></script>
+<script>
+(function(){
+  'use strict';
+  const canvas = document.getElementById('canvasEl');
+  const ctx = canvas.getContext('2d');
+  const backdrop = document.getElementById('backdrop');
+  const popup = document.getElementById('mapPopup');
+
+  let world = PlanetCore.createEmptyWorld();
+  const cam = PlanetCamera.createCamera(world);
+  cam.mode = '3d'; cam.scale = 2.5; 
+
+  const state = { imageCache: new Map(), guides: [], lod: null };
+
+  function init() {
+    resize();
+    Promise.all([
+      fetch('data/world.json').then(r => r.ok ? r.json() : null).catch(() => null),
+      fetch('data/maps_manifest.json').then(r => r.ok ? r.json() : null).catch(() => null)
+    ]).then(([wdata, manifest]) => {
+      if (wdata) {
+        world = PlanetCore.loadWorld(wdata);
+        cam.worldW = world.planet.widthPx; cam.worldH = world.planet.heightPx;
+        if (world.planet.textureUrl) ensureImage('planet_tex', world.planet.textureUrl);
+      }
+      if (manifest && manifest.maps) for (const entry of manifest.maps) if (entry.id && entry.pngUrl) ensureImage(entry.id, entry.pngUrl);
+      for (const m of world.maps) if (m.id && m.pngUrl) ensureImage(m.id, m.pngUrl);
+      
+      PlanetCamera.fitBounds(cam, { x1: 0, y1: 0, x2: cam.worldW, y2: cam.worldH }, 50);
+      render();
+    });
+  }
+
+  function ensureImage(id, url) {
+    if (!url || state.imageCache.has(id)) return;
+    const img = new Image(); img.crossOrigin = 'Anonymous';
+    img.onload = () => { img._ready = true; render(); };
+    img.src = url; state.imageCache.set(id, img);
+  }
+
+  function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; PlanetCamera.setViewport(cam, canvas.width, canvas.height); render(); }
+  window.addEventListener('resize', resize);
+
+  let rafPending = false;
+  function render() {
+    if (rafPending) return; rafPending = true;
+    requestAnimationFrame(() => { rafPending = false; state.lod = PlanetView.getLODLevel(cam.scale); PlanetView.renderMaps(ctx, cam, world, state); });
+  }
+
+  let isDragging = false, dragLastX = 0, dragLastY = 0, dragDist = 0;
+  canvas.addEventListener('pointerdown', (e) => { canvas.setPointerCapture(e.pointerId); isDragging = true; dragLastX = e.clientX; dragLastY = e.clientY; dragDist = 0; });
+  canvas.addEventListener('pointermove', (e) => {
+    if (!isDragging) return;
+    const dx = e.clientX - dragLastX, dy = e.clientY - dragLastY; dragDist += Math.abs(dx) + Math.abs(dy);
+    if (cam.mode === '3d') { cam.planetRotX -= dy * 0.005; cam.planetRotY += dx * 0.005; } else { cam.offsetX += dx; cam.offsetY += dy; }
+    dragLastX = e.clientX; dragLastY = e.clientY; render();
+  });
+  canvas.addEventListener('pointerup', () => { isDragging = false; });
+  canvas.addEventListener('pointercancel', () => { isDragging = false; });
+
+  canvas.addEventListener('wheel', (e) => {
+    e.preventDefault(); const factor = e.deltaY > 0 ? 0.85 : 1.18;
+    if (cam.mode === '3d') { cam.scale = Math.max(0.5, Math.min(10, cam.scale * factor)); } else { PlanetCamera.zoomAt(cam, e.clientX, e.clientY, factor); }
+    render();
+  }, { passive: false });
+
+  canvas.addEventListener('click', (e) => {
+    if (dragDist > 10) return;
+    const rect = canvas.getBoundingClientRect(), sx = e.clientX - rect.left, sy = e.clientY - rect.top;
+    let hitMap = null;
+    if (cam.mode === '2d') {
+      const wx = (sx - cam.offsetX) / cam.scale, wy = (sy - cam.offsetY) / cam.scale;
+      hitMap = world.maps.find(m => wx >= m.x && wx <= m.x + m.w && wy >= m.y && wy <= m.y + m.h);
+    } else {
+      let minDist = 40;
+      for (const m of world.maps) {
+        const proj = PlanetCamera.project3D(cam, m.x + m.w/2, m.y + m.h/2);
+        if (proj.z > 0) { const d = Math.sqrt((proj.x - sx)**2 + (proj.y - sy)**2); if (d < minDist) { minDist = d; hitMap = m; } }
+      }
+    }
+    if (hitMap) openPopup(hitMap);
+  });
+
+  function openPopup(m) {
+    document.getElementById('popupName').textContent = m.name || 'Без названия';
+    document.getElementById('popupSize').textContent = `${m.w}x${m.h}`;
+    let regName = 'Неизвестно';
+    if (m.regionId && world.regions) { const reg = world.regions.find(r => r.id === m.regionId); if (reg) regName = reg.name; }
+    document.getElementById('popupRegion').textContent = regName;
+
+    const imgEl = document.getElementById('popupImg');
+    if (m.pngUrl) { imgEl.src = m.pngUrl; imgEl.style.display = 'block'; } else { imgEl.style.display = 'none'; }
+
+    const dlBtn = document.getElementById('popupDownload');
+    dlBtn.href = m.tmxUrl || '#';
+    if (!m.tmxUrl) { dlBtn.style.opacity = '0.5'; dlBtn.style.pointerEvents = 'none'; }
+    else { dlBtn.style.opacity = '1'; dlBtn.style.pointerEvents = 'auto'; }
+
+    popup.style.display = 'flex'; backdrop.style.display = 'block';
+  }
+
+  function closePopup() { popup.style.display = 'none'; backdrop.style.display = 'none'; }
+  document.getElementById('popupClose').onclick = closePopup;
+  backdrop.onclick = closePopup;
+
+  document.getElementById('btn3d').onclick = () => { cam.mode = '3d'; document.getElementById('btn3d').classList.add('active'); document.getElementById('btn2d').classList.remove('active'); render(); };
+  document.getElementById('btn2d').onclick = () => { cam.mode = '2d'; document.getElementById('btn2d').classList.add('active'); document.getElementById('btn3d').classList.remove('active'); render(); };
+
+  document.getElementById('searchInput').addEventListener('change', (e) => {
+    const q = e.target.value.toLowerCase(); if (!q) return;
+    const m = world.maps.find(map => map.name.toLowerCase().includes(q));
+    if (m) {
+      if (cam.mode === '2d') { PlanetCamera.centerOn(cam, m.x + m.w/2, m.y + m.h/2, 0.1); render(); }
+      else { openPopup(m); }
+    }
+  });
+  init();
+})();
+</script>
+</body>
+</html>

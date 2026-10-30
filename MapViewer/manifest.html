@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Генератор манифеста</title>
+<style>
+  body { background:#0a0a12; color:#fff; font-family:sans-serif; padding:40px; display:flex; justify-content:center; }
+  .box { width:100%; max-width:800px; background:rgba(20,20,30,0.9); border:1px solid #333; border-radius:16px; padding:30px; }
+  .dropzone { border:2px dashed #7c5cfc; border-radius:12px; padding:40px; text-align:center; cursor:pointer; background:rgba(124,92,252,0.05); margin-bottom:20px; }
+  .dropzone:hover { background:rgba(124,92,252,0.15); }
+  .config { display:flex; gap:10px; margin-bottom:20px; }
+  .config input { flex:1; padding:10px; border-radius:8px; border:1px solid #444; background:#000; color:#fff; }
+  table { width:100%; border-collapse:collapse; margin-bottom:20px; display:none; }
+  th, td { padding:10px; border-bottom:1px solid #333; text-align:left; font-size:13px; }
+  th { color:#888; }
+  .btn { background:#7c5cfc; color:#fff; border:none; padding:12px; border-radius:8px; font-weight:bold; cursor:pointer; width:100%; }
+  .btn:disabled { opacity:0.5; cursor:not-allowed; }
+</style>
+</head>
+<body>
+<div class="box">
+  <h1>Генератор манифеста</h1>
+  <p style="color:#888; margin-bottom:20px;">Перетащи PNG и TMX файлы, укажи базовый путь и скачай JSON.</p>
+  <div class="dropzone" id="dropzone">Перетащите файлы сюда<br><small>или нажмите</small><input type="file" id="fileInput" multiple hidden></div>
+  <div class="config"><input type="text" id="basePath" value="assets/TCW-Arasida/"></div>
+  <table id="listTable"><thead><tr><th>ID / Название</th><th>Размер</th><th>Статус</th></tr></thead><tbody id="tbody"></tbody></table>
+  <button class="btn" id="downloadBtn" disabled>Скачать maps_manifest.json</button>
+</div>
+<script>
+  let parsed = [], pending = 0;
+  const dropzone = document.getElementById('dropzone'), fileInput = document.getElementById('fileInput'), tbody = document.getElementById('tbody'), table = document.getElementById('listTable');
+  dropzone.onclick = () => fileInput.click();
+  dropzone.ondragover = (e) => { e.preventDefault(); dropzone.style.borderColor = '#a07cff'; };
+  dropzone.ondragleave = () => { dropzone.style.borderColor = '#7c5cfc'; };
+  dropzone.ondrop = (e) => { e.preventDefault(); dropzone.style.borderColor = '#7c5cfc'; handle(e.dataTransfer.files); };
+  fileInput.onchange = (e) => handle(e.target.files);
+
+  function handle(files) {
+    const groups = {};
+    Array.from(files).forEach(f => {
+      let ext = f.name.split('.').pop().toLowerCase();
+      if (ext !== 'png' && ext !== 'tmx') return;
+      let base = f.name.substring(0, f.name.lastIndexOf('.'));
+      if (ext === 'png' && base.endsWith('_map')) base = base.slice(0, -4);
+      if (!groups[base]) groups[base] = { base, png: null, tmx: null };
+      if (ext === 'png') groups[base].png = f; else groups[base].tmx = f;
+    });
+
+    Object.values(groups).forEach(g => {
+      if (parsed.some(p => p.base === g.base)) return;
+      let m = { id: g.base.toLowerCase().replace(/[^a-z0-9]/g, '_'), name: g.base.replace(/_/g, ' '), base: g.base, w: 0, h: 0, png: g.png, tmx: g.tmx, status: 'Загрузка...' };
+      
+      pending++;
+      
+      // 1. Сначала пытаемся прочитать размер из TMX
+      if (g.tmx) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const text = e.target.result;
+          const match = text.match(/width="(\d+)"\s+height="(\d+)"\s+tilewidth="(\d+)"\s+tileheight="(\d+)"/);
+          if (match) {
+            m.w = parseInt(match[1]) * parseInt(match[3]);
+            m.h = parseInt(match[2]) * parseInt(match[4]);
+            m.status = 'OK (TMX)';
+          } else {
+            m.status = 'Ошибка TMX';
+          }
+          pending--; updateUI();
+        };
+        reader.readAsText(g.tmx);
+      } 
+      // 2. Если TMX нет, читаем PNG
+      else if (g.png) {
+        const img = new Image();
+        img.onload = () => { m.w = img.naturalWidth; m.h = img.naturalHeight; m.status = 'OK (PNG)'; pending--; updateUI(); };
+        img.src = URL.createObjectURL(g.png);
+      } else {
+        m.status = 'Нет файлов';
+        pending--;
+      }
+      parsed.push(m);
+    });
+    updateUI();
+  }
+
+  function updateUI() {
+    if (!parsed.length) return;
+    table.style.display = 'table'; tbody.innerHTML = '';
+    parsed.sort((a,b) => a.base.localeCompare(b.base)).forEach(m => {
+      tbody.innerHTML += `<tr><td><b>${m.name}</b><br><small>${m.id}</small></td><td>${m.w ? m.w+'x'+m.h : '—'}</td><td>${m.status}</td></tr>`;
+    });
+    document.getElementById('downloadBtn').disabled = pending > 0;
+  }
+
+  document.getElementById('downloadBtn').onclick = () => {
+    let path = document.getElementById('basePath').value.trim();
+    if (!path.endsWith('/')) path += '/';
+    const man = { format: 'webtiled-manifest', version: 1, maps: [] };
+    parsed.forEach(m => {
+      man.maps.push({ id: m.id, name: m.name, pngUrl: m.png ? path + m.png.name : "", tmxUrl: m.tmx ? path + m.tmx.name : "", w: m.w || 2000, h: m.h || 2000 });
+    });
+    const blob = new Blob([JSON.stringify(man, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'maps_manifest.json'; a.click();
+  };
+</script>
+</body>
+</html>

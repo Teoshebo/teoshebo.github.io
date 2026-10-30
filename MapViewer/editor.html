@@ -1,0 +1,686 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>WebTiled Planet — Editor v1.3</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html, body { height:100%; overflow:hidden; background:#0b1020; color:#fff; font-family:'Segoe UI',system-ui,sans-serif; user-select:none; }
+  #viewport { position:fixed; inset:0; }
+  
+  #vectorCanvas { position:absolute; inset:0; display:block; z-index: 1; pointer-events: none; }
+  #mapCanvas { position:absolute; inset:0; display:block; z-index: 2; cursor: grab; background: transparent; }
+  #mapCanvas:active { cursor: grabbing; }
+  
+  #ui { position:absolute; inset:0; z-index:10; pointer-events:none; }
+  #ui > * { pointer-events:auto; }
+  
+  .panel { position:absolute; background:rgba(20,20,30,0.9); backdrop-filter:blur(12px); border:1px solid rgba(255,255,255,0.08); border-radius:12px; padding:12px; font-size:13px; }
+  
+  #status { top:16px; left:50%; transform:translateX(-50%); color:#b0b0d0; font-family:monospace; white-space:nowrap; }
+  #coords { bottom:16px; right:16px; color:#b0b0d0; font-family:monospace; }
+  
+  #modeSwitcher { top:16px; left:16px; display:flex; gap:4px; padding:4px; z-index: 20; }
+  #viewToggle { top:16px; right:16px; display:flex; gap:4px; padding:4px; z-index: 20; }
+  
+  #leftPanel { top:70px; left:16px; width:220px; max-height:75vh; display:flex; flex-direction:column; }
+  #rightPanel, #regionPanel { top:70px; right:16px; width:240px; display:none; }
+  
+  h3 { font-size:14px; margin-bottom:10px; color:#7c5cfc; text-transform:uppercase; letter-spacing:1px; }
+  
+  .palette-item { background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); border-radius:8px; padding:8px; margin-bottom:6px; cursor:pointer; display:flex; align-items:center; gap:8px; transition:0.2s; }
+  .palette-item:hover { background:rgba(124,92,252,0.2); border-color:#7c5cfc; }
+  .palette-item img { width:32px; height:32px; border-radius:4px; object-fit:cover; background:#000; }
+  
+  .insp-row { margin-bottom:10px; }
+  .insp-row label { display:block; font-size:11px; color:#888; margin-bottom:4px; }
+  .insp-row input, .insp-row select { width:100%; background:rgba(0,0,0,0.4); border:1px solid rgba(255,255,255,0.1); border-radius:6px; padding:6px; color:#fff; font-size:12px; }
+  .insp-row input[type="color"] { padding:0; height:30px; cursor:pointer; }
+  
+  .btn-group { display:flex; gap:6px; margin-top:12px; }
+  .btn { background:rgba(124,92,252,0.9); border:none; color:#fff; padding:8px 12px; border-radius:6px; font-weight:600; font-size:12px; cursor:pointer; transition:0.2s; flex:1; text-align:center; }
+  .btn:hover { background:#a07cff; }
+  .btn.sec { background:rgba(60,60,80,0.9); }
+  .btn.sec:hover { background:rgba(90,90,120,0.9); }
+  .btn.danger { background:#d32f2f; }
+  .btn.danger:hover { background:#f44336; }
+  
+  #topBar { position:absolute; bottom:24px; left:50%; transform:translateX(-50%); display:flex; gap:6px; align-items:center; }
+  
+  .tool-bar { 
+    position: absolute; bottom: 90px; left: 50%; transform: translateX(-50%); 
+    display: none; gap: 8px; background: rgba(20,20,30,0.85); backdrop-filter: blur(12px); 
+    border-radius: 50px; padding: 8px 12px; box-shadow: 0 8px 32px rgba(0,0,0,0.6); border: 1px solid rgba(255,255,255,0.08); 
+  }
+  .tool-btn { 
+    width: 44px; height: 44px; border-radius: 50%; border: none; 
+    background: transparent; color: #b0b0d0; font-size: 20px; cursor: pointer; 
+    transition: 0.2s; display: flex; align-items: center; justify-content: center; position: relative; 
+  }
+  .tool-btn:hover { background: rgba(255,255,255,0.1); color: #fff; transform: scale(1.1); }
+  .tool-btn.active { background: #7c5cfc; color: #fff; box-shadow: 0 0 15px rgba(124,92,252,0.5); }
+  .tool-btn::after { 
+    content: attr(title); position: absolute; bottom: -32px; left: 50%; transform: translateX(-50%); 
+    background: rgba(0,0,0,0.85); color: #fff; font-size: 11px; padding: 4px 10px; border-radius: 12px; 
+    white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity 0.2s; z-index: 100; 
+  }
+  .tool-btn:hover::after { opacity: 1; }
+  
+  .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.7); backdrop-filter:blur(4px); display:none; align-items:center; justify-content:center; z-index:100; }
+  .modal { background:rgba(24,24,36,0.95); border:1px solid rgba(255,255,255,0.1); border-radius:16px; padding:20px; width:320px; }
+  #emojiPalette { display:flex; flex-wrap:wrap; gap:6px; background:rgba(0,0,0,0.3); padding:8px; border-radius:10px; font-size:24px; cursor:pointer; margin-bottom:10px; }
+  #emojiPalette span:hover { background:rgba(255,255,255,0.1); border-radius:4px; }
+</style>
+</head>
+<body>
+<div id="viewport">
+  <canvas id="vectorCanvas"></canvas>
+  <canvas id="mapCanvas"></canvas>
+</div>
+
+<div id="ui">
+  <div class="panel" id="status">Инициализация...</div>
+  <div class="panel" id="coords">—</div>
+
+  <div class="panel" id="modeSwitcher">
+    <button class="btn" id="modeMapsBtn" style="background:#7c5cfc;">Карты</button>
+    <button class="btn sec" id="modeRegionsBtn">Регионы</button>
+    <button class="btn sec" id="modeVectorBtn">Вектор</button>
+  </div>
+
+  <div class="panel" id="viewToggle">
+    <button class="btn" id="btn2d" style="background:#7c5cfc;">2D</button>
+    <button class="btn sec" id="btn3d">3D</button>
+  </div>
+
+  <div class="panel" id="leftPanel">
+    <h3 id="leftTitle">Палитра карт</h3>
+    <div id="paletteList" style="overflow-y:auto; flex:1;">
+      <div style="color:#888; font-size:12px;">Загрузка...</div>
+    </div>
+  </div>
+
+  <div class="panel" id="rightPanel">
+    <h3>Инспектор карты</h3>
+    <div class="insp-row"><label>Название</label><input type="text" id="inspName"></div>
+    <div class="insp-row" style="display:flex; gap:6px;">
+      <div style="flex:1;"><label>X</label><input type="number" id="inspX"></div>
+      <div style="flex:1;"><label>Y</label><input type="number" id="inspY"></div>
+    </div>
+    <div class="insp-row" style="display:flex; gap:6px;">
+      <div style="flex:1;"><label>Ширина</label><input type="number" id="inspW"></div>
+      <div style="flex:1;"><label>Высота</label><input type="number" id="inspH"></div>
+    </div>
+    <div class="insp-row">
+      <label>Z-Index</label>
+      <div style="display:flex; gap:6px;">
+        <button class="btn sec" id="inspZDown" style="padding:4px;">▼</button>
+        <input type="number" id="inspZ" readonly style="text-align:center;">
+        <button class="btn sec" id="inspZUp" style="padding:4px;">▲</button>
+      </div>
+    </div>
+    <div class="btn-group">
+      <button class="btn" id="inspLinkBtn">Связать</button>
+      <button class="btn danger" id="inspDeleteBtn">Удалить</button>
+    </div>
+  </div>
+
+  <div class="panel" id="regionPanel">
+    <h3>Инспектор региона</h3>
+    <div class="insp-row"><label>Название</label><input type="text" id="regName"></div>
+    <div class="insp-row"><label>Радиус</label><input type="number" id="regRadius"></div>
+    <div class="insp-row"><label>Цвет</label><input type="color" id="regColor"></div>
+    <div class="btn-group"><button class="btn danger" id="regDeleteBtn">Удалить</button></div>
+  </div>
+
+  <div class="tool-bar" id="mapTools">
+    <button class="tool-btn" id="toolLink" title="Связать карты">🔗</button>
+  </div>
+
+  <div class="tool-bar" id="vectorTools">
+    <button class="tool-btn" id="vToolCreate" title="Создать полигон">✏️</button>
+    <button class="tool-btn" id="vToolFinish" title="Завершить рисование">✅</button>
+    <button class="tool-btn" id="vToolEdit" title="Редактировать вершины">📝</button>
+    <button class="tool-btn" id="vToolCut" title="Разрезать полигон">✂️</button>
+    <button class="tool-btn" id="vToolMarker" title="Поставить маркер">📍</button>
+    <button class="tool-btn" id="vToolMove" title="Двигать маркеры">🖐️</button>
+  </div>
+
+  <div id="topBar">
+    <button class="btn sec" id="fitWorld">Вся планета</button>
+    <button class="btn sec" id="fitMaps">К картам</button>
+    <button class="btn" id="loadBtn">Загрузить вручную</button>
+    <button class="btn" id="saveBtn">Скачать world.json</button>
+    <button class="btn sec" id="clearBtn" style="color:#ff6b6b;">Очистить</button>
+    <input type="file" id="fileInput" hidden accept=".json" multiple>
+  </div>
+</div>
+
+<div class="modal-overlay" id="markerModal">
+  <div class="modal">
+    <h3 style="margin-bottom:15px; color:#7c5cfc;">Настройка маркера</h3>
+    <div id="emojiPalette"></div>
+    <div class="insp-row"><label>Размер</label><input type="number" id="markerSize" value="20"></div>
+    <div class="insp-row"><label>Подпись</label><input type="text" id="markerLabel" placeholder="Текст..."></div>
+    <div class="btn-group">
+      <button class="btn" id="markerSaveBtn">Сохранить</button>
+      <button class="btn sec" id="markerCancelBtn">Отмена</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="styleModal">
+  <div class="modal">
+    <h3 style="margin-bottom:15px; color:#7c5cfc;">Стиль полигона</h3>
+    <div class="insp-row" style="display:flex; gap:10px;">
+      <div style="flex:1;"><label>Цвет 1</label><input type="color" id="polyColor1" value="#ffcccc"></div>
+      <div style="flex:1;"><label>Цвет 2</label><input type="color" id="polyColor2" value="#ffffff"></div>
+    </div>
+    <div class="insp-row">
+      <label>Узор</label>
+      <select id="polyPattern">
+        <option value="solid">Сплошной</option>
+        <option value="horizontal">Полосы (гор.)</option>
+        <option value="vertical">Полосы (верт.)</option>
+        <option value="diagonal">Диагональ</option>
+        <option value="checkers">Клетка</option>
+        <option value="dots">Точки</option>
+        <option value="grid">Сетка</option>
+      </select>
+    </div>
+    <div class="insp-row"><label>Масштаб узора</label><input type="range" id="polyScale" min="5" max="100" value="20"></div>
+    <div class="btn-group">
+      <button class="btn" id="styleSaveBtn">Применить</button>
+      <button class="btn sec" id="styleCancelBtn">Отмена</button>
+    </div>
+  </div>
+</div>
+
+<script src="js/planet_core.js"></script>
+<script src="js/planet_camera.js"></script>
+<script src="js/planet_view.js"></script>
+<script src="js/vector_editor.js"></script>
+
+<script>
+(function(){
+  'use strict';
+
+  const mapCanvas = document.getElementById('mapCanvas');
+  const vecCanvas = document.getElementById('vectorCanvas');
+  const mapCtx = mapCanvas.getContext('2d');
+  const vecCtx = vecCanvas.getContext('2d');
+
+  let world = PlanetCore.createEmptyWorld();
+  let manifest = null;
+  const cam = PlanetCamera.createCamera(world);
+  
+  let appMode = 'maps';
+  let linkMode = false;
+  let linkSourceId = null;
+
+  let editingPolyIndex = -1;
+  let editingMarkerRef = null;
+
+  const state = {
+    imageCache: new Map(),
+    guides: [],
+    lod: null,
+    selectedMapId: null,
+    selectedRegionId: null
+  };
+
+  function init() {
+    resize();
+    setupEmojiPalette();
+    VectorEditor.setModalCallback((type, data) => {
+      if (type === 'marker') openMarkerModal(data);
+    });
+
+    Promise.all([
+      fetch('data/world.json').then(r => r.ok ? r.json() : null).catch(() => null),
+      fetch('data/maps_manifest.json').then(r => r.ok ? r.json() : null).catch(() => null)
+    ]).then(([wdata, mdata]) => {
+      if (wdata) applyWorld(PlanetCore.loadWorld(wdata));
+      if (mdata) { manifest = mdata; buildPalette(); refreshAllImages(); }
+      
+      if (!wdata && !mdata) {
+        document.getElementById('status').textContent = 'Локальный режим. Нажмите "Загрузить вручную"';
+      } else {
+        document.getElementById('status').textContent = 'Данные загружены с сервера!';
+      }
+      render();
+    });
+  }
+
+  function saveToLocal() {
+    try { localStorage.setItem('webtiled_world_backup', JSON.stringify(world)); } catch(e) {}
+  }
+
+  function ensureImage(mapId, url) {
+    if (!url || state.imageCache.has(mapId)) return;
+    const img = new Image();
+    if (window.location.protocol !== 'file:') img.crossOrigin = 'Anonymous';
+    img.onload = () => { img._ready = true; render(); };
+    img.src = url;
+    state.imageCache.set(mapId, img);
+  }
+
+  function refreshAllImages() {
+    if (manifest && manifest.maps) {
+      for (const entry of manifest.maps) if (entry.id && entry.pngUrl) ensureImage(entry.id, entry.pngUrl);
+    }
+    for (const m of world.maps) if (m.id && m.pngUrl) ensureImage(m.id, m.pngUrl);
+    if (world.planet.textureUrl) ensureImage('planet_tex', world.planet.textureUrl);
+  }
+
+  let rafPending = false;
+  function render() {
+    if (rafPending) return;
+    rafPending = true;
+    requestAnimationFrame(() => {
+      rafPending = false;
+      state.lod = PlanetView.getLODLevel(cam.scale);
+      
+      if (cam.mode === '2d') {
+        VectorEditor.render(vecCtx, cam, world, state);
+      } else {
+        vecCtx.clearRect(0, 0, vecCanvas.width, vecCanvas.height);
+      }
+      
+      PlanetView.renderMaps(mapCtx, cam, world, state);
+      
+      if (appMode === 'regions' && state.selectedRegionId && cam.mode === '2d') {
+        const r = world.regions.find(reg => reg.id === state.selectedRegionId);
+        if (r) {
+          const p = PlanetCamera.toScreen(cam, r.x, r.y);
+          const screenR = Math.max(10, r.radius * cam.scale);
+          mapCtx.beginPath(); mapCtx.arc(p.x, p.y, screenR, 0, 2*Math.PI);
+          mapCtx.strokeStyle = '#00ffff'; mapCtx.lineWidth = 3; mapCtx.setLineDash([5, 5]); mapCtx.stroke(); mapCtx.setLineDash([]);
+        }
+      }
+
+      document.getElementById('status').textContent = `LOD:${state.lod} | maps:${world.maps.length} | scale:${cam.scale.toFixed(4)}`;
+    });
+  }
+
+  function resize() {
+    const w = window.innerWidth, h = window.innerHeight;
+    [mapCanvas, vecCanvas].forEach(c => { c.width = w; c.height = h; });
+    PlanetCamera.setViewport(cam, w, h); render();
+  }
+  window.addEventListener('resize', resize);
+
+  function getMapAt(wx, wy) {
+    const maps = PlanetCore.sortMapsByZ(world.maps).reverse();
+    for (const m of maps) { if (wx >= m.x && wx <= m.x + m.w && wy >= m.y && wy <= m.y + m.h) return m; }
+    return null;
+  }
+  function getRegionAt(wx, wy) {
+    for (let i = world.regions.length - 1; i >= 0; i--) {
+      const r = world.regions[i], dx = wx - r.x, dy = wy - r.y;
+      if (Math.sqrt(dx*dx + dy*dy) < (r.radius || 500)) return r;
+    }
+    return null;
+  }
+  function getPolyAt(wx, wy) {
+    if (!world.polygons) return -1;
+    for (let i = world.polygons.length - 1; i >= 0; i--) {
+      const poly = world.polygons[i];
+      let inside = false;
+      for (let j = 0, k = poly.points.length - 1; j < poly.points.length; k = j++) {
+        let xi = poly.points[j].x, yi = poly.points[j].y, xj = poly.points[k].x, yj = poly.points[k].y;
+        let intersect = ((yi > wy) != (yj > wy)) && (wx < (xj - xi) * (wy - yi) / (yj - yi) + xi);
+        if (intersect) inside = !inside;
+      }
+      if (inside) return i;
+    }
+    return -1;
+  }
+
+  let action = 'none', dragMapOffsetX = 0, dragMapOffsetY = 0, dragRegionOffsetX = 0, dragRegionOffsetY = 0, dragLastX = 0, dragLastY = 0;
+
+  function screenPos(e) { const r = mapCanvas.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; }
+
+  mapCanvas.addEventListener('pointerdown', (e) => {
+    mapCanvas.setPointerCapture(e.pointerId);
+    const p = screenPos(e), wx = (p.x - cam.offsetX) / cam.scale, wy = (p.y - cam.offsetY) / cam.scale;
+
+    if (appMode === 'vector' && cam.mode === '2d' && typeof VectorEditor !== 'undefined') {
+      if (e.button === 0) {
+        const handled = VectorEditor.handlePointerDown(e, cam, world, render);
+        if (handled) { saveToLocal(); return; }
+      }
+      action = 'pan'; dragLastX = p.x; dragLastY = p.y; return;
+    }
+
+    if (appMode === 'regions' && cam.mode === '2d') {
+      if (e.button === 0) {
+        const hitReg = getRegionAt(wx, wy);
+        if (hitReg) {
+          state.selectedRegionId = hitReg.id; action = 'drag-region';
+          dragRegionOffsetX = wx - hitReg.x; dragRegionOffsetY = wy - hitReg.y; updateRegionPanel();
+        } else {
+          const newReg = { id: PlanetCore.generateId('reg'), name: 'New Region', x: wx, y: wy, radius: 2000, color: '#3a6ea5' };
+          world.regions.push(newReg); state.selectedRegionId = newReg.id; updateRegionPanel(); saveToLocal();
+        }
+        render(); return;
+      }
+    }
+
+    if (appMode === 'maps' && cam.mode === '2d') {
+      if (linkMode) {
+        const targetMap = getMapAt(wx, wy);
+        if (targetMap) {
+          if (!linkSourceId) {
+            linkSourceId = targetMap.id;
+            document.getElementById('status').textContent = 'Выбрана первая карта. Кликните по второй...';
+          } else if (targetMap.id !== linkSourceId) {
+            world.links.push({ id: PlanetCore.generateId('ln'), from: linkSourceId, to: targetMap.id, color: '#88ccff' });
+            linkSourceId = null;
+            linkMode = false;
+            document.getElementById('toolLink').classList.remove('active');
+            saveToLocal(); render();
+          }
+        }
+        return;
+      }
+
+      if (e.button === 0) {
+        const hitMap = getMapAt(wx, wy);
+        if (hitMap) {
+          state.selectedMapId = hitMap.id; action = 'drag-map';
+          dragMapOffsetX = wx - hitMap.x; dragMapOffsetY = wy - hitMap.y; updateInspector();
+        } else {
+          state.selectedMapId = null; updateInspector(); action = 'pan'; dragLastX = p.x; dragLastY = p.y;
+        }
+      } else { action = 'pan'; dragLastX = p.x; dragLastY = p.y; }
+    } else if (cam.mode === '3d') {
+      // В 3D мы просто панорамируем/вращаем камеру
+      action = 'pan'; dragLastX = p.x; dragLastY = p.y;
+    }
+  });
+
+  mapCanvas.addEventListener('pointermove', (e) => {
+    const p = screenPos(e), wx = (p.x - cam.offsetX) / cam.scale, wy = (p.y - cam.offsetY) / cam.scale;
+    document.getElementById('coords').textContent = `x:${Math.round(wx)} y:${Math.round(wy)}`;
+
+    if (appMode === 'vector' && cam.mode === '2d' && typeof VectorEditor !== 'undefined') {
+      if (VectorEditor.handlePointerMove(e, cam, world, render)) return;
+    }
+
+    if (action === 'pan') {
+      if (cam.mode === '3d') {
+        cam.planetRotX -= (p.y - dragLastY) * 0.005;
+        cam.planetRotY += (p.x - dragLastX) * 0.005;
+      } else {
+        PlanetCamera.panBy(cam, p.x - dragLastX, p.y - dragLastY);
+      }
+      dragLastX = p.x; dragLastY = p.y; render();
+    } 
+    else if (action === 'drag-map' && state.selectedMapId) {
+      const m = world.maps.find(map => map.id === state.selectedMapId);
+      if (!m) return;
+      let newX = wx - dragMapOffsetX, newY = wy - dragMapOffsetY;
+      const snap = PlanetCore.computeEdgeSnap({ x1: newX, y1: newY, x2: newX + m.w, y2: newY + m.h }, world.maps, 20 / cam.scale, m.id);
+      if (snap) { newX += snap.dx; newY += snap.dy; state.guides = snap.guides; } else { state.guides = []; }
+      m.x = Math.round(newX); m.y = Math.round(newY);
+      document.getElementById('inspX').value = m.x; document.getElementById('inspY').value = m.y; render();
+    }
+    else if (action === 'drag-region' && state.selectedRegionId) {
+      const r = world.regions.find(reg => reg.id === state.selectedRegionId);
+      if (r) { r.x = Math.round(wx - dragRegionOffsetX); r.y = Math.round(wy - dragRegionOffsetY); render(); }
+    }
+  });
+
+  function endPointer(e) {
+    if (appMode === 'vector' && cam.mode === '2d' && typeof VectorEditor !== 'undefined') {
+      if (VectorEditor.handlePointerUp(e, world, render)) saveToLocal();
+    } else {
+      if (action === 'drag-map' || action === 'drag-region') saveToLocal();
+    }
+    action = 'none'; state.guides = []; render();
+  }
+  mapCanvas.addEventListener('pointerup', endPointer);
+  mapCanvas.addEventListener('pointercancel', endPointer);
+  mapCanvas.addEventListener('contextmenu', (e) => e.preventDefault());
+  mapCanvas.addEventListener('wheel', (e) => {
+    e.preventDefault(); const p = screenPos(e);
+    PlanetCamera.zoomAt(cam, p.x, p.y, e.deltaY > 0 ? 0.85 : 1.18); render();
+  }, { passive: false });
+
+  function setAppMode(mode) {
+    appMode = mode;
+    ['modeMapsBtn', 'modeRegionsBtn', 'modeVectorBtn'].forEach(id => document.getElementById(id).style.background = 'rgba(60,60,80,0.9)');
+    document.getElementById(mode === 'maps' ? 'modeMapsBtn' : mode === 'regions' ? 'modeRegionsBtn' : 'modeVectorBtn').style.background = '#7c5cfc';
+
+    document.getElementById('mapTools').style.display = mode === 'maps' ? 'flex' : 'none';
+    document.getElementById('vectorTools').style.display = mode === 'vector' ? 'flex' : 'none';
+    document.getElementById('leftPanel').style.display = mode === 'maps' ? 'flex' : 'none';
+    document.getElementById('rightPanel').style.display = 'none';
+    document.getElementById('regionPanel').style.display = 'none';
+    
+    state.selectedMapId = null; state.selectedRegionId = null; linkMode = false; linkSourceId = null;
+    if (mode === 'vector') VectorEditor.setMode('none', world, cam);
+    render();
+  }
+  document.getElementById('modeMapsBtn').onclick = () => setAppMode('maps');
+  document.getElementById('modeRegionsBtn').onclick = () => setAppMode('regions');
+  document.getElementById('modeVectorBtn').onclick = () => setAppMode('vector');
+
+  // 2D / 3D Toggle
+  function setViewMode(mode) {
+    cam.mode = mode;
+    document.getElementById('btn2d').style.background = mode === '2d' ? '#7c5cfc' : 'rgba(60,60,80,0.9)';
+    document.getElementById('btn3d').style.background = mode === '3d' ? '#7c5cfc' : 'rgba(60,60,80,0.9)';
+    render();
+  }
+  document.getElementById('btn2d').onclick = () => setViewMode('2d');
+  document.getElementById('btn3d').onclick = () => setViewMode('3d');
+
+  function setVectorTool(mode, btnId) {
+    ['vToolCreate', 'vToolEdit', 'vToolCut', 'vToolMarker', 'vToolMove'].forEach(id => document.getElementById(id).classList.remove('active'));
+    if (btnId) document.getElementById(btnId).classList.add('active');
+    VectorEditor.setMode(mode, world, cam); render();
+  }
+  document.getElementById('vToolCreate').onclick = () => setVectorTool('create', 'vToolCreate');
+  document.getElementById('vToolEdit').onclick = () => setVectorTool('edit', 'vToolEdit');
+  document.getElementById('vToolCut').onclick = () => setVectorTool('cut', 'vToolCut');
+  document.getElementById('vToolMarker').onclick = () => setVectorTool('marker', 'vToolMarker');
+  document.getElementById('vToolMove').onclick = () => setVectorTool('move', 'vToolMove');
+  document.getElementById('vToolFinish').onclick = () => { VectorEditor.finishCurrentPath(world); saveToLocal(); render(); };
+
+  document.getElementById('toolLink').onclick = function() {
+    linkMode = !linkMode;
+    if (linkMode) {
+      this.classList.add('active');
+      document.getElementById('status').textContent = 'Связь: выберите первую карту';
+    } else {
+      this.classList.remove('active');
+      linkSourceId = null;
+    }
+  };
+
+  mapCanvas.addEventListener('dblclick', (e) => {
+    if (appMode !== 'vector' || cam.mode !== '2d') return;
+    const p = screenPos(e), wx = (p.x - cam.offsetX) / cam.scale, wy = (p.y - cam.offsetY) / cam.scale;
+    
+    // Проверяем, не кликнули ли мы по маркеру (для редактирования эмодзи)
+    let hitMarker = null;
+    let bestDist = 30 / cam.scale;
+    if (world.markers) {
+      world.markers.forEach(m => {
+        const d = Math.sqrt((m.x - wx)**2 + (m.y - wy)**2);
+        if (d < bestDist) { bestDist = d; hitMarker = m; }
+      });
+    }
+    if (hitMarker) {
+      openMarkerModal(hitMarker);
+      return;
+    }
+
+    // Или по полигону
+    const idx = getPolyAt(wx, wy);
+    if (idx !== -1) {
+      editingPolyIndex = idx;
+      const poly = world.polygons[idx];
+      document.getElementById('polyColor1').value = poly.color1 || '#ffcccc';
+      document.getElementById('polyColor2').value = poly.color2 || '#ffffff';
+      document.getElementById('polyPattern').value = poly.pattern || 'solid';
+      document.getElementById('polyScale').value = poly.scale || 20;
+      document.getElementById('styleModal').style.display = 'flex';
+    }
+  });
+
+  document.getElementById('styleCancelBtn').onclick = () => document.getElementById('styleModal').style.display = 'none';
+  document.getElementById('styleSaveBtn').onclick = () => {
+    if (editingPolyIndex !== -1) {
+      const poly = world.polygons[editingPolyIndex];
+      poly.color1 = document.getElementById('polyColor1').value;
+      poly.color2 = document.getElementById('polyColor2').value;
+      poly.pattern = document.getElementById('polyPattern').value;
+      poly.scale = parseInt(document.getElementById('polyScale').value);
+      saveToLocal(); render();
+    }
+    document.getElementById('styleModal').style.display = 'none';
+  };
+
+  function setupEmojiPalette() {
+    const emojis = ['⭐','🏔️','🌳','🏳️','🏴','🏠','🏢','🏫','🚩','🚧','🔴','🟠','🟡','🟢','🔵','🟣','🟤','⚫','⚪','🟥','🟧','🟨','🟩','🟦','🟪','🟫','⬛','⬜'];
+    const pal = document.getElementById('emojiPalette');
+    emojis.forEach(em => {
+      const span = document.createElement('span'); span.textContent = em;
+      span.onclick = () => { document.getElementById('markerLabel').value = em; }; pal.appendChild(span);
+    });
+  }
+  function openMarkerModal(marker) {
+    editingMarkerRef = marker;
+    document.getElementById('markerSize').value = marker.size || 20;
+    document.getElementById('markerLabel').value = marker.label || '';
+    document.getElementById('markerModal').style.display = 'flex';
+  }
+  document.getElementById('markerCancelBtn').onclick = () => document.getElementById('markerModal').style.display = 'none';
+  document.getElementById('markerSaveBtn').onclick = () => {
+    if (editingMarkerRef) {
+      editingMarkerRef.emoji = document.getElementById('markerLabel').value || '📍';
+      editingMarkerRef.label = document.getElementById('markerLabel').value;
+      editingMarkerRef.size = parseInt(document.getElementById('markerSize').value);
+      saveToLocal(); render();
+    }
+    document.getElementById('markerModal').style.display = 'none';
+  };
+
+  function updateInspector() {
+    const panel = document.getElementById('rightPanel');
+    if (!state.selectedMapId || appMode !== 'maps') { panel.style.display = 'none'; return; }
+    const m = world.maps.find(map => map.id === state.selectedMapId);
+    if (!m) { panel.style.display = 'none'; return; }
+    panel.style.display = 'block';
+    document.getElementById('inspName').value = m.name || '';
+    document.getElementById('inspX').value = m.x; document.getElementById('inspY').value = m.y;
+    document.getElementById('inspW').value = m.w || 2000; document.getElementById('inspH').value = m.h || 2000;
+    document.getElementById('inspZ').value = m.z || 0;
+  }
+  document.getElementById('inspName').oninput = (e) => { const m = world.maps.find(map => map.id === state.selectedMapId); if (m) { m.name = e.target.value; saveToLocal(); render(); } };
+  document.getElementById('inspX').onchange = (e) => { const m = world.maps.find(map => map.id === state.selectedMapId); if (m) { m.x = parseInt(e.target.value); saveToLocal(); render(); } };
+  document.getElementById('inspY').onchange = (e) => { const m = world.maps.find(map => map.id === state.selectedMapId); if (m) { m.y = parseInt(e.target.value); saveToLocal(); render(); } };
+  document.getElementById('inspW').onchange = (e) => { const m = world.maps.find(map => map.id === state.selectedMapId); if (m) { m.w = parseInt(e.target.value); saveToLocal(); render(); } };
+  document.getElementById('inspH').onchange = (e) => { const m = world.maps.find(map => map.id === state.selectedMapId); if (m) { m.h = parseInt(e.target.value); saveToLocal(); render(); } };
+  document.getElementById('inspZUp').onclick = () => { const m = world.maps.find(map => map.id === state.selectedMapId); if (m) { m.z = (m.z || 0) + 1; updateInspector(); saveToLocal(); render(); } };
+  document.getElementById('inspZDown').onclick = () => { const m = world.maps.find(map => map.id === state.selectedMapId); if (m) { m.z = (m.z || 0) - 1; updateInspector(); saveToLocal(); render(); } };
+  document.getElementById('inspDeleteBtn').onclick = () => {
+    if (!confirm('Удалить карту?')) return;
+    world.maps = world.maps.filter(map => map.id !== state.selectedMapId);
+    world.links = world.links.filter(l => l.from !== state.selectedMapId && l.to !== state.selectedMapId);
+    state.selectedMapId = null; updateInspector(); saveToLocal(); render();
+  };
+  document.getElementById('inspLinkBtn').onclick = () => {
+    if (!state.selectedMapId) return;
+    linkMode = true; linkSourceId = state.selectedMapId;
+    document.getElementById('toolLink').classList.add('active');
+    document.getElementById('status').textContent = 'Выберите вторую карту...';
+  };
+
+  function updateRegionPanel() {
+    const panel = document.getElementById('regionPanel');
+    if (!state.selectedRegionId || appMode !== 'regions') { panel.style.display = 'none'; return; }
+    const r = world.regions.find(reg => reg.id === state.selectedRegionId);
+    if (!r) { panel.style.display = 'none'; return; }
+    panel.style.display = 'block';
+    document.getElementById('regName').value = r.name || '';
+    document.getElementById('regRadius').value = r.radius || 2000;
+    document.getElementById('regColor').value = r.color || '#3a6ea5';
+  }
+  document.getElementById('regName').oninput = (e) => { const r = world.regions.find(reg => reg.id === state.selectedRegionId); if (r) { r.name = e.target.value; saveToLocal(); render(); } };
+  document.getElementById('regRadius').onchange = (e) => { const r = world.regions.find(reg => reg.id === state.selectedRegionId); if (r) { r.radius = parseInt(e.target.value); saveToLocal(); render(); } };
+  document.getElementById('regColor').oninput = (e) => { const r = world.regions.find(reg => reg.id === state.selectedRegionId); if (r) { r.color = e.target.value; saveToLocal(); render(); } };
+  document.getElementById('regDeleteBtn').onclick = () => {
+    if (!confirm('Удалить регион?')) return;
+    world.regions = world.regions.filter(reg => reg.id !== state.selectedRegionId);
+    state.selectedRegionId = null; updateRegionPanel(); saveToLocal(); render();
+  };
+
+  function buildPalette() {
+    const list = document.getElementById('paletteList');
+    list.innerHTML = '';
+    if (!manifest || !manifest.maps) { list.innerHTML = '<div style="color:#888; font-size:12px;">Манифест не загружен.</div>'; return; }
+    manifest.maps.forEach(entry => {
+      const div = document.createElement('div'); div.className = 'palette-item';
+      div.innerHTML = `${entry.pngUrl ? `<img src="${entry.pngUrl}" onerror="this.style.display='none'">` : ''}<div style="flex:1;"><div style="font-weight:600; margin-bottom:2px;">${entry.name}</div><div style="font-size:10px; color:#888;">${entry.w}x${entry.h}</div></div>`;
+      div.onclick = () => {
+        const cx = (mapCanvas.width / 2 - cam.offsetX) / cam.scale, cy = (mapCanvas.height / 2 - cam.offsetY) / cam.scale;
+        const newMap = { id: PlanetCore.generateId('map'), name: entry.name, x: Math.round(cx - entry.w/2), y: Math.round(cy - entry.h/2), w: entry.w || 2000, h: entry.h || 2000, pngUrl: entry.pngUrl, tmxUrl: entry.tmxUrl, z: (world.maps.length > 0 ? Math.max(...world.maps.map(m=>m.z||0)) + 1 : 0) };
+        world.maps.push(newMap); state.selectedMapId = newMap.id; updateInspector(); saveToLocal(); render();
+      };
+      list.appendChild(div);
+    });
+  }
+
+  document.getElementById('loadBtn').onclick = () => document.getElementById('fileInput').click();
+  document.getElementById('fileInput').onchange = (e) => {
+    const files = Array.from(e.target.files);
+    files.forEach(f => {
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        try {
+          const data = JSON.parse(ev.target.result);
+          if (data.format === 'webtiled-manifest') { manifest = data; buildPalette(); refreshAllImages(); }
+          else { applyWorld(PlanetCore.loadWorld(data)); saveToLocal(); }
+        } catch (err) { alert('Ошибка JSON в ' + f.name); }
+      };
+      reader.readAsText(f);
+    });
+    e.target.value = '';
+  };
+  document.getElementById('saveBtn').onclick = () => {
+    world.camera = { offsetX: cam.offsetX, offsetY: cam.offsetY, scale: cam.scale, mode: cam.mode };
+    const blob = new Blob([JSON.stringify(PlanetCore.saveWorld(world), null, 2)], { type: 'application/json' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'world.json'; a.click();
+  };
+  document.getElementById('clearBtn').onclick = () => {
+    if (!confirm('Полностью очистить проект?')) return;
+    world = PlanetCore.createEmptyWorld(); cam.offsetX = -500; cam.offsetY = -500; cam.scale = 1;
+    state.selectedMapId = null; state.selectedRegionId = null; linkMode = false;
+    localStorage.removeItem('webtiled_world_backup'); applyWorld(world); updateInspector(); updateRegionPanel();
+  };
+
+  document.getElementById('fitWorld').onclick = () => { PlanetCamera.fitBounds(cam, { x1: 0, y1: 0, x2: world.planet.widthPx, y2: world.planet.heightPx }); render(); };
+  document.getElementById('fitMaps').onclick = () => {
+    if (world.maps.length === 0) return;
+    let x1 = Infinity, y1 = Infinity, x2 = -Infinity, y2 = -Infinity;
+    for (const m of world.maps) { x1 = Math.min(x1, m.x); y1 = Math.min(y1, m.y); x2 = Math.max(x2, m.x + m.w); y2 = Math.max(y2, m.y + m.h); }
+    PlanetCamera.fitBounds(cam, { x1, y1, x2, y2 }, 100); render();
+  };
+
+  function applyWorld(newWorld) {
+    world = newWorld;
+    if (world.camera) { cam.offsetX = world.camera.offsetX ?? cam.offsetX; cam.offsetY = world.camera.offsetY ?? cam.offsetY; cam.scale = world.camera.scale ?? cam.scale; }
+    cam.worldW = world.planet.widthPx; cam.worldH = world.planet.heightPx;
+    PlanetView.resetLod(); refreshAllImages(); updateInspector(); updateRegionPanel(); render();
+  }
+
+  init();
+})();
+</script>
+</body>
+</html>
