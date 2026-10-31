@@ -1,5 +1,5 @@
 /**
- * planet_camera.js — камера
+ * planet_camera.js — камера (2D+3D)
  */
 (function(global) {
   'use strict';
@@ -9,10 +9,11 @@
 
   function createCamera(world) {
     return {
-      offsetX: -500, offsetY: -500, scale: 1, mode: '2d',
-      planetRotX: 0, planetRotY: 0, width: 0, height: 0,
-      worldW: world?.planet.widthPx || 200000,
-      worldH: world?.planet.heightPx || 200000
+      offsetX: -500, offsetY: -500, scale: 1,
+      mode: '2d', planetRotX: 0, planetRotY: 0,
+      width: 0, height: 0,
+      worldW: world?.planet.widthPx || 2000000,
+      worldH: world?.planet.heightPx || 2000000
     };
   }
 
@@ -50,12 +51,12 @@
   }
 
   function fitBounds(cam, bbox, padding = 50) {
-    const bw = Math.max(1e-3, bbox.x2 - bbox.x1);
-    const bh = Math.max(1e-3, bbox.y2 - bbox.y1);
     if (cam.mode === '3d') {
-      cam.scale = clampScale(Math.min((cam.width - 2*padding) / cam.worldW, (cam.height - 2*padding) / cam.worldH));
+      cam.scale = 2.5; // Стандартный зум, чтобы сфера занимала экран
       return;
     }
+    const bw = Math.max(1e-3, bbox.x2 - bbox.x1);
+    const bh = Math.max(1e-3, bbox.y2 - bbox.y1);
     const sx = (cam.width - 2*padding) / bw;
     const sy = (cam.height - 2*padding) / bh;
     cam.scale = clampScale(Math.min(sx, sy));
@@ -84,16 +85,20 @@
     const y2 = y1 * Math.cos(cam.planetRotX) - z1 * Math.sin(cam.planetRotX);
     const z2 = y1 * Math.sin(cam.planetRotX) + z1 * Math.cos(cam.planetRotX);
     const x2 = x1;
-    const r = (Math.min(cam.width, cam.height) * 0.4) * cam.scale;
+    const minDim = Math.min(cam.width, cam.height);
+    const r = (minDim * 0.4) * cam.scale;
     return { x: x2 * r + cam.width/2, y: -y2 * r + cam.height/2, z: z2 };
   }
 
   function worldFromScreen3D(cam, sx, sy) {
     const cx = cam.width/2, cy = cam.height/2;
-    const r = (Math.min(cam.width, cam.height) * 0.4) * cam.scale;
-    const u = (sx - cx) / r, v = -(sy - cy) / r;
-    if (u*u + v*v > 1) return null;
-    const z = Math.sqrt(1 - u*u - v*v);
+    const minDim = Math.min(cam.width, cam.height);
+    const r = (minDim * 0.4) * cam.scale;
+    const u = (sx - cx) / r;
+    const v = -(sy - cy) / r;
+    const distSq = u*u + v*v;
+    if (distSq > 1) return null;
+    const z = Math.sqrt(1 - distSq);
     let x = u, y = v, zc = z;
     const y1 = y * Math.cos(-cam.planetRotX) - zc * Math.sin(-cam.planetRotX);
     const z1 = y * Math.sin(-cam.planetRotX) + zc * Math.cos(-cam.planetRotX);
@@ -103,11 +108,17 @@
     const py = y1;
     const lat = Math.asin(-py);
     const lon = Math.atan2(px, pz);
-    return { x: (lon / (2*Math.PI) + 0.5) * cam.worldW, y: (lat / Math.PI + 0.5) * cam.worldH };
+    return {
+      x: (lon / (2*Math.PI) + 0.5) * cam.worldW,
+      y: (lat / Math.PI + 0.5) * cam.worldH
+    };
   }
 
   global.PlanetCamera = {
-    MIN_SCALE, MAX_SCALE, createCamera, setViewport, clampScale,
-    toWorld, toScreen, panBy, zoomAt, getVisibleBounds, fitBounds, centerOn, project3D
+    MIN_SCALE, MAX_SCALE,
+    createCamera, setViewport, clampScale,
+    toWorld, toScreen, panBy, zoomAt,
+    getVisibleBounds, fitBounds, centerOn,
+    project3D, worldFromScreen3D
   };
 })(window);
