@@ -14,7 +14,7 @@
   }
 
   const DEFAULT_PLANET = {
-    name: 'Terra', widthPx: 2000000, heightPx: 2000000, // Увеличили базовый размер
+    name: 'Terra', widthPx: 2000000, heightPx: 2000000,
     kmPerUnit: 30, textureUrl: ''
   };
 
@@ -25,7 +25,8 @@
       camera: { offsetX: -500, offsetY: -500, scale: 1, mode: '2d' },
       regions: [], maps: [], links: [],
       polygons: [], markers: [], rulerPoints: [],
-      gridSize: 50, gridOpacity: 0.5, polyOpacity: 1
+      gridSize: 50, gridOpacity: 0.5, polyOpacity: 1,
+      isMigrated: false
     };
   }
 
@@ -37,7 +38,7 @@
     if (json.format === FORMAT) {
       world = { ...world, ...json };
     } else {
-      // МИГРАЦИЯ СТАРОГО ФОРМАТА (Умножение на 1000)
+      // МИГРАЦИЯ СТАРОГО ФОРМАТА
       const scale = 1000;
       const oldW = json.fieldW || 1600;
       const oldH = json.fieldH || 2000;
@@ -56,24 +57,40 @@
       
       world.planet.widthPx = oldW * scale;
       world.planet.heightPx = oldH * scale;
+      world.isMigrated = true; 
       
-      // Если был фон, забираем его в текстуру планеты
       if (json.overlayUrl) world.planet.textureUrl = json.overlayUrl;
       else if (json.bgUrl) world.planet.textureUrl = json.bgUrl;
-      
-      if (json.gridSize !== undefined) world.gridSize = json.gridSize * scale;
-      if (json.gridOpacity !== undefined) world.gridOpacity = json.gridOpacity;
-      if (json.polyOpacity !== undefined) world.polyOpacity = json.polyOpacity;
     }
 
     ['regions','maps','links','polygons','markers','rulerPoints'].forEach(k => {
       if (!Array.isArray(world[k])) world[k] = [];
     });
     if (!world.planet) world.planet = { ...DEFAULT_PLANET };
+
+    // АВТО-ИСПРАВЛЕНИЕ РАЗМЕРА МИРА (Предотвращает скручивание сферы)
+    let maxX = 0, maxY = 0;
+    world.polygons.forEach(p => p.points.forEach(pt => { maxX = Math.max(maxX, pt.x); maxY = Math.max(maxY, pt.y); }));
+    world.maps.forEach(m => { maxX = Math.max(maxX, m.x + m.w); maxY = Math.max(maxY, m.y + m.h); });
+    
+    if (maxX > world.planet.widthPx) world.planet.widthPx = maxX + 10000;
+    if (maxY > world.planet.heightPx) world.planet.heightPx = maxY + 10000;
+
     return world;
   }
 
-  function saveWorld(world) { return JSON.parse(JSON.stringify(world)); }
+  function saveWorld(world, divideBy1000 = false) {
+    const copy = JSON.parse(JSON.stringify(world));
+    if (divideBy1000 && copy.isMigrated) {
+      copy.polygons.forEach(p => p.points.forEach(pt => { pt.x /= 1000; pt.y /= 1000; }));
+      copy.markers.forEach(m => { m.x /= 1000; m.y /= 1000; });
+      copy.planet.widthPx /= 1000;
+      copy.planet.heightPx /= 1000;
+      copy.isMigrated = false;
+    }
+    return copy;
+  }
+
   function bboxOfMap(m) { return { x1: m.x, y1: m.y, x2: m.x + m.w, y2: m.y + m.h }; }
   function aabbIntersect(a, b) { return !(a.x2 < b.x1 || a.x1 > b.x2 || a.y2 < b.y1 || a.y1 > b.y2); }
 
