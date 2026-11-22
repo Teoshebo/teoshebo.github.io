@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Seamless Camo Generator v10.2 (Auto-Names Download)</title>
+    <title>Seamless Camo Generator v10.3 (Seed in Filename)</title>
     <style>
         :root {
             --bg: #121216; --panel: #1e1e24; --text: #e0e0e0;
@@ -906,14 +906,14 @@
                 
                 renderToCanvas(exCtx, state.width, state.height);
                 
-                // ИСПОЛЬЗУЕМ СГЕНЕРИРОВАННОЕ ИМЯ ДЛЯ СКАЧИВАНИЯ
-                const fileName = `${generatePresetName()}_${state.width}x${state.height}.png`;
+                // ДОБАВЛЯЕМ СИД В ИМЯ ФАЙЛА
+                const fileName = `${generatePresetName()}_seed${state.globalSeed}_${state.width}x${state.height}.png`;
 
                 exCanvas.toBlob(blob => {
                     const url = URL.createObjectURL(blob);
                     const a = document.createElement('a');
                     a.href = url; 
-                    a.download = fileName; // <--- ПРИМЕНЕНО ЗДЕСЬ
+                    a.download = fileName;
                     a.click();
                     URL.revokeObjectURL(url);
                     btn.innerText = "Скачать PNG (Высокое разрешение)"; btn.disabled = false;
