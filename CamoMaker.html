@@ -3,12 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Seamless Camouflage Generator v7 (PNG Pattern)</title>
+    <title>Seamless Camo Generator v10.2 (Auto-Names Download)</title>
     <style>
         :root {
-            --bg: #1e1e24; --panel: #2b2b36; --text: #e0e0e0;
+            --bg: #121216; --panel: #1e1e24; --text: #e0e0e0;
             --accent: #4caf50; --accent-hover: #45a049;
-            --border: #444; --input-bg: #1a1a20;
+            --border: #333; --input-bg: #2a2a35;
             --btn-random: #ff9800; --btn-random-hover: #e68a00;
         }
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -18,78 +18,74 @@
             display: flex; height: 100vh; overflow: hidden;
         }
         
-        /* Sidebar */
         .sidebar {
-            width: 420px; background-color: var(--panel); border-right: 1px solid var(--border);
-            display: flex; flex-direction: column; overflow-y: auto;
+            width: 380px; background-color: var(--panel); border-right: 1px solid var(--border);
+            display: flex; flex-direction: column; height: 100%;
         }
-        .header { padding: 15px; border-bottom: 1px solid var(--border); background-color: #222; position: sticky; top: 0; z-index: 10; display: flex; flex-direction: column; gap: 8px; }
-        .header h1 { font-size: 1.2rem; }
+        .tabs { display: flex; background: #111; border-bottom: 1px solid var(--border); }
+        .tab-btn {
+            flex: 1; padding: 12px 5px; background: none; border: none; color: #888;
+            cursor: pointer; font-weight: bold; text-transform: uppercase; font-size: 0.8rem;
+            transition: 0.2s; border-bottom: 2px solid transparent;
+        }
+        .tab-btn:hover { color: #fff; }
+        .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
         
-        .btn-row { display: flex; gap: 8px; }
-        .btn-row button { flex: 1; }
+        .tab-content { display: none; flex: 1; overflow-y: auto; padding: 15px; }
+        .tab-content.active { display: block; }
 
-        .section { padding: 15px; border-bottom: 1px solid var(--border); }
-        .section-title { font-weight: bold; margin-bottom: 10px; font-size: 0.9rem; text-transform: uppercase; color: #aaa; display: flex; justify-content: space-between; align-items: center; }
-        
-        /* Controls */
-        .control-group { display: flex; flex-direction: column; margin-bottom: 8px; }
+        .control-group { display: flex; flex-direction: column; margin-bottom: 12px; }
         .control-group label { font-size: 0.8rem; margin-bottom: 4px; color: #ccc; display: flex; justify-content: space-between; }
-        input[type="range"], input[type="text"], select, input[type="color"] { width: 100%; padding: 4px; background: var(--input-bg); border: 1px solid var(--border); color: var(--text); border-radius: 4px; }
-        input[type="color"] { height: 30px; cursor: pointer; padding: 2px; }
-        input[type="file"] { font-size: 0.8rem; color: #ccc; }
-        button { background: var(--accent); color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-weight: bold; transition: 0.2s; }
+        input[type="range"], input[type="text"], input[type="number"], select, input[type="color"] { width: 100%; padding: 6px; background: var(--input-bg); border: 1px solid var(--border); color: var(--text); border-radius: 4px; }
+        input[type="color"] { height: 32px; cursor: pointer; padding: 2px; }
+        button { background: var(--accent); color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-weight: bold; transition: 0.2s; font-size: 0.85rem;}
         button:hover { background: var(--accent-hover); }
-        button:disabled { background: #555; cursor: not-allowed; }
-        button.random { background: var(--btn-random); }
-        button.random:hover { background: var(--btn-random-hover); }
         button.danger { background: #d32f2f; }
         button.danger:hover { background: #b71c1c; }
-        button.small { padding: 4px 8px; font-size: 0.8rem; }
-
-        /* Layer List */
-        .layer-item { background: var(--input-bg); border: 1px solid var(--border); border-radius: 4px; padding: 10px; margin-bottom: 10px; }
-        .layer-item.active { border-color: var(--accent); }
-        .layer-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; cursor: pointer; padding-bottom: 5px; border-bottom: 1px solid #333; }
-        .layer-controls { display: none; margin-top: 10px; }
-        .layer-item.active .layer-controls { display: block; }
-        .transform-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; background: rgba(0,0,0,0.2); padding: 10px; border-radius: 4px; }
-
-        /* Canvas Area */
-        .main-area { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; background: #111; overflow: auto; }
-        .canvas-container { background: #000; box-shadow: 0 0 20px rgba(0,0,0,0.5); border: 1px solid var(--border); position: relative; }
-        canvas#preview-canvas { display: block; width: 512px; height: 512px; object-fit: contain; image-rendering: pixelated; }
-        .actions { margin-top: 20px; display: flex; gap: 10px; }
-
-        /* Presets */
-        .preset-list { max-height: 150px; overflow-y: auto; margin-top: 10px; }
-        .preset-item { display: flex; justify-content: space-between; align-items: center; padding: 6px; background: var(--input-bg); border: 1px solid var(--border); margin-bottom: 5px; border-radius: 4px; }
-        .preset-name { font-size: 0.8rem; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;}
-        .preset-actions { display: flex; gap: 5px; }
+        button.secondary { background: #444; }
+        button.secondary:hover { background: #555; }
+        button.random { background: var(--btn-random); }
+        button.random:hover { background: var(--btn-random-hover); }
         
-        .file-upload-wrapper {
-            background: #2a2a35; padding: 8px; border-radius: 4px; border: 1px dashed #555;
-            margin-top: 5px; text-align: center;
+        .flex-row { display: flex; gap: 5px; }
+        .flex-row > * { flex: 1; }
+
+        .layer-item { background: var(--input-bg); border: 1px solid var(--border); border-radius: 4px; margin-bottom: 10px; overflow: hidden; }
+        .layer-item.active { border-color: var(--accent); }
+        .layer-header { display: flex; justify-content: space-between; align-items: center; padding: 10px; cursor: pointer; background: rgba(0,0,0,0.2); }
+        .layer-controls { display: none; padding: 10px; border-top: 1px solid var(--border); }
+        .layer-item.active .layer-controls { display: block; }
+        
+        .section-subtitle { font-size: 0.75rem; color: #777; margin: 10px 0 5px 0; text-transform: uppercase; border-bottom: 1px solid #333; padding-bottom: 2px; }
+
+        .main-area {
+            flex: 1; display: flex; flex-direction: column; align-items: center;
+            justify-content: center; padding: 20px; background: #0a0a0c; position: relative;
         }
+        .canvas-wrapper { position: relative; box-shadow: 0 0 30px rgba(0,0,0,0.8); border: 1px solid #333; }
+        canvas#preview-canvas { display: block; width: 512px; height: 512px; }
+        
+        .seamless-grid { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; display: grid; grid-template-columns: 1fr 1fr 1fr; grid-template-rows: 1fr 1fr 1fr; opacity: 0; transition: opacity 0.3s;}
+        .seamless-grid.show { opacity: 1; }
+        .seamless-grid > div { border: 1px dashed rgba(255,255,255,0.2); background-size: cover; background-position: center; }
+        
+        .actions { margin-top: 20px; display: flex; gap: 10px; }
+        .json-area { margin-top: 15px; padding: 10px; background: rgba(0,0,0,0.2); border-radius: 4px; border: 1px dashed #444;}
     </style>
 </head>
 <body>
 
     <div class="sidebar">
-        <div class="header">
-            <h1>Camо Generator v7</h1>
-            <div class="btn-row">
-                <button id="btn-generate">ОБНОВИТЬ</button>
-                <button id="btn-random" class="random">СЛУЧАЙНЫЙ</button>
-            </div>
+        <div class="tabs">
+            <button class="tab-btn active" onclick="switchTab('global')">Глобально</button>
+            <button class="tab-btn" onclick="switchTab('layers')">Слои</button>
+            <button class="tab-btn" onclick="switchTab('presets')">Пресеты</button>
         </div>
 
-        <div class="section">
-            <div class="section-title">Глобальные настройки</div>
+        <div id="tab-global" class="tab-content active">
             <div class="control-group">
-                <label>Размер экспорта (PNG)</label>
+                <label>Размер экспорта</label>
                 <select id="global-size">
-                    <option value="512">512 x 512</option>
                     <option value="1024" selected>1024 x 1024</option>
                     <option value="2048">2048 x 2048</option>
                     <option value="4096">4096 x 4096</option>
@@ -99,167 +95,256 @@
                 <label>Цвет фона</label>
                 <input type="color" id="global-bg" value="#121816">
             </div>
+            <div class="control-group">
+                <label>Глобальный сид</label>
+                <div class="flex-row">
+                    <input type="number" id="global-seed" value="12345">
+                    <button onclick="regenerateSeed()">🎲</button>
+                </div>
+            </div>
+            <div class="control-group" style="margin-top: 20px;">
+                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                    <input type="checkbox" id="check-seamless" onchange="toggleSeamlessView()" style="width: auto;"> 
+                    Проверка бесшовности (3x3)
+                </label>
+            </div>
+            <button id="btn-generate" style="width: 100%; margin-top: 10px;">ПЕРЕРИСОВАТЬ ТЕКСТУРУ</button>
+            <button id="btn-random" class="random" style="width: 100%; margin-top: 10px;">СЛУЧАЙНЫЙ КАМУФЛЯЖ</button>
         </div>
 
-        <div class="section">
-            <div class="section-title">
-                <span>Пресеты (<span id="preset-count">0</span>/30)</span>
-            </div>
-            <div style="display: flex; gap: 5px; margin-bottom: 10px;">
-                <input type="text" id="preset-name" placeholder="Имя пресета..." style="flex: 1;">
-                <button id="btn-save-preset" class="small">Сохранить</button>
-            </div>
-            <div class="preset-list" id="preset-list"></div>
-        </div>
-
-        <div class="section" style="flex: 1;">
-            <div class="section-title">
-                <span>Слои</span>
-                <button id="btn-add-layer" class="small">+ Добавить</button>
+        <div id="tab-layers" class="tab-content">
+            <div class="flex-row" style="margin-bottom: 10px;">
+                <button onclick="addLayer()">+ Добавить слой</button>
             </div>
             <div id="layers-container"></div>
+        </div>
+
+        <div id="tab-presets" class="tab-content">
+            <div class="control-group">
+                <label>Имя нового пресета (Авто-генерация)</label>
+                <div class="flex-row">
+                    <input type="text" id="preset-name" placeholder="Оставьте пустым для авто...">
+                    <button onclick="saveCurrentPreset()">💾 Сохр.</button>
+                </div>
+            </div>
+            <div class="json-area">
+                <div class="section-subtitle">Библиотека JSON</div>
+                <div class="flex-row" style="margin-top: 5px;">
+                    <button class="secondary" onclick="exportPresetsJSON()">Экспорт</button>
+                    <button class="secondary" onclick="document.getElementById('import-json').click()">Импорт</button>
+                    <input type="file" id="import-json" accept=".json" onchange="importPresetsJSON(event)" style="display: none;">
+                </div>
+            </div>
+            <div class="section-subtitle" style="margin-top: 20px;">Сохраненные (<span id="preset-count">0</span>/30)</div>
+            <div id="preset-list"></div>
         </div>
     </div>
 
     <div class="main-area">
-        <div class="canvas-container">
+        <div class="canvas-wrapper">
             <canvas id="preview-canvas" width="512" height="512"></canvas>
+            <div id="seamless-grid" class="seamless-grid"></div>
         </div>
         <div class="actions">
-            <button id="btn-download">Скачать PNG (Высокое разрешение)</button>
+            <button id="btn-download" style="padding: 12px 24px; font-size: 1rem;">Скачать PNG (Высокое разрешение)</button>
         </div>
     </div>
 
     <script>
         const PREVIEW_SIZE = 512;
         const BASE_RES = 1024;
-        const STORAGE_KEY = 'camo_presets_universal_v7';
 
         let state = {
-            width: 1024, height: 1024, bgColor: '#121816',
-            layers: [
-                { id: 1, color: '#3b4d3a', type: 'smooth', noise: 10, colorNoise: 15, blend: 'source-over', opacity: 1.0, seed: Math.random() * 1000, scale: 1, scaleX: 1, scaleY: 1, rotation: 0, image: null, imageSrc: null },
-                { id: 2, color: '#1c261d', type: 'brush', noise: 25, colorNoise: 10, blend: 'multiply', opacity: 0.9, seed: Math.random() * 1000, scale: 1, scaleX: 1, scaleY: 1, rotation: 0, image: null, imageSrc: null }
-            ]
+            width: 1024, height: 1024, bgColor: '#121816', globalSeed: 12345,
+            layers: []
         };
-        let activeLayerId = state.layers[0].id;
+        let activeLayerId = null;
         let presets = [];
 
-        const previewCanvas = document.getElementById('preview-canvas');
-        const pCtx = previewCanvas.getContext('2d', { willReadFrequently: true });
-        const layersContainer = document.getElementById('layers-container');
-        const presetList = document.getElementById('preset-list');
-        const presetCount = document.getElementById('preset-count');
-        const globalBgInput = document.getElementById('global-bg');
-        const btnDownload = document.getElementById('btn-download');
+        // --- МАССИВЫ ДЛЯ АВТО-ИМЕН (32+ элемента) ---
+        const colorThemes = [
+            "forest", "urban", "desert", "arctic", "ocean", "jungle", "swamp", "canyon",
+            "mountain", "meadow", "tundra", "savanna", "volcanic", "coastal", "river", "steppe",
+            "taiga", "boreal", "tropical", "alpine", "marsh", "dune", "reef", "glacier",
+            "mangrove", "rainforest", "highland", "lowland", "underground", "sky", "cave", "plateau"
+        ];
 
-        // --- ULTRA FAST NOISE ---
-        function fastNoise(x, y, seed) {
-            let n = x * 374761393 + y * 668265263 + seed * 1442695040888963407;
-            n = (n ^ (n >> 13)) * 1274126177;
-            return ((n ^ (n >> 16)) >>> 0) / 4294967296;
+        const patternNames = [
+            "brush", "drybrush", "smooth", "wavy", "tiger", "cellular", "voronoi", "pixel",
+            "digital", "speckle", "dust", "shards", "crystal", "hex", "honeycomb", "branches",
+            "tangle", "rain", "drizzle", "splatter", "splashes", "stencil", "mesh", "web",
+            "crack", "fracture", "blob", "spot", "dapple", "mottle", "patch", "swirl"
+        ];
+
+        // --- НАСТОЯЩИЙ ШУМ ПЕРЛИНА / ВОРОНОГО ---
+        function hash(x, y, seed) {
+            let h = x * 374761393 + y * 668265263 + seed * 1442695040888963407;
+            h = (h ^ (h >> 13)) * 1274126177;
+            return ((h ^ (h >> 16)) >>> 0) / 4294967296;
         }
 
-        function seededRandom(seed) {
-            let x = Math.sin(seed++) * 10000;
-            return x - Math.floor(x);
+        function valueNoise2D(x, y, seed) {
+            const xi = Math.floor(x), yi = Math.floor(y);
+            const xf = x - xi, yf = y - yi;
+            const u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf);
+            const a = hash(xi, yi, seed);
+            const b = hash(xi + 1, yi, seed);
+            const c = hash(xi, yi + 1, seed);
+            const d = hash(xi + 1, yi + 1, seed);
+            return (a * (1 - u) + b * u) * (1 - v) + (c * (1 - u) + d * u) * v;
         }
 
-        // --- IMAGE REHYDRATION ---
-        // Превращает Base64 строки обратно в объекты Image при загрузке пресета
-        function rehydrateImages() {
-            state.layers.forEach(layer => {
-                if (layer.imageSrc && !layer.image) {
-                    const img = new Image();
-                    img.src = layer.imageSrc;
-                    layer.image = img;
-                }
-            });
+        function fbm(x, y, seed) {
+            let n = 0, amp = 0.5, freq = 1.0;
+            for (let i = 0; i < 4; i++) {
+                n += amp * valueNoise2D(x * freq, y * freq, seed + i);
+                amp *= 0.5;
+                freq *= 2.0;
+            }
+            return n;
         }
 
-        // --- UI RENDER ---
+        function mulberry32(a) {
+            return function() {
+                var t = a += 0x6D2B79F5;
+                t = Math.imul(t ^ t >>> 15, t | 1);
+                t ^= t + Math.imul(t ^ t >>> 7, t | 61);
+                return ((t ^ t >>> 14) >>> 0) / 4294967296;
+            }
+        }
+
+        // --- UI LOGIC ---
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            event.target.classList.add('active');
+            document.getElementById(`tab-${tabId}`).classList.add('active');
+        }
+
+        function toggleSeamlessView() {
+            const grid = document.getElementById('seamless-grid');
+            if (document.getElementById('check-seamless').checked) {
+                grid.classList.add('show');
+                const dataUrl = document.getElementById('preview-canvas').toDataURL();
+                grid.innerHTML = Array(9).fill(`<div style="background-image: url(${dataUrl});"></div>`).join('');
+            } else {
+                grid.classList.remove('show');
+            }
+        }
+
+        function regenerateSeed() {
+            state.globalSeed = Math.floor(Math.random() * 99999);
+            document.getElementById('global-seed').value = state.globalSeed;
+            generateTexture();
+        }
+
         function renderLayersUI() {
-            layersContainer.innerHTML = '';
+            const container = document.getElementById('layers-container');
+            container.innerHTML = '';
+            
             state.layers.forEach((layer, index) => {
                 const el = document.createElement('div');
                 el.className = `layer-item ${layer.id === activeLayerId ? 'active' : ''}`;
-                
-                // Показываем загрузку файла только если выбран тип custom
                 const isCustom = layer.type === 'custom';
-                const customUploadStyle = isCustom ? 'flex' : 'none';
-
+                
                 el.innerHTML = `
                     <div class="layer-header" onclick="setActiveLayer(${layer.id})">
-                        <span><strong>Слой ${index + 1}</strong></span>
+                        <strong>Слой ${index + 1} (${layer.type})</strong>
                         <div style="display:flex; gap:5px;">
-                            ${index > 0 ? `<button class="small" onclick="moveLayer(${index}, -1); event.stopPropagation();">↑</button>` : ''}
-                            ${index < state.layers.length - 1 ? `<button class="small" onclick="moveLayer(${index}, 1); event.stopPropagation();">↓</button>` : ''}
-                            ${state.layers.length > 1 ? `<button class="danger small" onclick="removeLayer(${layer.id}); event.stopPropagation();">x</button>` : ''}
+                            ${index > 0 ? `<button class="secondary" onclick="moveLayer(${index}, -1); event.stopPropagation();">↑</button>` : ''}
+                            ${index < state.layers.length - 1 ? `<button class="secondary" onclick="moveLayer(${index}, 1); event.stopPropagation();">↓</button>` : ''}
+                            ${state.layers.length > 1 ? `<button class="danger" onclick="removeLayer(${layer.id}); event.stopPropagation();">x</button>` : ''}
                         </div>
                     </div>
                     <div class="layer-controls">
-                        <div class="control-group">
-                            <label>Основной цвет (для не-PNG)</label>
-                            <input type="color" value="${layer.color}" onchange="updateLayer(${layer.id}, 'color', this.value)">
-                        </div>
+                        <div class="section-subtitle">Основные</div>
                         <div class="control-group">
                             <label>Тип пятен</label>
                             <select onchange="updateLayer(${layer.id}, 'type', this.value)">
-                                <option value="brush" ${layer.type === 'brush' ? 'selected' : ''}>Сухая кисть / Спрей</option>
+                                <option value="brush" ${layer.type === 'brush' ? 'selected' : ''}>Сухая кисть (Органика)</option>
                                 <option value="smooth" ${layer.type === 'smooth' ? 'selected' : ''}>Гладкие (Кляксы)</option>
-                                <option value="circles" ${layer.type === 'circles' ? 'selected' : ''}>Круги</option>
-                                <option value="wavy" ${layer.type === 'wavy' ? 'selected' : ''}>Волнистые линии</option>
-                                <option value="cellular" ${layer.type === 'cellular' ? 'selected' : ''}>Ячеистые (Соты)</option>
-                                <option value="splatter" ${layer.type === 'splatter' ? 'selected' : ''}>Крапчатые</option>
-                                <option value="digital" ${layer.type === 'digital' ? 'selected' : ''}>Пиксельные (Цифра)</option>
-                                <option value="custom" ${layer.type === 'custom' ? 'selected' : ''}>Пользовательский PNG</option>
+                                <option value="wavy" ${layer.type === 'wavy' ? 'selected' : ''}>Волнистые (Тигр)</option>
+                                <option value="cellular" ${layer.type === 'cellular' ? 'selected' : ''}>Ячеистые (Voronoi)</option>
+                                <option value="pixel" ${layer.type === 'pixel' ? 'selected' : ''}>Пиксельные (Цифра)</option>
+                                <option value="speckle" ${layer.type === 'speckle' ? 'selected' : ''}>Мелкая крапа</option>
+                                <option value="shards" ${layer.type === 'shards' ? 'selected' : ''}>Острые (Граненые)</option>
+                                <option value="hex" ${layer.type === 'hex' ? 'selected' : ''}>Соты (Гексы)</option>
+                                <option value="branches" ${layer.type === 'branches' ? 'selected' : ''}>Ветки (Перехлест)</option>
+                                <option value="rain" ${layer.type === 'rain' ? 'selected' : ''}>Дождь (Штрихи)</option>
+                                <option value="drybrush" ${layer.type === 'drybrush' ? 'selected' : ''}>Сухая кисть (Направленная)</option>
+                                <option value="splatter" ${layer.type === 'splatter' ? 'selected' : ''}>Брызги (Кластеры)</option>
+                                <option value="custom" ${layer.type === 'custom' ? 'selected' : ''}>Свой PNG</option>
                             </select>
                         </div>
+                        ${isCustom ? `<div class="control-group"><input type="file" accept="image/png" onchange="uploadPattern(${layer.id}, this)"></div>` : ''}
                         
-                        <!-- Блок загрузки PNG -->
-                        <div class="control-group" style="display: ${customUploadStyle};">
-                            <div class="file-upload-wrapper">
-                                <label style="font-size: 0.75rem; color: #aaa; display: block; margin-bottom: 5px;">Загрузить паттерн (PNG)</label>
-                                <input type="file" accept="image/png" onchange="uploadPattern(${layer.id}, this)">
-                            </div>
-                        </div>
-
-                        <div class="transform-grid">
-                            <div class="control-group">
-                                <label>Масштаб: ${layer.scale.toFixed(1)}x</label>
-                                <input type="range" min="0.1" max="5" step="0.1" value="${layer.scale}" oninput="updateLayer(${layer.id}, 'scale', parseFloat(this.value), this)">
-                            </div>
-                            <div class="control-group">
-                                <label>Поворот: ${Math.round(layer.rotation)}°</label>
-                                <input type="range" min="0" max="360" value="${layer.rotation}" oninput="updateLayer(${layer.id}, 'rotation', parseInt(this.value), this)">
-                            </div>
-                            <div class="control-group">
-                                <label>Сжатие X: ${layer.scaleX.toFixed(1)}x</label>
-                                <input type="range" min="0.1" max="5" step="0.1" value="${layer.scaleX}" oninput="updateLayer(${layer.id}, 'scaleX', parseFloat(this.value), this)">
-                            </div>
-                            <div class="control-group">
-                                <label>Сжатие Y: ${layer.scaleY.toFixed(1)}x</label>
-                                <input type="range" min="0.1" max="5" step="0.1" value="${layer.scaleY}" oninput="updateLayer(${layer.id}, 'scaleY', parseFloat(this.value), this)">
-                            </div>
-                        </div>
-
                         <div class="control-group">
-                            <label>Шум границ (Эрозия): ${layer.noise}%</label>
+                            <label>Палитра (Случайный выбор)</label>
+                            <div class="flex-row">
+                                ${layer.palette.map((c, i) => `<input type="color" value="${c}" onchange="updatePaletteColor(${layer.id}, ${i}, this.value)">`).join('')}
+                            </div>
+                        </div>
+
+                        <div class="section-subtitle">Генерация</div>
+                        <div class="control-group">
+                            <label>Сид слоя: ${layer.seed}</label>
+                            <div class="flex-row">
+                                <input type="number" value="${layer.seed}" onchange="updateLayer(${layer.id}, 'seed', parseInt(this.value))">
+                                <button onclick="randomizeLayerSeed(${layer.id})">🎲</button>
+                            </div>
+                        </div>
+                        <div class="control-group">
+                            <label>Плотность (кол-во): ${layer.density}</label>
+                            <input type="range" min="5" max="100" value="${layer.density}" oninput="updateLayer(${layer.id}, 'density', parseInt(this.value), this)">
+                        </div>
+                        <div class="control-group">
+                            <label>Разброс размера: ${layer.sizeJitter}%</label>
+                            <input type="range" min="0" max="100" value="${layer.sizeJitter}" oninput="updateLayer(${layer.id}, 'sizeJitter', parseInt(this.value), this)">
+                        </div>
+                        <div class="flex-row">
+                            <div class="control-group">
+                                <label>Мин. расст.</label>
+                                <input type="range" min="0" max="200" value="${layer.minDist}" oninput="updateLayer(${layer.id}, 'minDist', parseInt(this.value), this)">
+                            </div>
+                            <div class="control-group">
+                                <label>Макс. расст.</label>
+                                <input type="range" min="100" max="1000" value="${layer.maxDist}" oninput="updateLayer(${layer.id}, 'maxDist', parseInt(this.value), this)">
+                            </div>
+                        </div>
+
+                        <div class="section-subtitle">Шум и Трансформация</div>
+                        <div class="control-group">
+                            <label>Тип шума</label>
+                            <select onchange="updateLayer(${layer.id}, 'noiseType', this.value)">
+                                <option value="perlin" ${layer.noiseType === 'perlin' ? 'selected' : ''}>Perlin (Органика)</option>
+                                <option value="voronoi" ${layer.noiseType === 'voronoi' ? 'selected' : ''}>Voronoi (Границы)</option>
+                            </select>
+                        </div>
+                        <div class="control-group">
+                            <label>Эрозия (Матовое стекло): ${layer.noise}%</label>
                             <input type="range" min="0" max="100" value="${layer.noise}" oninput="updateLayer(${layer.id}, 'noise', parseInt(this.value), this)">
                         </div>
                         <div class="control-group">
-                            <label>Шум пигмента (Цвет): ±${layer.colorNoise}%</label>
+                            <label>Шум пигмента: ±${layer.colorNoise}%</label>
                             <input type="range" min="0" max="50" value="${layer.colorNoise}" oninput="updateLayer(${layer.id}, 'colorNoise', parseInt(this.value), this)">
                         </div>
+                        
+                        <div class="flex-row">
+                            <div class="control-group"><label>Масштаб</label><input type="range" min="0.1" max="3" step="0.1" value="${layer.scale}" oninput="updateLayer(${layer.id}, 'scale', parseFloat(this.value), this)"></div>
+                            <div class="control-group"><label>Поворот</label><input type="range" min="0" max="360" value="${layer.rotation}" oninput="updateLayer(${layer.id}, 'rotation', parseInt(this.value), this)"></div>
+                        </div>
+                        <div class="flex-row">
+                            <div class="control-group"><label>Сжатие X</label><input type="range" min="0.1" max="3" step="0.1" value="${layer.scaleX}" oninput="updateLayer(${layer.id}, 'scaleX', parseFloat(this.value), this)"></div>
+                            <div class="control-group"><label>Сжатие Y</label><input type="range" min="0.1" max="3" step="0.1" value="${layer.scaleY}" oninput="updateLayer(${layer.id}, 'scaleY', parseFloat(this.value), this)"></div>
+                        </div>
+                        
+                        <div class="section-subtitle">Наложение</div>
                         <div class="control-group">
-                            <label>Режим наложения</label>
                             <select onchange="updateLayer(${layer.id}, 'blend', this.value)">
                                 <option value="source-over" ${layer.blend === 'source-over' ? 'selected' : ''}>Обычный</option>
                                 <option value="multiply" ${layer.blend === 'multiply' ? 'selected' : ''}>Умножение</option>
                                 <option value="overlay" ${layer.blend === 'overlay' ? 'selected' : ''}>Перекрытие</option>
                                 <option value="screen" ${layer.blend === 'screen' ? 'selected' : ''}>Экран</option>
-                                <option value="soft-light" ${layer.blend === 'soft-light' ? 'selected' : ''}>Мягкий свет</option>
-                                <option value="darken" ${layer.blend === 'darken' ? 'selected' : ''}>Замена темным</option>
                             </select>
                         </div>
                         <div class="control-group">
@@ -268,397 +353,365 @@
                         </div>
                     </div>
                 `;
-                layersContainer.appendChild(el);
+                container.appendChild(el);
             });
         }
 
-        window.setActiveLayer = function(id) { activeLayerId = id; renderLayersUI(); }
-
-        window.updateLayer = function(id, key, value, inputEl) {
+        window.setActiveLayer = (id) => { activeLayerId = id; renderLayersUI(); }
+        
+        window.updateLayer = (id, key, val, el) => {
             const layer = state.layers.find(l => l.id === id);
             if (layer) {
-                layer[key] = value;
+                layer[key] = val;
+                if (key === 'type') renderLayersUI();
                 
-                // Если сменили тип на custom - перерисовываем UI
-                if (key === 'type') {
-                    renderLayersUI();
+                if (el && el.type === 'range') {
+                    const label = el.previousElementSibling;
+                    if (key === 'density') label.innerHTML = `Плотность (кол-во): ${val}`;
+                    if (key === 'sizeJitter') label.innerHTML = `Разброс размера: ${val}%`;
+                    if (key === 'noise') label.innerHTML = `Эрозия (Матовое стекло): ${val}%`;
+                    if (key === 'colorNoise') label.innerHTML = `Шум пигмента: ±${val}%`;
+                    if (key === 'opacity') label.innerHTML = `Прозрачность: ${Math.round(val * 100)}%`;
                 }
-
-                if (inputEl && inputEl.type === 'range') {
-                    const label = inputEl.previousElementSibling;
-                    if (key === 'noise') label.innerHTML = `Шум границ (Эрозия): ${value}%`;
-                    if (key === 'colorNoise') label.innerHTML = `Шум пигмента (Цвет): ±${value}%`;
-                    if (key === 'opacity') label.innerHTML = `Прозрачность: ${Math.round(value * 100)}%`;
-                    if (key === 'scale') label.innerHTML = `Масштаб: ${value.toFixed(1)}x`;
-                    if (key === 'scaleX') label.innerHTML = `Сжатие X: ${value.toFixed(1)}x`;
-                    if (key === 'scaleY') label.innerHTML = `Сжатие Y: ${value.toFixed(1)}x`;
-                    if (key === 'rotation') label.innerHTML = `Поворот: ${value}°`;
-                }
-                clearTimeout(window.genTimeout);
-                window.genTimeout = setTimeout(() => updatePreview(), 30);
+                
+                clearTimeout(window.debounce);
+                window.debounce = setTimeout(generateTexture, 50);
             }
         }
 
-        // --- ОБРАБОТКА ЗАГРУЗКИ PNG ---
-        window.uploadPattern = function(id, input) {
-            if (!input.files || !input.files[0]) return;
-            
+        window.updatePaletteColor = (id, index, color) => {
             const layer = state.layers.find(l => l.id === id);
-            const reader = new FileReader();
-            
-            reader.onload = function(e) {
-                const img = new Image();
-                img.onload = function() {
-                    // Оптимизация памяти: если картинка большая, уменьшаем её до 256px по большей стороне
-                    const maxDim = 256;
-                    let scale = 1;
-                    if (img.width > maxDim || img.height > maxDim) {
-                        scale = Math.min(maxDim / img.width, maxDim / img.height);
-                    }
-                    
-                    const c = document.createElement('canvas');
-                    c.width = Math.round(img.width * scale);
-                    c.height = Math.round(img.height * scale);
-                    const ctx = c.getContext('2d');
-                    ctx.drawImage(img, 0, 0, c.width, c.height);
-                    
-                    // Сохраняем как base64 строку для пресетов
-                    layer.imageSrc = c.toDataURL('image/png');
-                    
-                    // Создаем финальный объект Image для отрисовки
-                    const finalImg = new Image();
-                    finalImg.onload = () => {
-                        layer.image = finalImg;
-                        updatePreview();
-                    };
-                    finalImg.src = layer.imageSrc;
-                };
-                img.src = e.target.result;
-            };
-            reader.readAsDataURL(input.files[0]);
-        };
+            if (layer) {
+                layer.palette[index] = color;
+                clearTimeout(window.debounce);
+                window.debounce = setTimeout(generateTexture, 50);
+            }
+        }
 
-        window.addLayer = function() {
+        window.randomizeLayerSeed = (id) => {
+            const layer = state.layers.find(l => l.id === id);
+            if (layer) {
+                layer.seed = Math.floor(Math.random() * 99999);
+                renderLayersUI();
+                generateTexture();
+            }
+        }
+
+        window.addLayer = () => {
             const newId = Date.now();
             state.layers.push({
-                id: newId, color: '#' + Math.floor(Math.random()*16777215).toString(16).padStart(6, '0'),
-                type: 'smooth', noise: 10, colorNoise: 10, blend: 'multiply', opacity: 0.9,
-                seed: Math.random() * 1000, scale: 1, scaleX: 1, scaleY: 1, rotation: 0, image: null, imageSrc: null
+                id: newId, type: 'smooth', palette: ['#3b4d3a', '#4a5e3a', '#2b3b26'], 
+                noise: 10, colorNoise: 10, noiseType: 'perlin', blend: 'multiply', opacity: 0.9,
+                seed: Math.floor(Math.random() * 99999), density: 30, sizeJitter: 50, 
+                minDist: 50, maxDist: 300, scale: 1, scaleX: 1, scaleY: 1, rotation: 0, image: null, imageSrc: null
             });
             activeLayerId = newId;
             renderLayersUI();
-            updatePreview();
+            generateTexture();
         }
 
-        window.removeLayer = function(id) {
+        window.removeLayer = (id) => {
             state.layers = state.layers.filter(l => l.id !== id);
-            if (activeLayerId === id && state.layers.length > 0) activeLayerId = state.layers[state.layers.length - 1].id;
+            if (activeLayerId === id && state.layers.length > 0) activeLayerId = state.layers[0].id;
             renderLayersUI();
-            updatePreview();
+            generateTexture();
         }
 
-        window.moveLayer = function(index, direction) {
-            const newIndex = index + direction;
-            if (newIndex >= 0 && newIndex < state.layers.length) {
+        window.moveLayer = (index, dir) => {
+            const newIdx = index + dir;
+            if (newIdx >= 0 && newIdx < state.layers.length) {
                 const temp = state.layers[index];
-                state.layers[index] = state.layers[newIndex];
-                state.layers[newIndex] = temp;
+                state.layers[index] = state.layers[newIdx];
+                state.layers[newIdx] = temp;
                 renderLayersUI();
-                updatePreview();
+                generateTexture();
             }
         }
 
         // --- RANDOMIZER ---
-        function generateRandomCamo() {
+        window.generateRandomCamo = () => {
             const palettes = [
-                ['#2b3b26', '#4a5e3a', '#1a2415', '#5e6e47', '#2e3b22'], // Forest
-                ['#b59e74', '#8c7a54', '#d9c7a7', '#5a4d36', '#6d5f45'], // Desert
-                ['#2f2f2f', '#474747', '#121212', '#636363', '#1f1f1f'], // Urban
-                ['#e0e0e0', '#a0a0a0', '#ffffff', '#555555', '#7a7a7a'], // Winter
-                ['#6b1d1d', '#9c3030', '#3d0a0a', '#c94a4a', '#822020']  // Red
+                ['#2b3b26', '#4a5e3a', '#1a2415', '#5e6e47', '#2e3b22'],
+                ['#b59e74', '#8c7a54', '#d9c7a7', '#5a4d36', '#6d5f45'],
+                ['#2f2f2f', '#474747', '#121212', '#636363', '#1f1f1f'],
+                ['#e0e0e0', '#a0a0a0', '#ffffff', '#555555', '#7a7a7a'],
+                ['#6b1d1d', '#9c3030', '#3d0a0a', '#c94a4a', '#822020'],
+                ['#1a2b3c', '#2d4a63', '#0f1821', '#3e6b8a', '#1e3348']
             ];
 
-            const types = ['brush', 'smooth', 'circles', 'wavy', 'cellular', 'splatter', 'digital'];
-            const blends = ['source-over', 'multiply', 'overlay', 'screen', 'soft-light', 'darken'];
+            const types = ['brush', 'smooth', 'wavy', 'cellular', 'pixel', 'speckle', 'shards', 'hex', 'branches', 'rain', 'drybrush', 'splatter'];
+            const blends = ['source-over', 'multiply', 'overlay', 'screen'];
+            const noiseTypes = ['perlin', 'voronoi'];
 
             const palette = palettes[Math.floor(Math.random() * palettes.length)];
-            state.bgColor = palette[Math.floor(Math.random() * palette.length)];
-            globalBgInput.value = state.bgColor;
-
-            const numLayers = Math.floor(Math.random() * 4) + 2; 
-            state.layers = [];
             
+            state.bgColor = palette[Math.floor(Math.random() * palette.length)];
+            document.getElementById('global-bg').value = state.bgColor;
+            state.globalSeed = Math.floor(Math.random() * 99999);
+            document.getElementById('global-seed').value = state.globalSeed;
+
+            const numLayers = Math.floor(Math.random() * 4) + 2;
+            state.layers = [];
+
             for (let i = 0; i < numLayers; i++) {
+                const layerPalette = [
+                    palette[Math.floor(Math.random() * palette.length)],
+                    palette[Math.floor(Math.random() * palette.length)],
+                    palette[Math.floor(Math.random() * palette.length)]
+                ];
+
+                const minDist = Math.floor(Math.random() * 50) + 20;
+                const maxDist = minDist + Math.floor(Math.random() * 300) + 100;
+
                 state.layers.push({
                     id: Date.now() + i,
-                    color: palette[Math.floor(Math.random() * palette.length)],
                     type: types[Math.floor(Math.random() * types.length)],
-                    noise: Math.floor(Math.random() * 25) + 5,
-                    colorNoise: Math.floor(Math.random() * 15),
-                    blend: i === 0 ? 'source-over' : blends[Math.floor(Math.random() * (blends.length - 1)) + 1],
-                    opacity: Math.random() * 0.4 + 0.6, 
-                    seed: Math.random() * 1000,
-                    scale: Math.random() * 1.5 + 0.5, 
-                    scaleX: Math.random() * 0.6 + 0.7, 
-                    scaleY: Math.random() * 0.6 + 0.7,
+                    palette: layerPalette,
+                    noise: Math.floor(Math.random() * 20) + 5,
+                    colorNoise: Math.floor(Math.random() * 15) + 5,
+                    noiseType: noiseTypes[Math.floor(Math.random() * noiseTypes.length)],
+                    blend: i === 0 ? 'source-over' : blends[Math.floor(Math.random() * blends.length)],
+                    opacity: Math.random() * 0.4 + 0.6,
+                    seed: Math.floor(Math.random() * 99999),
+                    density: Math.floor(Math.random() * 30) + 15,
+                    sizeJitter: Math.floor(Math.random() * 60) + 10,
+                    minDist: minDist,
+                    maxDist: maxDist,
+                    scale: Math.random() * 1.0 + 0.5,
+                    scaleX: Math.random() * 1.0 + 0.5,
+                    scaleY: Math.random() * 1.0 + 0.5,
                     rotation: Math.floor(Math.random() * 360),
                     image: null, imageSrc: null
                 });
             }
-            
+
             activeLayerId = state.layers[0].id;
             renderLayersUI();
-            updatePreview();
+            generateTexture();
         }
 
-        // --- PRESET LOGIC ---
-        function loadPresets() {
-            let stored = localStorage.getItem(STORAGE_KEY);
-            // Миграция со старых версий
-            if (!stored) {
-                const oldKeys = ['camo_presets_universal', 'camo_presets_v6', 'camo_presets_v5', 'camo_presets_v4', 'camo_presets_v3', 'camo_presets_v2'];
-                for (let key of oldKeys) {
-                    stored = localStorage.getItem(key);
-                    if (stored) break;
-                }
-            }
-
-            if (stored) {
-                try {
-                    let parsed = JSON.parse(stored);
-                    presets = parsed.map(p => {
-                        let fixedData = p.data;
-                        if (!fixedData.bgColor) fixedData.bgColor = '#121816';
-                        if (!fixedData.width) fixedData.width = 1024;
-                        if (!fixedData.height) fixedData.height = 1024;
-                        
-                        if (fixedData.layers) {
-                            fixedData.layers.forEach(layer => {
-                                if (layer.colorNoise === undefined) layer.colorNoise = 10;
-                                if (layer.scale === undefined) layer.scale = 1;
-                                if (layer.scaleX === undefined) layer.scaleX = 1;
-                                if (layer.scaleY === undefined) layer.scaleY = 1;
-                                if (layer.rotation === undefined) layer.rotation = 0;
-                                if (layer.seed === undefined) layer.seed = Math.random() * 1000;
-                                if (layer.id === undefined) layer.id = Date.now() + Math.random();
-                                if (layer.image === undefined) layer.image = null;
-                                if (layer.imageSrc === undefined) layer.imageSrc = null;
-                            });
-                        }
-                        return { name: p.name, data: fixedData };
-                    });
-                } catch (e) {
-                    console.error("Ошибка загрузки пресетов", e);
-                    presets = [];
-                }
-            }
-            savePresets(); 
-            renderPresetsUI();
-        }
-
-        function savePresets() { 
-            try {
-                localStorage.setItem(STORAGE_KEY, JSON.stringify(presets)); 
-            } catch (e) {
-                alert("Ошибка сохранения: Хранилище браузера переполнено. Удалите старые пресеты с PNG-файлами.");
-            }
-        }
-        
-        function renderPresetsUI() {
-            presetCount.textContent = presets.length;
-            presetList.innerHTML = '';
-            presets.forEach((p, index) => {
-                const el = document.createElement('div');
-                el.className = 'preset-item';
-                el.innerHTML = `
-                    <span class="preset-name" title="${p.name}">${p.name}</span>
-                    <div class="preset-actions">
-                        <button class="small" onclick="loadPreset(${index})">Загр.</button>
-                        <button class="danger small" onclick="deletePreset(${index})">X</button>
-                    </div>
-                `;
-                presetList.appendChild(el);
-            });
-        }
-
-        window.loadPreset = function(index) {
-            state = JSON.parse(JSON.stringify(presets[index].data));
-            rehydrateImages(); // Восстанавливаем картинки из base64
-            if (state.layers.length > 0) activeLayerId = state.layers[0].id;
-            document.getElementById('global-size').value = state.width;
-            globalBgInput.value = state.bgColor;
-            renderLayersUI();
-            updatePreview();
-        }
-
-        window.deletePreset = function(index) { 
-            presets.splice(index, 1); 
-            savePresets(); 
-            renderPresetsUI(); 
-        }
-
-        document.getElementById('btn-save-preset').addEventListener('click', () => {
-            if (presets.length >= 30) { alert('Лимит пресетов (30) достигнут.'); return; }
-            const nameInput = document.getElementById('preset-name');
-            const name = nameInput.value.trim() || `Пресет ${presets.length + 1}`;
-            presets.push({ name: name, data: JSON.parse(JSON.stringify(state)) });
-            savePresets(); renderPresetsUI(); nameInput.value = '';
-        });
-
-        // --- CORE ENGINE ---
-        function renderToCanvas(targetCtx, targetWidth, targetHeight) {
+        // --- RENDER ENGINE ---
+        function renderToCanvas(targetCtx, w, h) {
             targetCtx.fillStyle = state.bgColor;
-            targetCtx.fillRect(0, 0, targetWidth, targetHeight);
+            targetCtx.fillRect(0, 0, w, h);
             
             state.layers.forEach((layer) => {
                 const layerCanvas = document.createElement('canvas');
-                layerCanvas.width = targetWidth;
-                layerCanvas.height = targetHeight;
+                layerCanvas.width = w; layerCanvas.height = h;
                 const lCtx = layerCanvas.getContext('2d', { willReadFrequently: true });
-
-                drawBlobs(lCtx, layer, targetWidth, targetHeight);
-                applyNoiseAndPigment(lCtx, layer, targetWidth, targetHeight);
-
+                
+                drawBlobs(lCtx, layer, w, h);
+                applyNoiseAndPigment(lCtx, layer, w, h);
+                
                 targetCtx.globalAlpha = layer.opacity;
                 targetCtx.globalCompositeOperation = layer.blend;
                 targetCtx.drawImage(layerCanvas, 0, 0);
             });
-
+            
             targetCtx.globalAlpha = 1.0;
             targetCtx.globalCompositeOperation = 'source-over';
         }
 
         function drawBlobs(ctx, layer, w, h) {
-            const numBlobs = 25; 
-            const baseRadius = Math.min(w, h) * 0.15; 
-
-            let seed = layer.seed;
-            ctx.fillStyle = layer.color;
-            ctx.strokeStyle = layer.color;
-
-            for (let i = 0; i < numBlobs; i++) {
-                const nx = seededRandom(seed++);
-                const ny = seededRandom(seed++);
-                const nRadius = (seededRandom(seed++) * 0.6 + 0.4); 
+            const prng = mulberry32(Number(layer.seed) + Number(state.globalSeed));
+            const baseRadius = Math.min(w, h) * 0.08;
+            const points = [];
+            
+            let attempts = 0;
+            const maxAttempts = layer.density * 50;
+            
+            while(points.length < layer.density && attempts < maxAttempts) {
+                attempts++;
+                const px = prng() * w;
+                const py = prng() * h;
                 
-                const radius = nRadius * baseRadius;
-                const blobSeed = seededRandom(seed++) * 100;
+                let valid = true;
+                for (let p of points) {
+                    let dx = Math.abs(px - p.x);
+                    let dy = Math.abs(py - p.y);
+                    if (dx > w/2) dx = w - dx;
+                    if (dy > h/2) dy = h - dy;
+                    
+                    const dist = Math.sqrt(dx*dx + dy*dy);
+                    if (dist < layer.minDist) {
+                        valid = false; break;
+                    }
+                }
+                
+                if (valid) points.push({ x: px, y: py });
+            }
 
+            if (points.length === 0) {
+                for (let i = 0; i < layer.density; i++) {
+                    points.push({ x: prng() * w, y: prng() * h });
+                }
+            }
+
+            points.forEach(p => {
+                const color = layer.palette[Math.floor(prng() * layer.palette.length)] || '#000000';
+                ctx.fillStyle = color;
+                ctx.strokeStyle = color;
+                
+                const jitter = (prng() * 2 - 1) * (layer.sizeJitter / 100);
+                const radius = baseRadius * (1 + jitter);
+                const blobSeed = prng() * 100;
+                
                 for (let dx = -1; dx <= 1; dx++) {
                     for (let dy = -1; dy <= 1; dy++) {
                         ctx.save();
-                        const x = (nx + dx) * w;
-                        const y = (ny + dy) * h;
-                        
-                        ctx.translate(x, y);
+                        ctx.translate(p.x + dx * w, p.y + dy * h);
                         ctx.rotate(layer.rotation * Math.PI / 180);
-                        ctx.scale(layer.scale * layer.scaleX, layer.scale * layer.scaleY);
+                        ctx.scale(layer.scale * (layer.scaleX || 1), layer.scale * (layer.scaleY || 1));
                         
-                        // Если выбран кастомный PNG и он загружен
                         if (layer.type === 'custom' && layer.image) {
-                            // Масштабируем размер штампа относительно базового разрешения
-                            // Чтобы при экспорте 2048x2048 картинка была больше
-                            const imgScale = w / BASE_RES; 
+                            const imgScale = (w / BASE_RES);
                             const dw = layer.image.width * imgScale;
                             const dh = layer.image.height * imgScale;
-                            
-                            // Рисуем картинку центрированно
-                            ctx.drawImage(layer.image, -dw / 2, -dh / 2, dw, dh);
+                            ctx.drawImage(layer.image, -dw/2, -dh/2, dw, dh);
                         } else {
-                            drawSingleBlob(ctx, radius, blobSeed, layer.type, w);
+                            drawShape(ctx, radius, blobSeed, layer.type, w);
                         }
-                        
                         ctx.restore();
                     }
                 }
-            }
+            });
         }
 
-        function drawSingleBlob(ctx, radius, seed, type, canvasWidth) {
-            // Если тип custom, но картинка не загружена, рисуем заглушку (квадрат)
-            if (type === 'custom') {
-                ctx.fillRect(-radius/2, -radius/2, radius, radius);
-                return;
-            }
-
+        function drawShape(ctx, radius, seed, type, canvasWidth) {
             const resScale = canvasWidth / BASE_RES;
-
             ctx.beginPath();
             
-            if (type === 'circles') {
-                ctx.arc(0, 0, radius, 0, Math.PI * 2);
-                ctx.fill();
-            } 
-            else if (type === 'wavy') {
-                ctx.lineWidth = radius * 0.4;
+            if (type === 'wavy') {
+                ctx.lineWidth = radius * 0.5;
                 ctx.lineCap = 'round';
                 const length = radius * 4;
-                const steps = 20;
-                for (let i = 0; i <= steps; i++) {
-                    const px = (i / steps - 0.5) * length;
-                    const py = (fastNoise(i * 0.2, seed, 0) - 0.5) * 2 * radius * 0.8;
-                    if (i === 0) ctx.moveTo(px, py);
-                    else ctx.lineTo(px, py);
+                for (let i = 0; i <= 20; i++) {
+                    const px = (i / 20 - 0.5) * length;
+                    const py = (mulberry32(seed + i)() - 0.5) * radius * 1.5;
+                    if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
                 }
                 ctx.stroke();
             }
             else if (type === 'cellular') {
-                ctx.lineWidth = radius * 0.15;
-                ctx.lineJoin = 'round';
-                const points = 6;
-                for (let i = 0; i <= points; i++) {
-                    const angle = (i / points) * Math.PI * 2;
-                    const r = radius * (0.8 + fastNoise(Math.cos(angle), Math.sin(angle), seed) * 0.4);
+                for (let i = 0; i <= 8; i++) {
+                    const angle = (i / 8) * Math.PI * 2;
+                    const r = radius * (0.8 + mulberry32(seed + i)() * 0.4);
                     const px = Math.cos(angle) * r;
                     const py = Math.sin(angle) * r;
-                    if (i === 0) ctx.moveTo(px, py);
-                    else ctx.lineTo(px, py);
+                    if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
                 }
                 ctx.closePath();
+                ctx.fill();
+                ctx.lineWidth = 2 * resScale;
                 ctx.stroke();
             }
-            else if (type === 'splatter') {
-                ctx.arc(0, 0, radius * 0.4, 0, Math.PI * 2);
-                ctx.fill();
-                for (let i = 0; i < 15; i++) {
-                    const angle = seededRandom(seed + i) * Math.PI * 2;
-                    const dist = seededRandom(seed + i + 10) * radius * 1.2;
-                    const r = seededRandom(seed + i + 20) * radius * 0.15;
-                    ctx.beginPath();
-                    ctx.arc(Math.cos(angle) * dist, Math.sin(angle) * dist, r, 0, Math.PI * 2);
-                    ctx.fill();
+            else if (type === 'pixel') {
+                const grid = 8 * resScale;
+                const cx = Math.floor(radius / grid);
+                for (let x = -cx; x <= cx; x++) {
+                    for (let y = -cx; y <= cx; y++) {
+                        if (mulberry32(seed + x * 100 + y)() > 0.3) {
+                            ctx.fillRect(x * grid, y * grid, grid, grid);
+                        }
+                    }
                 }
             }
-            else if (type === 'digital') {
-                const gridSize = Math.max(2, 8 * resScale); 
-                const blocks = 10;
-                for (let i = 0; i < blocks; i++) {
-                    const bx = Math.floor((seededRandom(seed + i) - 0.5) * radius / gridSize) * gridSize;
-                    const by = Math.floor((seededRandom(seed + i + 10) - 0.5) * radius / gridSize) * gridSize;
-                    const bw = Math.floor(seededRandom(seed + i + 20) * 3 + 1) * gridSize;
-                    const bh = Math.floor(seededRandom(seed + i + 30) * 3 + 1) * gridSize;
-                    ctx.fillRect(bx, by, bw, bh);
+            else if (type === 'speckle') {
+                for (let i = 0; i < 20; i++) {
+                    const px = (mulberry32(seed + i)() - 0.5) * radius * 1.5;
+                    const py = (mulberry32(seed + i + 10)() - 0.5) * radius * 1.5;
+                    const r = 2 * resScale;
+                    ctx.beginPath(); ctx.arc(px, py, r, 0, Math.PI*2); ctx.fill();
+                }
+            }
+            else if (type === 'shards') {
+                const pts = 6 + Math.floor(mulberry32(seed)() * 4);
+                for (let i = 0; i <= pts; i++) {
+                    const angle = (i / pts) * Math.PI * 2;
+                    const r = radius * (mulberry32(seed + i)() * 0.8 + 0.2); 
+                    const px = Math.cos(angle) * r;
+                    const py = Math.sin(angle) * r;
+                    if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+                }
+                ctx.closePath();
+                ctx.fill();
+            }
+            else if (type === 'hex') {
+                for (let i = 0; i <= 6; i++) {
+                    const angle = (i / 6) * Math.PI * 2 + (Math.PI / 6);
+                    const px = Math.cos(angle) * radius;
+                    const py = Math.sin(angle) * radius;
+                    if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+                }
+                ctx.closePath();
+                ctx.fill();
+                ctx.lineWidth = 1 * resScale;
+                ctx.stroke();
+            }
+            else if (type === 'branches') {
+                ctx.lineWidth = radius * 0.4;
+                ctx.lineCap = 'round';
+                const numBranches = 4;
+                for (let i = 0; i < numBranches; i++) {
+                    const angle = mulberry32(seed + i)() * Math.PI * 2;
+                    const length = radius * (1 + mulberry32(seed + i + 10)());
+                    ctx.beginPath();
+                    ctx.moveTo(0, 0);
+                    ctx.lineTo(Math.cos(angle) * length, Math.sin(angle) * length);
+                    ctx.stroke();
+                }
+            }
+            else if (type === 'rain') {
+                ctx.lineWidth = radius * 0.1;
+                ctx.lineCap = 'round';
+                const numDrops = 8;
+                for (let i = 0; i < numDrops; i++) {
+                    const px = (mulberry32(seed + i)() - 0.5) * radius * 2;
+                    const py = (mulberry32(seed + i + 10)() - 0.5) * radius * 2;
+                    const len = radius * (0.5 + mulberry32(seed + i + 20)());
+                    ctx.beginPath();
+                    ctx.moveTo(px, py);
+                    ctx.lineTo(px, py + len);
+                    ctx.stroke();
+                }
+            }
+            else if (type === 'drybrush') {
+                ctx.lineWidth = radius * 0.15;
+                ctx.lineCap = 'round';
+                for (let i = 0; i < 15; i++) {
+                    const angle = (mulberry32(seed + i)() - 0.5) * 0.5;
+                    const px = (mulberry32(seed + i + 10)() - 0.5) * radius;
+                    const len = radius * (0.5 + mulberry32(seed + i + 20)());
+                    ctx.beginPath();
+                    ctx.moveTo(px, px);
+                    ctx.lineTo(px + Math.cos(angle)*len, px + Math.sin(angle)*len);
+                    ctx.stroke();
+                }
+            }
+            else if (type === 'splatter') {
+                ctx.arc(0, 0, radius * 0.3, 0, Math.PI * 2); ctx.fill();
+                for(let i=0; i<10; i++) {
+                    const px = (mulberry32(seed + i)() - 0.5) * radius * 1.8;
+                    const py = (mulberry32(seed + i + 10)() - 0.5) * radius * 1.8;
+                    ctx.beginPath(); ctx.arc(px, py, 2 * resScale, 0, Math.PI*2); ctx.fill();
                 }
             }
             else {
-                const points = type === 'brush' ? 64 : 32; 
-                const roughness = type === 'brush' ? 1.2 : 0.35; 
-                for (let i = 0; i <= points; i++) {
-                    const angle = (i / points) * Math.PI * 2;
-                    let noiseVal = fastNoise(Math.cos(angle) * 2, Math.sin(angle) * 2, seed);
-                    if (type === 'brush') {
-                        noiseVal = noiseVal * 0.6 + fastNoise(Math.cos(angle)*8, Math.sin(angle)*8, seed) * 0.4;
-                    }
-                    const r = radius * (1 + (noiseVal - 0.5) * roughness);
+                const pts = type === 'brush' ? 64 : 32;
+                const roughness = type === 'brush' ? 1.0 : 0.3;
+                for (let i = 0; i <= pts; i++) {
+                    const angle = (i / pts) * Math.PI * 2;
+                    let n = mulberry32(seed + i)();
+                    if (type === 'brush') n = n * 0.7 + mulberry32(seed + i + 100)() * 0.3;
+                    const r = radius * (1 + (n - 0.5) * roughness);
                     const px = Math.cos(angle) * r;
                     const py = Math.sin(angle) * r;
-                    if (i === 0) ctx.moveTo(px, py);
-                    else ctx.lineTo(px, py);
+                    if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
                 }
                 ctx.closePath();
-                ctx.filter = type === 'smooth' ? `blur(${3 * resScale}px)` : 'none'; 
+                ctx.filter = type === 'smooth' ? `blur(${4 * resScale}px)` : 'none';
                 ctx.fill();
-                ctx.filter = 'none'; 
+                ctx.filter = 'none';
             }
         }
 
@@ -667,35 +720,50 @@
 
             const imgData = ctx.getImageData(0, 0, w, h);
             const data = imgData.data;
-
             const erosionVal = layer.noise / 100;
             const pigmentVal = layer.colorNoise / 100;
-            let seed = layer.seed + 999;
-            const freqScale = w / BASE_RES;
+            
+            const vPoints = [];
+            if (layer.noiseType === 'voronoi') {
+                const prng = mulberry32(Number(layer.seed) + Number(state.globalSeed));
+                for (let i = 0; i < 50; i++) {
+                    vPoints.push({ x: prng() * w, y: prng() * h });
+                }
+            }
 
             for (let i = 0; i < data.length; i += 4) {
                 if (data[i + 3] === 0) continue; 
-
                 const x = (i / 4) % w;
                 const y = Math.floor((i / 4) / w);
 
                 if (pigmentVal > 0) {
-                    let cNoise = (fastNoise(x * 0.02 * freqScale, y * 0.02 * freqScale, seed + 55) - 0.5) * 2;
-                    let shift = cNoise * pigmentVal * 80;
-                    data[i]     = Math.min(255, Math.max(0, data[i] + shift));
-                    data[i + 1] = Math.min(255, Math.max(0, data[i + 1] + shift));
-                    data[i + 2] = Math.min(255, Math.max(0, data[i + 2] + shift));
+                    let cNoise = (fbm(x * 0.01, y * 0.01, layer.seed) - 0.5) * 2;
+                    let shift = cNoise * pigmentVal * 100;
+                    data[i] = Math.min(255, Math.max(0, data[i] + shift));
+                    data[i+1] = Math.min(255, Math.max(0, data[i+1] + shift));
+                    data[i+2] = Math.min(255, Math.max(0, data[i+2] + shift));
                 }
 
                 if (erosionVal > 0) {
-                    let n1 = fastNoise(x * 0.05 * freqScale, y * 0.05 * freqScale, seed);
-                    let n2 = fastNoise(x * 0.2 * freqScale, y * 0.2 * freqScale, seed + 1);
-                    let n3 = fastNoise(x * 0.8 * freqScale, y * 0.8 * freqScale, seed + 2);
-                    let finalNoise = (n1 * 0.2) + (n2 * 0.3) + (n3 * 0.5);
+                    let n = 0;
+                    if (layer.noiseType === 'perlin') {
+                        n = fbm(x * 0.05, y * 0.05, layer.seed);
+                    } else {
+                        let minDist1 = 999999, minDist2 = 999999;
+                        for (let p of vPoints) {
+                            let dx = x - p.x;
+                            let dy = y - p.y;
+                            let dist = dx*dx + dy*dy;
+                            if (dist < minDist1) { minDist2 = minDist1; minDist1 = dist; }
+                            else if (dist < minDist2) { minDist2 = dist; }
+                        }
+                        let borderDist = Math.sqrt(minDist2) - Math.sqrt(minDist1);
+                        n = Math.min(1, borderDist / (w * 0.05)); 
+                    }
 
-                    if (finalNoise < erosionVal) {
-                        data[i + 3] = 0; 
-                    } else if (finalNoise < erosionVal + 0.1) {
+                    if (n < erosionVal) {
+                        data[i + 3] = 0;
+                    } else if (n < erosionVal + 0.1) {
                         data[i + 3] = data[i + 3] * 0.5;
                     }
                 }
@@ -703,62 +771,163 @@
             ctx.putImageData(imgData, 0, 0);
         }
 
-        // --- PREVIEW & EXPORT ---
-        function updatePreview() {
-            renderToCanvas(pCtx, PREVIEW_SIZE, PREVIEW_SIZE);
+        // --- PRESET & JSON LOGIC ---
+        function generatePresetName() {
+            const colorPart = colorThemes[Math.floor(Math.random() * colorThemes.length)];
+            
+            let basePattern = 'smooth';
+            if (state.layers.length > 0) {
+                basePattern = state.layers[0].type;
+            }
+            let patternPart = patternNames.find(p => p === basePattern) || 'organic';
+            if (Math.random() > 0.5) patternPart += "Mix";
+
+            const hexPart = state.bgColor.replace('#', '');
+
+            return `${colorPart}_${patternPart}_${hexPart}`;
         }
 
-        btnDownload.addEventListener('click', () => {
-            const originalText = btnDownload.innerText;
-            btnDownload.innerText = 'Генерация...';
-            btnDownload.disabled = true;
+        function saveCurrentPreset() {
+            if (presets.length >= 30) return alert("Лимит 30 пресетов.");
+            
+            let name = document.getElementById('preset-name').value.trim();
+            
+            if (!name) {
+                name = generatePresetName();
+                let counter = 1;
+                let originalName = name;
+                while (presets.some(p => p.name === name)) {
+                    name = `${originalName}_v${counter}`;
+                    counter++;
+                }
+            }
 
-            setTimeout(() => {
-                const exportCanvas = document.createElement('canvas');
-                exportCanvas.width = state.width;
-                exportCanvas.height = state.height;
-                const eCtx = exportCanvas.getContext('2d', { willReadFrequently: true });
+            presets.push({ name, data: JSON.parse(JSON.stringify(state)) });
+            localStorage.setItem('camo_presets_v10', JSON.stringify(presets));
+            document.getElementById('preset-name').value = '';
+            renderPresets();
+        }
 
-                renderToCanvas(eCtx, state.width, state.height);
+        function renderPresets() {
+            document.getElementById('preset-count').innerText = presets.length;
+            const list = document.getElementById('preset-list');
+            list.innerHTML = presets.map((p, i) => `
+                <div class="layer-item" style="display:flex; justify-content:space-between; align-items:center; padding:8px;">
+                    <span style="font-size:0.8rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${p.name}">${p.name}</span>
+                    <div style="display:flex; gap:5px;">
+                        <button class="secondary" onclick="loadPreset(${i})">Загр</button>
+                        <button class="danger" onclick="deletePreset(${i})">X</button>
+                    </div>
+                </div>
+            `).join('');
+        }
 
-                exportCanvas.toBlob((blob) => {
-                    const url = URL.createObjectURL(blob);
-                    const link = document.createElement('a');
-                    link.download = `camo_${state.width}x${state.height}.png`;
-                    link.href = url;
-                    link.click();
-                    
-                    setTimeout(() => URL.revokeObjectURL(url), 1000);
-                    
-                    btnDownload.innerText = originalText;
-                    btnDownload.disabled = false;
-                }, 'image/png');
-            }, 50); 
-        });
+        window.loadPreset = (i) => {
+            state = JSON.parse(JSON.stringify(presets[i].data));
+            activeLayerId = state.layers[0]?.id;
+            state.layers.forEach(l => {
+                if (l.imageSrc) {
+                    const img = new Image();
+                    img.onload = () => { l.image = img; generateTexture(); };
+                    img.src = l.imageSrc;
+                }
+            });
+            document.getElementById('global-size').value = state.width;
+            document.getElementById('global-bg').value = state.bgColor;
+            document.getElementById('global-seed').value = state.globalSeed;
+            renderLayersUI();
+            generateTexture();
+        }
 
-        // --- INIT ---
-        document.getElementById('btn-generate').addEventListener('click', updatePreview);
-        document.getElementById('btn-random').addEventListener('click', generateRandomCamo);
-        document.getElementById('btn-add-layer').addEventListener('click', addLayer);
+        window.deletePreset = (i) => {
+            presets.splice(i, 1);
+            localStorage.setItem('camo_presets_v10', JSON.stringify(presets));
+            renderPresets();
+        }
 
-        document.getElementById('global-size').addEventListener('change', (e) => {
+        window.exportPresetsJSON = () => {
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(presets, null, 2));
+            const dlAnchor = document.createElement('a');
+            dlAnchor.setAttribute("href", dataStr);
+            dlAnchor.setAttribute("download", "camo_library.json");
+            dlAnchor.click();
+        }
+
+        window.importPresetsJSON = (event) => {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const imported = JSON.parse(e.target.result);
+                    if (Array.isArray(imported)) {
+                        presets = presets.concat(imported).slice(0, 30);
+                        localStorage.setItem('camo_presets_v10', JSON.stringify(presets));
+                        renderPresets();
+                        alert(`Импортировано пресетов: ${imported.length}`);
+                    }
+                } catch (err) {
+                    alert("Ошибка чтения JSON файла");
+                }
+            };
+            reader.readAsText(file);
+            event.target.value = '';
+        }
+
+        // --- INIT & EXPORT ---
+        function generateTexture() {
+            const pCtx = document.getElementById('preview-canvas').getContext('2d');
+            renderToCanvas(pCtx, PREVIEW_SIZE, PREVIEW_SIZE);
+            if (document.getElementById('check-seamless').checked) toggleSeamlessView();
+        }
+
+        document.getElementById('btn-generate').onclick = generateTexture;
+        document.getElementById('btn-random').onclick = generateRandomCamo;
+        
+        document.getElementById('global-size').onchange = (e) => {
             state.width = parseInt(e.target.value);
             state.height = parseInt(e.target.value);
-        });
-
-        globalBgInput.addEventListener('input', (e) => {
-            state.bgColor = e.target.value;
-            updatePreview();
-        });
-
-        function init() {
-            loadPresets();
-            renderLayersUI();
-            globalBgInput.value = state.bgColor;
-            updatePreview();
+        }
+        document.getElementById('global-bg').oninput = (e) => {
+            state.bgColor = e.target.value; generateTexture();
+        }
+        document.getElementById('global-seed').onchange = (e) => {
+            state.globalSeed = parseInt(e.target.value); generateTexture();
         }
 
-        init();
+        document.getElementById('btn-download').onclick = () => {
+            const btn = document.getElementById('btn-download');
+            btn.innerText = "Генерация..."; btn.disabled = true;
+            
+            setTimeout(() => {
+                const exCanvas = document.createElement('canvas');
+                exCanvas.width = state.width; exCanvas.height = state.height;
+                const exCtx = exCanvas.getContext('2d');
+                
+                renderToCanvas(exCtx, state.width, state.height);
+                
+                // ИСПОЛЬЗУЕМ СГЕНЕРИРОВАННОЕ ИМЯ ДЛЯ СКАЧИВАНИЯ
+                const fileName = `${generatePresetName()}_${state.width}x${state.height}.png`;
+
+                exCanvas.toBlob(blob => {
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url; 
+                    a.download = fileName; // <--- ПРИМЕНЕНО ЗДЕСЬ
+                    a.click();
+                    URL.revokeObjectURL(url);
+                    btn.innerText = "Скачать PNG (Высокое разрешение)"; btn.disabled = false;
+                });
+            }, 50);
+        }
+
+        const stored = localStorage.getItem('camo_presets_v10');
+        if (stored) { try { presets = JSON.parse(stored); } catch(e){} }
+
+        addLayer(); 
+        document.getElementById('global-seed').value = state.globalSeed;
+        renderPresets();
+        generateTexture();
     </script>
 </body>
 </html>
